@@ -1,5 +1,5 @@
 import re
-from typing import Dict, List, Tuple, Union
+from typing import Dict, List, Tuple, Union, Any
 import numpy as np
 import argparse
 
@@ -7,11 +7,34 @@ class FeatureExtractor:
     input_path : str
     output_path : str
     ref_sequences : Dict[str, str]
+    filter_num_reads: int
+    filter_perc_mismatch: float
 
-    def __init__(self, in_path: str, out_path: str, ref_path: str) -> None:
+    def __init__(self, in_path: str, out_path: str, ref_path: str, num_reads: int = None, perc_mismatch: float = None) -> None:
         self.input_path = in_path
         self.output_path = out_path
         self.ref_sequences = self.get_references(ref_path)
+        # if no argument is given (i.e. num_reads=None) the minimum number of reads is 1, 
+        # so only positions with no reads are filtered out
+        self.filter_num_reads = num_reads if num_reads is not None else 1
+        # if no argument is given (i.e. perc_mismatch=None) set minimum %mismatched to 1
+        # so all positions are included 
+        self.filter_perc_mismatch = perc_mismatch if perc_mismatch is not None else 0
+
+    def __str__(self) -> str:
+        o = f"""FeatureExtractor instance - Member variables: 
+        
+            input_path = {self.input_path}
+            
+            output_path = {self.output_path}
+
+            number of reference sequences = {len(self.ref_sequences)}
+
+            filter_num_reads = {self.filter_num_reads}
+
+            filter_perc_mismatch = {self.filter_perc_mismatch}
+            """
+        return o
 
     def get_references(self, path: str) -> Dict[str, str]:
         """
@@ -64,7 +87,9 @@ class FeatureExtractor:
                 o.write(header)
                 for line in lines:
                     outline = self.process_position(line.split("\t"))
-                    o.write(outline) 
+                    # in case a line was filtered out, None is returned. In this case, do not write to file
+                    if outline:
+                        o.write(outline) 
 
     def process_position(self, line: List[str]) -> str:
         """
@@ -84,6 +109,10 @@ class FeatureExtractor:
         # extract elements from list
         chr, site, ref_base, n_reads, read_bases, read_qualities = line[0], int(line[1]), line[2], int(line[3]), line[4], line[5]
         
+        # filter by number of reads
+        if n_reads < self.filter_num_reads:
+            return None
+
         # get reference sequence 
         ref = self.ref_sequences[chr]
         # get absolute number of A, C, G, T, ins, del
@@ -92,14 +121,18 @@ class FeatureExtractor:
         # get relative number of A, C, G and T counts
         count = self.get_relative_count(count, n_reads)
 
+        # get allele fraction
+        allele_fraction = self.get_allele_fraction(count, ref_base)
+
+        # filter by allele_fraction
+        if allele_fraction < self.filter_perc_mismatch:
+            return None
+
         # get majority base
         majority_base = self.get_majority_base(count)
 
         # get 11b motif
         motif = self.get_motif(chr, site, ref, k=5)
-
-        # get allele fraction
-        allele_fraction = self.get_allele_fraction(count, ref_base)
 
         # get qualitiy measures
         quality_mean, quality_std = self.get_read_quality(read_qualities)
@@ -323,6 +356,50 @@ class FeatureExtractor:
         return mean, std 
     
 
+def positive_int(val: int) -> int:
+    """
+    Convert the given value to an integer and validate that it is positive.
+
+    Parameters
+    ----------
+    val : int
+        Value given in the command line when filtering by number of reads
+    
+    Returns
+    -------
+    int
+        Same number given, but only if it is a positive integer
+    """
+    ival = int(val)
+    if ival <= 0:
+        raise argparse.ArgumentTypeError(f"{val} is not a positive integer.")
+    return ival
+
+def float_between_zero_and_one(value: Any) -> float:
+    """
+    Convert the given value to a float and validate that it is between 0 and 1 (inclusive).
+
+    Parameters
+    ----------
+    value : Any
+        The value to be converted and validated.
+
+    Returns
+    -------
+    float
+        The converted and validated float value.
+
+    Raises
+    ------
+    argparse.ArgumentTypeError
+        If the value is not a float between 0 and 1.
+
+    """
+    fvalue = float(value)
+    if not 0 <= fvalue <= 1:
+        raise argparse.ArgumentTypeError(f"{value} is not a float between 0 and 1")
+    return fvalue
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="Pileup feature extractor",
                                         description="Extracs different characteristics from a\
@@ -335,7 +412,15 @@ if __name__ == "__main__":
 
     parser.add_argument('-r', '--reference', type=str, required=True,
                         help='Path to the reference file')
+    parser.add_argument('-n', '--num_reads', type=positive_int, required=False,
+                        help='Filter by minimum number of reads at a position')
+    parser.add_argument('-p', '--perc_mismatched', type=float_between_zero_and_one, required=False,
+                        help='Filter by minimum fraction of mismatched bases')
+
     args = parser.parse_args()
 
-    feature_extractor = FeatureExtractor(args.input, args.output, args.reference)
+    feature_extractor = FeatureExtractor(args.input, args.output, args.reference, 
+                                         num_reads=args.num_reads, 
+                                         perc_mismatch=args.perc_mismatched)
+    print(feature_extractor.__str__())
     feature_extractor.process_file()       
