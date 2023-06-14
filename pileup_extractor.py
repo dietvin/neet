@@ -6,13 +6,19 @@ import argparse
 class FeatureExtractor:
     input_path : str
     output_path : str
+    ref_path : str
     ref_sequences : Dict[str, str]
     filter_num_reads: int
     filter_perc_mismatch: float
+    filter_mean_quality: float
 
-    def __init__(self, in_path: str, out_path: str, ref_path: str, num_reads: int = None, perc_mismatch: float = None) -> None:
+    def __init__(self, in_path: str, out_path: str, ref_path: str, 
+                 num_reads: int = None, 
+                 perc_mismatch: float = None,
+                 mean_quality: float = None) -> None:
         self.input_path = in_path
         self.output_path = out_path
+        self.ref_path = ref_path
         self.ref_sequences = self.get_references(ref_path)
         # if no argument is given (i.e. num_reads=None) the minimum number of reads is 1, 
         # so only positions with no reads are filtered out
@@ -20,20 +26,14 @@ class FeatureExtractor:
         # if no argument is given (i.e. perc_mismatch=None) set minimum %mismatched to 1
         # so all positions are included 
         self.filter_perc_mismatch = perc_mismatch if perc_mismatch is not None else 0
+        self.filter_mean_quality = mean_quality if mean_quality is not None else 0
 
     def __str__(self) -> str:
-        o = f"""FeatureExtractor instance - Member variables: 
-        
-            input_path = {self.input_path}
-            
-            output_path = {self.output_path}
+        filter_n_reads = f"- Filtering positions with less than {self.filter_num_reads} reads.\n\t"
+        filter_perc_mis = f"- Filtering positions with less than {self.filter_perc_mismatch*100}% of reads mismatched.\n\t" if self.filter_perc_mismatch>0 else "- No filtering based on the mismatch percentage\n\t"
+        filter_mean_qual = f"- Filtering positions with mean read qualities lower that {self.filter_mean_quality}.\n\t" if self.filter_mean_quality>0 else "- No filtering based on the mean read quality.\n\t"
 
-            number of reference sequences = {len(self.ref_sequences)}
-
-            filter_num_reads = {self.filter_num_reads}
-
-            filter_perc_mismatch = {self.filter_perc_mismatch}
-            """
+        o = f"FeatureExtractor instance information:\n\t- Using input pileup file at {self.input_path}\n\t- After processing, writing new file to {self.output_path}\n\t- {len(self.ref_sequences)} reference sequence(s) found in file {self.ref_path}\n\t" + filter_n_reads + filter_perc_mis + filter_mean_qual
         return o
 
     def get_references(self, path: str) -> Dict[str, str]:
@@ -113,6 +113,13 @@ class FeatureExtractor:
         if n_reads < self.filter_num_reads:
             return None
 
+        # get qualitiy measures
+        quality_mean, quality_std = self.get_read_quality(read_qualities)
+
+        # filter by mean read quality
+        if quality_mean < self.filter_mean_quality:
+            return None
+
         # get reference sequence 
         ref = self.ref_sequences[chr]
         # get absolute number of A, C, G, T, ins, del
@@ -133,9 +140,6 @@ class FeatureExtractor:
 
         # get 11b motif
         motif = self.get_motif(chr, site, ref, k=5)
-
-        # get qualitiy measures
-        quality_mean, quality_std = self.get_read_quality(read_qualities)
 
         out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["t"]}\t{count["a_rel"]}\t{count["c_rel"]}\t{count["g_rel"]}\t{count["t_rel"]}\t{motif}\t{allele_fraction}\t{quality_mean}\t{quality_std}\n'
         return out
@@ -356,13 +360,13 @@ class FeatureExtractor:
         return mean, std 
     
 
-def positive_int(val: int) -> int:
+def positive_int(value: Any) -> int:
     """
     Convert the given value to an integer and validate that it is positive.
 
     Parameters
     ----------
-    val : int
+    value : int
         Value given in the command line when filtering by number of reads
     
     Returns
@@ -370,10 +374,36 @@ def positive_int(val: int) -> int:
     int
         Same number given, but only if it is a positive integer
     """
-    ival = int(val)
-    if ival <= 0:
-        raise argparse.ArgumentTypeError(f"{val} is not a positive integer.")
+    ival = int(value)
+    if ival < 0:
+        raise argparse.ArgumentTypeError(f"{value} is not a positive integer.")
     return ival
+
+def positive_float(value: Any) -> int:
+    """
+    Convert the given value to a float and validate that it is positive.
+
+    Parameters
+    ----------
+    value : Any
+        The value to be converted and validated.
+
+    Returns
+    -------
+    float
+        The converted and validated float value.
+
+    Raises
+    ------
+    argparse.ArgumentTypeError
+        If the value is not a positive float 
+
+    """
+    fvalue = float(value)
+    if fvalue < 0:
+        raise argparse.ArgumentTypeError(f"{value} is not a positive float.")
+    return fvalue
+
 
 def float_between_zero_and_one(value: Any) -> float:
     """
@@ -416,11 +446,15 @@ if __name__ == "__main__":
                         help='Filter by minimum number of reads at a position')
     parser.add_argument('-p', '--perc_mismatched', type=float_between_zero_and_one, required=False,
                         help='Filter by minimum fraction of mismatched bases')
+    parser.add_argument('-q', '--mean_quality', type=positive_float, required=False,
+                        help='Filter by mean read quality scores')
+
 
     args = parser.parse_args()
 
     feature_extractor = FeatureExtractor(args.input, args.output, args.reference, 
                                          num_reads=args.num_reads, 
-                                         perc_mismatch=args.perc_mismatched)
-    print(feature_extractor.__str__())
-    feature_extractor.process_file()       
+                                         perc_mismatch=args.perc_mismatched,
+                                         mean_quality=args.mean_quality)
+    print(str(feature_extractor))
+    #feature_extractor.process_file()
