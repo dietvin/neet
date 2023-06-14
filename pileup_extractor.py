@@ -11,11 +11,14 @@ class FeatureExtractor:
     filter_num_reads: int
     filter_perc_mismatch: float
     filter_mean_quality: float
+    filter_genomic_region: Tuple[str, int, int]
 
     def __init__(self, in_path: str, out_path: str, ref_path: str, 
                  num_reads: int = None, 
                  perc_mismatch: float = None,
-                 mean_quality: float = None) -> None:
+                 mean_quality: float = None,
+                 genomic_region: str = None) -> None:
+        
         self.input_path = in_path
         self.output_path = out_path
         self.ref_path = ref_path
@@ -27,13 +30,14 @@ class FeatureExtractor:
         # so all positions are included 
         self.filter_perc_mismatch = perc_mismatch if perc_mismatch is not None else 0
         self.filter_mean_quality = mean_quality if mean_quality is not None else 0
+        self.filter_genomic_region = self.extract_positional_info(genomic_region) if genomic_region is not None else None
 
     def __str__(self) -> str:
         filter_n_reads = f"- Filtering positions with less than {self.filter_num_reads} reads.\n\t"
         filter_perc_mis = f"- Filtering positions with less than {self.filter_perc_mismatch*100}% of reads mismatched.\n\t" if self.filter_perc_mismatch>0 else "- No filtering based on the mismatch percentage\n\t"
         filter_mean_qual = f"- Filtering positions with mean read qualities lower that {self.filter_mean_quality}.\n\t" if self.filter_mean_quality>0 else "- No filtering based on the mean read quality.\n\t"
-
-        o = f"FeatureExtractor instance information:\n\t- Using input pileup file at {self.input_path}\n\t- After processing, writing new file to {self.output_path}\n\t- {len(self.ref_sequences)} reference sequence(s) found in file {self.ref_path}\n\t" + filter_n_reads + filter_perc_mis + filter_mean_qual
+        filter_region = f"- Extracting positions only on chromosome '{self.filter_genomic_region[0]}' from position {self.filter_genomic_region[1]} to {self.filter_genomic_region[2]}.\n\t" if self.filter_genomic_region else "- Extracting all genomic positions\n\t"
+        o = f"FeatureExtractor instance information:\n\t- Using input pileup file at {self.input_path}\n\t- After processing, writing new file to {self.output_path}\n\t- {len(self.ref_sequences)} reference sequence(s) found in file {self.ref_path}\n\t" + filter_n_reads + filter_perc_mis + filter_mean_qual + filter_region
         return o
 
     def get_references(self, path: str) -> Dict[str, str]:
@@ -61,6 +65,62 @@ class FeatureExtractor:
                     refs[line[1:].strip()] = lines[i+1].strip()
         
         return refs
+    
+    def extract_positional_info(self, data_string: str) -> Tuple[str, int, int]:
+        """
+        Extracts the chromosome name, start value, and end value from a string in the format "chromosome_name:start-end".
+
+        Parameters
+        ----------
+        data_string : str
+            The input string in the format "chromosome_name:start-end".
+
+        Returns
+        -------
+        tuple
+            A tuple containing the chromosome name (str), start value (int), and end value (int).
+        """
+        chromosome, positions = data_string.split(':')
+        start_str, end_str = positions.split('-')
+        start = int(start_str.replace(',', ''))
+        end = int(end_str.replace(',', ''))
+
+        if self.region_is_valid(chromosome, start, end):
+            return chromosome, start, end
+    
+    def region_is_valid(self, chr, start, end) -> bool:
+        """
+        Checks if the chromosome is found in the reference sequences and if so, whether the given start and end
+        coordinates are in range of the corresponding sequence.
+
+        Parameters
+        ----------
+        pos_info : Tuple[str, int, int]
+            Positional information extracted in self.extract_positional_info()
+
+        Returns
+        -------
+        bool
+            True, if all information is valid
+
+        Raises
+        ------
+        Exception, if not all information is valid. 
+        """
+        # check if chromosome name is found in self.ref_sequences
+        if chr not in list(self.ref_sequences.keys()):
+            raise Exception(f"Chromosome region error: Name '{chr}' not found in reference sequences from file '{self.ref_path}'")
+        # check if start < end
+        if start >= end:
+            raise Exception(f"Chromosome region error: End position {end} must be larger than start position {start}.")
+        # check if start is in range
+        chr_len = len(self.ref_sequences[chr])
+        if start <= 0 or start > chr_len:
+            raise Exception(f"Chromosome region error: Start position {start} not in range of corrdinates 1-{chr_len} (both incl.).")
+        # check if end is in range
+        if end <= 0 or end > chr_len:
+            raise Exception(f"Chromosome region error: End position {end} not in range of corrdinates 1-{chr_len} (both incl.).")
+        return True
     
     def process_file(self):
         """
@@ -109,6 +169,11 @@ class FeatureExtractor:
         # extract elements from list
         chr, site, ref_base, n_reads, read_bases, read_qualities = line[0], int(line[1]), line[2], int(line[3]), line[4], line[5]
         
+        # filter by genomic region
+        region = self.filter_genomic_region
+        if not(chr == region[0] and site >= region[1] and site <= region[2]): # both start and end inclusive
+            return None
+
         # filter by number of reads
         if n_reads < self.filter_num_reads:
             return None
@@ -448,13 +513,15 @@ if __name__ == "__main__":
                         help='Filter by minimum fraction of mismatched bases')
     parser.add_argument('-q', '--mean_quality', type=positive_float, required=False,
                         help='Filter by mean read quality scores')
-
+    parser.add_argument('-g', '--genomic_region', type=str, required=False,
+                        help='Genomic region in "CHR:START-END" format. Specify to only extract information from a specific region.')
 
     args = parser.parse_args()
 
     feature_extractor = FeatureExtractor(args.input, args.output, args.reference, 
                                          num_reads=args.num_reads, 
                                          perc_mismatch=args.perc_mismatched,
-                                         mean_quality=args.mean_quality)
+                                         mean_quality=args.mean_quality,
+                                         genomic_region=args.genomic_region)
     print(str(feature_extractor))
-    #feature_extractor.process_file()
+    feature_extractor.process_file()
