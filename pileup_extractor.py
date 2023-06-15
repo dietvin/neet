@@ -1,9 +1,9 @@
 import re
 from typing import Dict, List, Tuple, Union, Any
-import numpy as np
 import argparse
 from tqdm import tqdm
 from pyfiglet import Figlet
+import numpy as np
 
 class FeatureExtractor:
     input_path : str
