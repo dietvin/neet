@@ -4,6 +4,9 @@ import argparse
 from tqdm import tqdm
 from pyfiglet import Figlet
 import numpy as np
+from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import Pool
+import timeit
 
 class FeatureExtractor:
     input_path : str
@@ -14,12 +17,14 @@ class FeatureExtractor:
     filter_perc_mismatch: float
     filter_mean_quality: float
     filter_genomic_region: Tuple[str, int, int]
+    num_processes: int
 
     def __init__(self, in_path: str, out_path: str, ref_path: str, 
                  num_reads: int = None, 
                  perc_mismatch: float = None,
                  mean_quality: float = None,
-                 genomic_region: str = None) -> None:
+                 genomic_region: str = None,
+                 num_processes: int = None) -> None:
         
         self.input_path = in_path
         self.output_path = out_path
@@ -33,6 +38,8 @@ class FeatureExtractor:
         self.filter_perc_mismatch = perc_mismatch if perc_mismatch is not None else 0
         self.filter_mean_quality = mean_quality if mean_quality is not None else 0
         self.filter_genomic_region = self.extract_positional_info(genomic_region) if genomic_region is not None else None
+
+        self.num_processes = num_processes
 
     def __str__(self) -> str:
         f = Figlet(font="slant")
@@ -150,15 +157,96 @@ class FeatureExtractor:
         with open(self.input_path, "r") as i:
             lines = i.readlines()
 
+        with open(self.output_path, "w") as o:
+            header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_ins\tn_del\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_ins_rel\tn_del_rel\tmotif\tperc_error\tq_mean\tq_std\n"
+            o.write(header)
+            # tqdm provides the progress bar
+            for line in tqdm(lines): 
+                outline = self.process_position(line.split("\t"))
+                # in case a line was filtered out, None is returned. In this case, do not write to file
+                if outline:
+                    o.write(outline) 
+
+    def process_file_multithread(self):
+        """
+        Reads .pileup file and processes it, writing the results to a new file using 
+        multiprocessing.
+
+        Parameters
+        ----------
+        infile : str
+            path to the input .pileup file
+        outfile : str
+            path to the output tsv file
+        ref : str
+            path to the reference fasta
+            
+        Returns
+        -------
+        None
+        """
+
+        print(str(self))
+
+        with open(self.input_path, "r") as i:
+            lines = i.readlines()
+
+        with ThreadPoolExecutor(max_workers=self.num_processes) as executor:
             with open(self.output_path, "w") as o:
                 header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_ins\tn_del\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_ins_rel\tn_del_rel\tmotif\tperc_error\tq_mean\tq_std\n"
                 o.write(header)
-                # tqdm provides the progress bar
-                for line in tqdm(lines): 
-                    outline = self.process_position(line.split("\t"))
-                    # in case a line was filtered out, None is returned. In this case, do not write to file
-                    if outline:
-                        o.write(outline) 
+
+                # Submit tasks to the thread pool
+                futures = [executor.submit(self.process_position, line.split("\t")) for line in lines]
+
+                for future in futures:
+                    outline = future.result()
+                    o.write(outline)
+
+    def process_file_multiprocess(self):
+        """
+        Reads .pileup file and processes it, writing the results to a new file
+        using multiprocessing.
+
+        Parameters
+        ----------
+        infile : str
+            path to the input .pileup file
+        outfile : str
+            path to the output tsv file
+        ref : str
+            path to the reference fasta
+            
+        Returns
+        -------
+        None
+        """
+        
+        print(str(self))
+
+        with open(self.input_path, "r") as i:
+            lines = i.readlines()
+        
+        with Pool(processes=self.num_processes) as pool:
+            with open(self.output_path, "w") as o:
+                header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_ins\tn_del\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_ins_rel\tn_del_rel\tmotif\tperc_error\tq_mean\tq_std\n"
+                o.write(header)
+
+                total_lines = len(lines)
+                progress_bar = tqdm(total=total_lines)
+
+                results = []
+
+                for line in lines:
+                    result = pool.apply_async(self.process_position, args=(line.split("\t"),))
+                    results.append((line, result))
+
+                for line, result in results:
+                    outline = result.get()
+                    o.write(outline)
+                    progress_bar.update()
+
+                progress_bar.close()
 
     def process_position(self, line: List[str]) -> str:
         """
@@ -182,18 +270,18 @@ class FeatureExtractor:
         region = self.filter_genomic_region
         if region is not None:
             if not(chr == region[0] and site >= region[1] and site <= region[2]): # both start and end inclusive
-                return None
+                return ""
 
         # filter by number of reads
         if n_reads < self.filter_num_reads:
-            return None
+            return ""
 
         # get qualitiy measures
         quality_mean, quality_std = self.get_read_quality(read_qualities)
 
         # filter by mean read quality
         if quality_mean < self.filter_mean_quality:
-            return None
+            return ""
 
         # get reference sequence 
         ref = self.ref_sequences[chr]
@@ -208,7 +296,7 @@ class FeatureExtractor:
 
         # filter by allele_fraction
         if allele_fraction < self.filter_perc_mismatch:
-            return None
+            return ""
 
         # get majority base
         majority_base = self.get_majority_base(count)
@@ -532,6 +620,8 @@ if __name__ == "__main__":
                         help='Filter by mean read quality scores')
     parser.add_argument('-g', '--genomic_region', type=str, required=False,
                         help='Genomic region in "CHR:START-END" format. Specify to only extract information from a specific region.')
+    parser.add_argument('-t', '--num_processes', type=int, required=False,
+                        help='Number of threads to use for processing.')
 
     args = parser.parse_args()
 
@@ -539,5 +629,12 @@ if __name__ == "__main__":
                                          num_reads=args.num_reads, 
                                          perc_mismatch=args.perc_mismatched,
                                          mean_quality=args.mean_quality,
-                                         genomic_region=args.genomic_region)
-    feature_extractor.process_file()
+                                         genomic_region=args.genomic_region,
+                                         num_processes=args.num_processes)
+    
+    #print(timeit.Timer(lambda: feature_extractor.process_file_multithread()).timeit(number=10))
+    #print(timeit.Timer(lambda: feature_extractor.process_file_multiprocess()).timeit(number=10))
+    #print(timeit.Timer(lambda: feature_extractor.process_file()).timeit(number=3))
+    
+    feature_extractor.process_file_multiprocess()
+    #feature_extractor.process_file()
