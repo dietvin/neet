@@ -133,77 +133,8 @@ class FeatureExtractor:
         if end <= 0 or end > chr_len:
             raise Exception(f"Chromosome region error: End position {end} not in range of corrdinates 1-{chr_len} (both incl.).")
         return True
-    
+
     def process_file(self):
-        """
-        Reads .pileup file and processes it, writing the results to a new file.
-
-        Parameters
-        ----------
-        infile : str
-            path to the input .pileup file
-        outfile : str
-            path to the output tsv file
-        ref : str
-            path to the reference fasta
-            
-        Returns
-        -------
-        None
-        """
-        
-        print(str(self))
-
-        with open(self.input_path, "r") as i:
-            lines = i.readlines()
-
-        with open(self.output_path, "w") as o:
-            header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_ins\tn_del\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_ins_rel\tn_del_rel\tmotif\tperc_error\tq_mean\tq_std\n"
-            o.write(header)
-            # tqdm provides the progress bar
-            for line in tqdm(lines): 
-                outline = self.process_position(line.split("\t"))
-                # in case a line was filtered out, None is returned. In this case, do not write to file
-                if outline:
-                    o.write(outline) 
-
-    def process_file_multithread(self):
-        """
-        Reads .pileup file and processes it, writing the results to a new file using 
-        multiprocessing.
-
-        Parameters
-        ----------
-        infile : str
-            path to the input .pileup file
-        outfile : str
-            path to the output tsv file
-        ref : str
-            path to the reference fasta
-            
-        Returns
-        -------
-        None
-        """
-
-        print(str(self))
-
-        with open(self.input_path, "r") as i:
-            lines = i.readlines()
-
-        with ThreadPoolExecutor(max_workers=self.num_processes) as executor:
-            with open(self.output_path, "w") as o:
-                header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_ins\tn_del\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_ins_rel\tn_del_rel\tmotif\tperc_error\tq_mean\tq_std\n"
-                o.write(header)
-
-                # Submit tasks to the thread pool
-                futures = [executor.submit(self.process_position, line.split("\t")) for line in lines]
-
-                for future in futures:
-                    outline = future.result()
-                    o.write(outline)
-
-    def process_file_multiprocess(self):
         """
         Reads .pileup file and processes it, writing the results to a new file
         using multiprocessing.
@@ -221,7 +152,6 @@ class FeatureExtractor:
         -------
         None
         """
-        
         print(str(self))
 
         with open(self.input_path, "r") as i:
@@ -632,9 +562,4 @@ if __name__ == "__main__":
                                          genomic_region=args.genomic_region,
                                          num_processes=args.num_processes)
     
-    #print(timeit.Timer(lambda: feature_extractor.process_file_multithread()).timeit(number=10))
-    #print(timeit.Timer(lambda: feature_extractor.process_file_multiprocess()).timeit(number=10))
-    #print(timeit.Timer(lambda: feature_extractor.process_file()).timeit(number=3))
-    
-    feature_extractor.process_file_multiprocess()
-    #feature_extractor.process_file()
+    feature_extractor.process_file()
