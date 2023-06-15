@@ -2,6 +2,8 @@ import re
 from typing import Dict, List, Tuple, Union, Any
 import numpy as np
 import argparse
+from tqdm import tqdm
+from pyfiglet import Figlet
 
 class FeatureExtractor:
     input_path : str
@@ -33,11 +35,14 @@ class FeatureExtractor:
         self.filter_genomic_region = self.extract_positional_info(genomic_region) if genomic_region is not None else None
 
     def __str__(self) -> str:
-        filter_n_reads = f"- Filtering positions with less than {self.filter_num_reads} reads.\n\t"
-        filter_perc_mis = f"- Filtering positions with less than {self.filter_perc_mismatch*100}% of reads mismatched.\n\t" if self.filter_perc_mismatch>0 else "- No filtering based on the mismatch percentage\n\t"
-        filter_mean_qual = f"- Filtering positions with mean read qualities lower that {self.filter_mean_quality}.\n\t" if self.filter_mean_quality>0 else "- No filtering based on the mean read quality.\n\t"
-        filter_region = f"- Extracting positions only on chromosome '{self.filter_genomic_region[0]}' from position {self.filter_genomic_region[1]} to {self.filter_genomic_region[2]}.\n\t" if self.filter_genomic_region else "- Extracting all genomic positions\n\t"
-        o = f"FeatureExtractor instance information:\n\t- Using input pileup file at {self.input_path}\n\t- After processing, writing new file to {self.output_path}\n\t- {len(self.ref_sequences)} reference sequence(s) found in file {self.ref_path}\n\t" + filter_n_reads + filter_perc_mis + filter_mean_qual + filter_region
+        f = Figlet(font="slant")
+        o = f.renderText("Neet - pileup extractor")
+        
+        filter_n_reads = f" - Filtering positions with less than {self.filter_num_reads} reads.\n"
+        filter_perc_mis = f" - Filtering positions with less than {self.filter_perc_mismatch*100}% of reads mismatched.\n" if self.filter_perc_mismatch>0 else " - No filtering based on the mismatch percentage\n"
+        filter_mean_qual = f" - Filtering positions with mean read qualities lower that {self.filter_mean_quality}.\n" if self.filter_mean_quality>0 else " - No filtering based on the mean read quality.\n"
+        filter_region = f" - Extracting positions only on chromosome '{self.filter_genomic_region[0]}' from position {self.filter_genomic_region[1]} to {self.filter_genomic_region[2]}.\n" if self.filter_genomic_region else " - Extracting all genomic positions\n"
+        o += f"\nFeatureExtractor instance information:\n\n - Using input pileup file at {self.input_path}\n - After processing, writing output file to {self.output_path}\n - {len(self.ref_sequences)} reference sequence(s) found in file {self.ref_path}\n" + filter_n_reads + filter_perc_mis + filter_mean_qual + filter_region
         return o
 
     def get_references(self, path: str) -> Dict[str, str]:
@@ -139,13 +144,17 @@ class FeatureExtractor:
         -------
         None
         """
+        
+        print(str(self))
+
         with open(self.input_path, "r") as i:
             lines = i.readlines()
 
             with open(self.output_path, "w") as o:
                 header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tmotif\tperc_mismatched\tq_mean\tq_std\n"
                 o.write(header)
-                for line in lines:
+                # tqdm provides the progress bar
+                for line in tqdm(lines): 
                     outline = self.process_position(line.split("\t"))
                     # in case a line was filtered out, None is returned. In this case, do not write to file
                     if outline:
@@ -171,8 +180,9 @@ class FeatureExtractor:
         
         # filter by genomic region
         region = self.filter_genomic_region
-        if not(chr == region[0] and site >= region[1] and site <= region[2]): # both start and end inclusive
-            return None
+        if region is not None:
+            if not(chr == region[0] and site >= region[1] and site <= region[2]): # both start and end inclusive
+                return None
 
         # filter by number of reads
         if n_reads < self.filter_num_reads:
@@ -523,5 +533,4 @@ if __name__ == "__main__":
                                          perc_mismatch=args.perc_mismatched,
                                          mean_quality=args.mean_quality,
                                          genomic_region=args.genomic_region)
-    print(str(feature_extractor))
     feature_extractor.process_file()
