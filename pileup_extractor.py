@@ -151,7 +151,7 @@ class FeatureExtractor:
             lines = i.readlines()
 
             with open(self.output_path, "w") as o:
-                header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tmotif\tperc_mismatched\tq_mean\tq_std\n"
+                header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_ins\tn_del\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_ins_rel\tn_del_rel\tmotif\tperc_error\tq_mean\tq_std\n"
                 o.write(header)
                 # tqdm provides the progress bar
                 for line in tqdm(lines): 
@@ -216,7 +216,7 @@ class FeatureExtractor:
         # get 11b motif
         motif = self.get_motif(chr, site, ref, k=5)
 
-        out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["t"]}\t{count["a_rel"]}\t{count["c_rel"]}\t{count["g_rel"]}\t{count["t_rel"]}\t{motif}\t{allele_fraction}\t{quality_mean}\t{quality_std}\n'
+        out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["t"]}\t{count["ins"]}\t{count["del"]}\t{count["a_rel"]}\t{count["c_rel"]}\t{count["g_rel"]}\t{count["t_rel"]}\t{count["ins_rel"]}\t{count["del_rel"]}\t{motif}\t{allele_fraction}\t{quality_mean}\t{quality_std}\n'
         return out
 
     def remove_indels(self, pileup_string: str) -> str:
@@ -318,11 +318,17 @@ class FeatureExtractor:
             count_dict["c_rel"] = count_dict["c"] / n_reads
             count_dict["g_rel"] = count_dict["g"] / n_reads
             count_dict["t_rel"] = count_dict["t"] / n_reads
+            count_dict["ins_rel"] = count_dict["ins"] / n_reads
+            count_dict["del_rel"] = count_dict["del"] / n_reads
+
         except ZeroDivisionError:
             count_dict["a_rel"] = 0
             count_dict["c_rel"] = 0
             count_dict["g_rel"] = 0
             count_dict["t_rel"] = 0
+            count_dict["ins_rel"] = 0
+            count_dict["del_rel"] = 0
+
 
         return count_dict
 
@@ -390,12 +396,13 @@ class FeatureExtractor:
         
     def get_allele_fraction(self, count_dict: Dict[str, Union[str, int, float]], ref_base: str) -> int:
         """
-        Calculates the number of mismatched reads
+        Calculates the number of reads containing a mismatch, insertion or deletion 
+        at a given position.
 
         Parameters
         ----------
         count_dict : dict
-            Dictionary containing the number of occurences of A,C,G,T for a given position
+            Dictionary containing the number of occurences of A,C,G,T,ins,del for a given position
         ref_base : str
             reference base at the given position
 
@@ -405,7 +412,7 @@ class FeatureExtractor:
             Number of mismatched reads a the given position
         """
         mismatch_count_sum = 0
-        for b in ["a", "c", "g", "t"]:
+        for b in ["a", "c", "g", "t", "ins", "del"]:
             if b != ref_base.lower():
                 mismatch_count_sum += count_dict[b+"_rel"]
 
