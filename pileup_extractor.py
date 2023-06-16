@@ -4,9 +4,8 @@ import argparse
 from tqdm import tqdm
 from pyfiglet import Figlet
 import numpy as np
-from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Pool
-import timeit
+from itertools import takewhile, repeat
 
 class FeatureExtractor:
     input_path : str
@@ -154,29 +153,47 @@ class FeatureExtractor:
         """
         print(str(self))
 
+        n_lines = self.get_num_lines(self.input_path)
+
         with open(self.input_path, "r") as i:
-            lines = i.readlines()
         
-        with Pool(processes=self.num_processes) as pool:
-            with open(self.output_path, "w") as o:
-                header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_ins\tn_del\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_ins_rel\tn_del_rel\tmotif\tperc_error\tq_mean\tq_std\n"
-                o.write(header)
+            with Pool(processes=self.num_processes) as pool:
+                with open(self.output_path, "w") as o:
+                    header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_ins\tn_del\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_ins_rel\tn_del_rel\tmotif\tperc_error\tq_mean\tq_std\n"
+                    o.write(header)
 
-                total_lines = len(lines)
-                progress_bar = tqdm(total=total_lines)
+                    progress_bar = tqdm(total=n_lines)
+                    results = []
 
-                results = []
+                    for line in i:
+                        result = pool.apply_async(self.process_position, args=(line.split("\t"),))
+                        results.append((line, result))
 
-                for line in lines:
-                    result = pool.apply_async(self.process_position, args=(line.split("\t"),))
-                    results.append((line, result))
+                    for line, result in results:
+                        outline = result.get()
+                        o.write(outline)
+                        progress_bar.update()
 
-                for line, result in results:
-                    outline = result.get()
-                    o.write(outline)
-                    progress_bar.update()
+                    progress_bar.close()
 
-                progress_bar.close()
+    def get_num_lines(self, path: str) -> int:
+        """
+        Calculate the number of lines in a given file. Function taken from
+        https://stackoverflow.com/questions/845058/how-to-get-line-count-of-a-large-file-cheaply-in-python
+        
+        Parameters
+        ----------
+        path : str
+            Path to a file
+
+        Returns
+        -------
+        int
+            Number of lines in the given file
+        """
+        f = open(path, 'rb')
+        bufgen = takewhile(lambda x: x, (f.raw.read(1024*1024) for _ in repeat(None)))
+        return sum( buf.count(b'\n') for buf in bufgen )
 
     def process_position(self, line: List[str]) -> str:
         """
