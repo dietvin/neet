@@ -1,4 +1,6 @@
 import re
+import os
+import warnings
 from typing import Dict, List, Tuple, Union, Any
 import argparse
 from tqdm import tqdm
@@ -91,9 +93,10 @@ class FeatureExtractor:
                  genomic_region: str = None,
                  num_processes: int = None) -> None:
         
-        self.input_path = in_path
-        self.output_path = out_path
-        self.ref_path = ref_path
+        self.input_path = self.check_get_in_path(in_path)
+        self.output_path = self.check_get_out_path(out_path, in_path)
+        self.ref_path = self.check_get_ref_path(ref_path)
+        
         self.ref_sequences = self.get_references(ref_path)
         # if no argument is given (i.e. num_reads=None) the minimum number of reads is 1, 
         # so only positions with no reads are filtered out
@@ -113,6 +116,116 @@ class FeatureExtractor:
         filter_region = f" - Extracting positions only on chromosome '{self.filter_genomic_region[0]}' from position {self.filter_genomic_region[1]} to {self.filter_genomic_region[2]}.\n" if self.filter_genomic_region else " - Extracting all genomic positions\n"
         o = f"FeatureExtractor instance information:\n\n - Using input pileup file at {self.input_path}\n - After processing, writing output file to {self.output_path}\n - {len(self.ref_sequences)} reference sequence(s) found in file {self.ref_path}\n" + filter_n_reads + filter_perc_mis + filter_mean_qual + filter_region
         return o
+
+    def check_get_in_path(self, in_path: str) -> str:
+        """
+        Check if the given input path is valid and of the expected file type.
+
+        Parameters
+        ----------
+        in_path : str
+            Path to the input file given by the user.
+
+        Returns
+        -------
+        str
+            Valid input file path.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the input file does not exist.
+
+        Warns
+        -----
+        UserWarning
+            If the input file is not of the expected file type (.msf, .pup, .pileup).
+            Warns the user to ensure it is a pileup file as produced by Samtools' mpileup function.
+        """
+        if not os.path.exists(in_path): # does file exist?
+            raise FileNotFoundError(f"Input file not found. File '{in_path}' does not exist.")
+        file_type = os.path.splitext(in_path)[1]
+        if not file_type in [".msf", ".pup", ".pileup"]: # is file likely in pileup format?
+            warnings.warn(f"Input file of type {file_type}. Make sure that this is a pileup file as produced by Samtools' mpileup function.", Warning)
+        
+        return in_path
+
+    def check_get_out_path(self, out_path: str, in_path: str) -> str:
+        """
+        Check if the given out_put path is valid. Can be either a filename or directory.
+        If a directory is given, output path will be '[DIR-path]/[INPUT-FILE-BASENAME]_extracted.tsv'.
+
+        Parameters
+        ----------
+        out_path : str
+            Output path given by the user. Either path to a (non-existing) file or a directory
+        in_path : str
+            Path to input file given by the user
+
+        Returns
+        -------
+        str
+            Valid path to output file 
+
+        Raises
+        ------
+        FileNotFoundError
+            If the output directory or path to the output file does not exist.
+        """
+        # check if directory/file exists
+        if os.path.isdir(out_path):
+            if not os.path.exists(out_path):
+                raise FileNotFoundError(f"Output directory not found. '{out_path}' does not exist.")
+
+            in_basename = os.path.splitext(os.path.basename(in_path))[0]
+            if not out_path.endswith("/"):
+                out_path += "/"
+
+            return os.path.join(out_path, in_basename + "_extracted.tsv")
+        
+        else:
+            dirname = os.path.dirname(out_path)
+            if not os.path.exists(dirname):
+                raise FileNotFoundError(f"Path to output file not found. '{dirname}' does not exist.")
+
+            file_extension = os.path.splitext(out_path)[1]
+            if file_extension != ".tsv":
+                warnings.warn(f"Given output file has extension '{file_extension}'. Note that the output file will be of type '.tsv'.")
+
+            return out_path
+
+    def check_get_ref_path(self, in_path: str) -> str:
+        """
+        Check if the given path to reference file is valid 
+        and of the expected file type.
+
+        Parameters
+        ----------
+        in_path : str
+            Path to the reference file given by the user.
+
+        Returns
+        -------
+        str
+            Valid input file path.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the input file does not exist.
+
+        Warns
+        -----
+        UserWarning
+            If the input file is not of the expected file type (.fa, .fasta).
+            Warns the user to ensure it is a fasta file.
+        """
+        if not os.path.exists(in_path): # does file exist?
+            raise FileNotFoundError(f"Input file not found. File '{in_path}' does not exist.")
+        file_type = os.path.splitext(in_path)[1]
+        if not file_type in [".fa", ".fasta"]: # is file likely in pileup format?
+            warnings.warn(f"Reference file of type {file_type}. Make sure that this is a fasta file", Warning)
+        return in_path
 
     def get_references(self, path: str) -> Dict[str, str]:
         """

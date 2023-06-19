@@ -1,5 +1,7 @@
 from typing import List, Any
 import argparse
+import warnings
+import os
 from tqdm import tqdm
 from pyfiglet import Figlet
 from itertools import takewhile, repeat
@@ -40,8 +42,8 @@ class NeighbourSearcher:
     error_threshold: float
 
     def __init__(self, in_path: str, out_path: str, window_size: int, err_thresh: float = None) -> None:
-        self.input_path = in_path
-        self.output_path = out_path
+        self.input_path = self.check_get_in_path(in_path)
+        self.output_path = self.check_get_out_path(out_path, in_path)
         self.window_size = window_size
         self.error_threshold = err_thresh if err_thresh is not None else 0
 
@@ -55,6 +57,85 @@ class NeighbourSearcher:
         Overwrite the existing (unsorted) file.
         """
         pass # for now I assume that the output files are sorted by default
+
+    def check_get_in_path(self, in_path: str) -> str:
+        """
+        Check if the given input path is valid and of the expected file type (.tsv).
+
+        Parameters
+        ----------
+        in_path : str
+            Path to the input file given by the user.
+
+        Returns
+        -------
+        str
+            Valid input file path.
+
+        Raises
+        ------
+        FileNotFoundError
+            If the input file does not exist.
+
+        Warns
+        -----
+        UserWarning
+            If the input file is not of the expected file type (.tsv).
+            Warns the user to ensure it is a tab-separated file as produced by the 
+            PileupExtractor.
+        """
+        if not os.path.exists(in_path): # does file exist?
+            raise FileNotFoundError(f"Input file not found. File '{in_path}' does not exist.")
+        file_type = os.path.splitext(in_path)[1]
+        if file_type != ".tsv": # is file likely in pileup format?
+            warnings.warn(f"Input file of type {file_type}. Make sure that this is a tab-separated file (.tsv)", Warning)
+        
+        return in_path
+
+    def check_get_out_path(self, out_path: str, in_path: str) -> str:
+        """
+        Check if the given out_put path is valid. Can be either a filename or directory.
+        If a directory is given, output path will be '[DIR-path]/[INPUT-FILE-BASENAME]_neighbours.tsv'.
+
+        Parameters
+        ----------
+        out_path : str
+            Output path given by the user. Either path to a (non-existing) file or a directory
+        in_path : str
+            Path to input file given by the user
+
+        Returns
+        -------
+        str
+            Valid path to output file 
+
+        Raises
+        ------
+        FileNotFoundError
+            If the output directory or path to the output file does not exist.
+        """
+        # check if directory/file exists
+        if os.path.isdir(out_path):
+            if not os.path.exists(out_path):
+                raise FileNotFoundError(f"Output directory not found. '{out_path}' does not exist.")
+
+            in_basename = os.path.splitext(os.path.basename(in_path))[0]
+            if not out_path.endswith("/"):
+                out_path += "/"
+
+            return os.path.join(out_path, in_basename + "_neighbours.tsv")
+        
+        else:
+            dirname = os.path.dirname(out_path)
+            if not os.path.exists(dirname):
+                raise FileNotFoundError(f"Path to output file not found. '{dirname}' does not exist.")
+
+            file_extension = os.path.splitext(out_path)[1]
+            if file_extension != ".tsv":
+                warnings.warn(f"Given output file has extension '{file_extension}'. Note that the output file will be of type '.tsv'.")
+
+            return out_path
+
 
     def read_lines_sliding_window(self) -> None:
         """
