@@ -86,7 +86,8 @@ class FeatureExtractor:
     filter_genomic_region: Tuple[str, int, int]
     num_processes: int
 
-    def __init__(self, in_path: str, out_path: str, ref_path: str, 
+    def __init__(self, in_path: str, ref_path: str,
+                 out_path: str = None, 
                  num_reads: int = None, 
                  perc_mismatch: float = None,
                  mean_quality: float = None,
@@ -94,9 +95,10 @@ class FeatureExtractor:
                  num_processes: int = None) -> None:
         
         self.input_path = self.check_get_in_path(in_path)
-        self.output_path = self.check_get_out_path(out_path, in_path)
         self.ref_path = self.check_get_ref_path(ref_path)
-        
+
+        self.output_path = self.check_get_out_path(out_path, in_path) if out_path is not None else None
+    
         self.ref_sequences = self.get_references(ref_path)
         # if no argument is given (i.e. num_reads=None) the minimum number of reads is 1, 
         # so only positions with no reads are filtered out
@@ -327,32 +329,48 @@ class FeatureExtractor:
         -------
         None
         """
-        f = Figlet(font="slant")
-        print(f.renderText("Neet - pileup extractor"))
-        print(str(self))
-
         n_lines = self.get_num_lines(self.input_path)
 
         with open(self.input_path, "r") as i:
         
             with Pool(processes=self.num_processes) as pool:
-                with open(self.output_path, "w") as o:
-                    header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_ins\tn_del\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_ins_rel\tn_del_rel\tmotif\tperc_error\tq_mean\tq_std\n"
-                    o.write(header)
+                
+                header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_ins\tn_del\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_ins_rel\tn_del_rel\tmotif\tperc_error\tq_mean\tq_std\n"
+                results = []
 
-                    progress_bar = tqdm(total=n_lines)
-                    results = []
-
+                # if no output is given, write to stdout
+                if self.output_path is None:
+                    print(header.strip("\n"))
                     for line in i:
                         result = pool.apply_async(self.process_position, args=(line.split("\t"),))
                         results.append((line, result))
 
                     for line, result in results:
                         outline = result.get()
-                        o.write(outline)
-                        progress_bar.update()
+                        if len(outline) > 0:
+                            print(outline.strip("\n"))
 
-                    progress_bar.close()
+                # if outpath is given, write to file
+                else:
+                    f = Figlet(font="slant")
+                    print(f.renderText("Neet - pileup extractor"))
+                    print(str(self))
+
+                    with open(self.output_path, "w") as o:
+                        o.write(header)
+
+                        progress_bar = tqdm(total=n_lines)
+
+                        for line in i:
+                            result = pool.apply_async(self.process_position, args=(line.split("\t"),))
+                            results.append((line, result))
+
+                        for line, result in results:
+                            outline = result.get()
+                            o.write(outline)
+                            progress_bar.update()
+
+                        progress_bar.close()
 
     def get_num_lines(self, path: str) -> int:
         """
@@ -731,12 +749,10 @@ if __name__ == "__main__":
                                         given pileup file.")
     parser.add_argument('-i', '--input', type=str, required=True,
                         help='Path to the input file')
-
-    parser.add_argument('-o', '--output', type=str, required=True,
-                        help='Path to the output file')
-
     parser.add_argument('-r', '--reference', type=str, required=True,
                         help='Path to the reference file')
+    parser.add_argument('-o', '--output', type=str, required=False,
+                        help='Path to the output file')
     parser.add_argument('-n', '--num_reads', type=positive_int, required=False,
                         help='Filter by minimum number of reads at a position')
     parser.add_argument('-p', '--perc_mismatched', type=float_between_zero_and_one, required=False,
@@ -750,7 +766,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    feature_extractor = FeatureExtractor(args.input, args.output, args.reference, 
+    feature_extractor = FeatureExtractor(args.input, args.reference, args.output, 
                                          num_reads=args.num_reads, 
                                          perc_mismatch=args.perc_mismatched,
                                          mean_quality=args.mean_quality,
