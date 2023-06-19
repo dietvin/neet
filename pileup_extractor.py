@@ -8,6 +8,72 @@ from multiprocessing import Pool
 from itertools import takewhile, repeat
 
 class FeatureExtractor:
+    """
+    From a pileup alignment file, extract the following features
+    at each genomic position:
+    - chromosome
+    - position on chromosome
+    - number of reads
+    - reference base
+    - majority base
+    - number of A, C, G, T (absolute & relative)
+    - number of insertions and deletions (abs. & rel.)
+    - motif surrounding a position
+    - percentage of reads with an error at a given position
+    - mean and standard deviation of the Qscore a a given position
+
+    Also allows for filtering positions by the number of reads, the error percentage,
+    the mean quality. Additionally, a specific genomic region can be extracted exlusively.
+
+    The pileup file should be created using Samtool's mpileup method as follows:
+
+    `samtools mpileup -f REF.fa -A -d 0 -Q 0 MAPPING.bam > OUTFILE.pileup` 
+
+    Attributes
+    ----------
+    input_path : str
+        path to a pileup file
+    output_path : str
+        path to newly created output file
+    ref_path : str
+        path to the reference fasta file
+    ref_sequences : Dict[str, str]
+        dictionary containing all sequences (values) and sequence names (keys) 
+        extracted from the reference fasta file
+    filter_num_reads : int
+        filtering option to keep only positions with at least filter_num_reads
+        number of reads 
+    filter_perc_mismatch : float
+        filtering option to keep only position with an error percentage of at 
+        least filter_perc_mismatch
+    filter_mean_quality : float
+        filtering option to keep only position with a mean Qscore of at least
+        filter_mean_quality 
+    filter_genomic_region : str
+        string of format CHR:START-END to specify a genomic region that should
+        be processed exclusively
+    num_processes
+        number of parallel processes during featrue extraction. Decreases 
+        computational time
+
+    Methods
+    -------
+    - get_references(path: str) -> Dict[str, str]
+    - extract_positional_info(data_string: str) -> Tuple[str, int, int]
+        - region_is_valid(self, chr, start, end) -> bool
+    - process_file(self) -> None
+        - get_num_lines(self, path: str) -> int
+        - process_position(self, line: List[str]) -> str
+            - remove_indels(self, pileup_string: str) -> str
+            - parse_pileup_string(self, pileup_string: str, ref_base: str) -> Dict[str, Union[str, int]]
+            - get_relative_count(self, count_dict: Dict[str, Union[str, int]], n_reads: int) -> Dict[str, Union[str, int, float]]
+            - get_majority_base(self, count_dict: Dict[str, Union[str, int, float]]) -> str
+            - get_motif(self, chr: str, site: int, ref: str, k: int) -> str
+            - get_allele_fraction(self, count_dict: Dict[str, Union[str, int, float]], ref_base: str) -> int
+            - get_read_quality(self, read_qualities: str) -> Tuple[float, float]
+    """
+
+
     input_path : str
     output_path : str
     ref_path : str
@@ -32,7 +98,7 @@ class FeatureExtractor:
         # if no argument is given (i.e. num_reads=None) the minimum number of reads is 1, 
         # so only positions with no reads are filtered out
         self.filter_num_reads = num_reads if num_reads is not None else 1
-        # if no argument is given (i.e. perc_mismatch=None) set minimum %mismatched to 1
+        # if no argument is given (i.e. perc_mismatch=None) set minimum %mismatched to 0
         # so all positions are included 
         self.filter_perc_mismatch = perc_mismatch if perc_mismatch is not None else 0
         self.filter_mean_quality = mean_quality if mean_quality is not None else 0
@@ -41,14 +107,11 @@ class FeatureExtractor:
         self.num_processes = num_processes
 
     def __str__(self) -> str:
-        f = Figlet(font="slant")
-        o = f.renderText("Neet - pileup extractor")
-        
         filter_n_reads = f" - Filtering positions with less than {self.filter_num_reads} reads.\n"
         filter_perc_mis = f" - Filtering positions with less than {self.filter_perc_mismatch*100}% of reads mismatched.\n" if self.filter_perc_mismatch>0 else " - No filtering based on the mismatch percentage\n"
         filter_mean_qual = f" - Filtering positions with mean read qualities lower that {self.filter_mean_quality}.\n" if self.filter_mean_quality>0 else " - No filtering based on the mean read quality.\n"
         filter_region = f" - Extracting positions only on chromosome '{self.filter_genomic_region[0]}' from position {self.filter_genomic_region[1]} to {self.filter_genomic_region[2]}.\n" if self.filter_genomic_region else " - Extracting all genomic positions\n"
-        o += f"\nFeatureExtractor instance information:\n\n - Using input pileup file at {self.input_path}\n - After processing, writing output file to {self.output_path}\n - {len(self.ref_sequences)} reference sequence(s) found in file {self.ref_path}\n" + filter_n_reads + filter_perc_mis + filter_mean_qual + filter_region
+        o = f"FeatureExtractor instance information:\n\n - Using input pileup file at {self.input_path}\n - After processing, writing output file to {self.output_path}\n - {len(self.ref_sequences)} reference sequence(s) found in file {self.ref_path}\n" + filter_n_reads + filter_perc_mis + filter_mean_qual + filter_region
         return o
 
     def get_references(self, path: str) -> Dict[str, str]:
@@ -133,7 +196,7 @@ class FeatureExtractor:
             raise Exception(f"Chromosome region error: End position {end} not in range of corrdinates 1-{chr_len} (both incl.).")
         return True
 
-    def process_file(self):
+    def process_file(self) -> None:
         """
         Reads .pileup file and processes it, writing the results to a new file
         using multiprocessing.
@@ -151,6 +214,8 @@ class FeatureExtractor:
         -------
         None
         """
+        f = Figlet(font="slant")
+        print(f.renderText("Neet - pileup extractor"))
         print(str(self))
 
         n_lines = self.get_num_lines(self.input_path)
@@ -562,7 +627,7 @@ if __name__ == "__main__":
     parser.add_argument('-n', '--num_reads', type=positive_int, required=False,
                         help='Filter by minimum number of reads at a position')
     parser.add_argument('-p', '--perc_mismatched', type=float_between_zero_and_one, required=False,
-                        help='Filter by minimum fraction of mismatched bases')
+                        help='Filter by minimum fraction of mismatched/deleted/inserted bases')
     parser.add_argument('-q', '--mean_quality', type=positive_float, required=False,
                         help='Filter by mean read quality scores')
     parser.add_argument('-g', '--genomic_region', type=str, required=False,
