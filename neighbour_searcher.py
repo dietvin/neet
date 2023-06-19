@@ -1,27 +1,92 @@
-from typing import List
+from typing import List, Any
 import argparse
 from tqdm import tqdm
 from pyfiglet import Figlet
 from itertools import takewhile, repeat
 
 class NeighbourSearcher:
+    """
+    From a PileupExtractor output file, search for errors in surrounding positions. Does this by using
+    a sliding window of size 2*window_size+1 across each line of a given file. For a given central 
+    line of a window, check for each neighbouring line if it is also a neighbour on the reference sequence
+    and optionally if it is considered an error based on the error_threshold.
+    The output file contains the same information as the input file, with two added columns containing 
+    (1.) if a error is found in the neighbourhood of a given position and (2.) where exactly these errors occur,
+    denoted by comma-separated relative positions.
+
+    Attributes
+    ----------
+    input_path : str
+        path to an PileupExtractor output file
+    output_path : str
+        path to newly created output file
+    window_size : int
+        size of the window used to find neighbours
+    error_threshold : float
+        error threshold to filter by. Neighbours are only considered if the error percentage is 
+        larger than the threshold (i.e. if a neighbour is considered an error).
+
+    Methods
+    -------
+    - sort_extractor_file() -> None
+    - read_lines_sliding_window() -> None
+    - process_neighbourhood(neighbourhood: List[str]) -> str
+    - get_num_lines(path: str) -> int:
+    """
 
     input_path: str
     output_path: str
     window_size: int
+    error_threshold: float
 
-
-    def __init__(self, in_path: str, out_path: str, window_size: int) -> None:
+    def __init__(self, in_path: str, out_path: str, window_size: int, err_thresh: float = None) -> None:
         self.input_path = in_path
         self.output_path = out_path
         self.window_size = window_size
+        self.error_threshold = err_thresh if err_thresh is not None else 0
 
+    def __str__(self) -> str:
+        o = f"NeighbourhoodSearcher instance information:\n\n - Using PileupExtractor file at {self.input_path} as input\n - After processing, writing output file to {self.output_path}\n - Searching neighbours {self.window_size} bases up- and downstream from a given position\n - A neighbouring position must have a error percentage of at least {self.error_threshold} to be included\n"
+        return o
+    
     def sort_extractor_file(self) -> None:
         """
         Read and sort a given tsv file from the pileup_extractor.
         Overwrite the existing (unsorted) file.
         """
         pass # for now I assume that the output files are sorted by default
+
+    def read_lines_sliding_window(self) -> None:
+        """
+        Read and process each line of a tsv file from the pileup extractor
+        """
+        f = Figlet(font="slant")
+        print(f.renderText("Neet - neighbourhood searcher"))
+        print(str(self))
+
+        window_size = 1 + 2 * self.window_size
+
+        n_lines = self.get_num_lines(self.input_path) - 1 # -1 because header is excluded
+
+        with open(self.input_path, 'r') as file, open(self.output_path, "w") as o:
+            header = next(file)
+            o.write(header.strip("\n")+"\thas_neighbour_error\tneighbour_error_pos\n")
+
+            progress_bar = tqdm(total=n_lines)
+            lines = []            
+            for line in file:
+                lines.append(line)
+
+                if len(lines) > window_size:
+                    lines.pop(0)
+                
+                if len(lines) == window_size:
+                    outline = self.process_neighbourhood(lines)
+                    o.write(outline)
+
+                progress_bar.update()
+            
+            progress_bar.close()
 
     def process_neighbourhood(self, neighbourhood: List[str]) -> str:
         """
@@ -60,40 +125,19 @@ class NeighbourSearcher:
 
         for pos in nb:
             pos = pos.strip("\n").split("\t")
-            if pos[0] == ref_chr: # check if same chromosome
+            chr = pos[0]
+            perc_error = float(pos[18])
+
+            if (chr == ref_chr) & (perc_error >= self.error_threshold): # check if same chromosome & if pos is error
                 site = int(pos[1])
                 relative_pos = site - ref_site
-                if abs(relative_pos) <= k: # check if pos are close to each other
+
+                if (abs(relative_pos) <= k): # check if pos are close to each other
                     has_nb = True
                     nb_info += str(relative_pos)+","
 
         ref_str += f"\t{has_nb}\t{nb_info}\n"
         return ref_str
-
-    def read_lines_sliding_window(self):
-        """
-        Read and process each line of a tsv file from the pileup extractor
-        """
-        window_size = 1 + 2 * self.window_size
-
-        n_lines = self.get_num_lines(self.input_path)
-
-        with open(self.input_path, 'r') as file, open(self.output_path, "w") as o:
-            progress_bar = tqdm(total=n_lines)
-            lines = []
-            for line in file:
-                lines.append(line)
-
-                if len(lines) > window_size:
-                    lines.pop(0)
-                
-                if len(lines) == window_size:
-                    outline = self.process_neighbourhood(lines)
-                    o.write(outline)
-
-                progress_bar.update()
-            
-            progress_bar.close()
 
     def get_num_lines(self, path: str) -> int:
         """
@@ -115,6 +159,32 @@ class NeighbourSearcher:
         return sum( buf.count(b'\n') for buf in bufgen )
 
 
+def float_between_zero_and_one(value: Any) -> float:
+    """
+    Convert the given value to a float and validate that it is between 0 and 1 (inclusive).
+
+    Parameters
+    ----------
+    value : Any
+        The value to be converted and validated.
+
+    Returns
+    -------
+    float
+        The converted and validated float value.
+
+    Raises
+    ------
+    argparse.ArgumentTypeError
+        If the value is not a float between 0 and 1.
+
+    """
+    fvalue = float(value)
+    if not 0 <= fvalue <= 1:
+        raise argparse.ArgumentTypeError(f"{value} is not a float between 0 and 1")
+    return fvalue
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="Pileup feature extractor",
                                         description="Extracs different characteristics from a\
@@ -125,13 +195,17 @@ if __name__ == "__main__":
     parser.add_argument('-o', '--output', type=str, required=True,
                         help='Path to the output file')
 
-    parser.add_argument('-w', '--window_size', type=int, required=True,
+    parser.add_argument('-w', '--window_size', type=int, required=True, default=3,
                         help='Size of the sliding window = 2*w+1')
-    parser.add_argument('-t', '--num_processes', type=int, required=False,
+    
+    parser.add_argument('-t', '--error_threshold', type=float_between_zero_and_one, required=False,
+                        help='Filter by minimum fraction of mismatched/deleted/inserted bases')
+
+    parser.add_argument('-p', '--num_processes', type=int, required=False,
                         help='Number of threads to use for processing.')
 
     args = parser.parse_args()
 
-    neighbour_searcher = NeighbourSearcher(args.input, args.output, args.window_size)
+    neighbour_searcher = NeighbourSearcher(args.input, args.output, args.window_size, args.error_threshold)
     
     neighbour_searcher.read_lines_sliding_window()
