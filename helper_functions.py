@@ -45,7 +45,6 @@ def positive_float(value: Any) -> int:
         raise argparse.ArgumentTypeError(f"{value} is not a positive float.")
     return fvalue
 
-
 def float_between_zero_and_one(value: Any) -> float:
     """
     Convert the given value to a float and validate that it is between 0 and 1 (inclusive).
