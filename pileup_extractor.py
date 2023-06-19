@@ -120,6 +120,11 @@ class FeatureExtractor:
         o = f"FeatureExtractor instance information:\n\n - Using input pileup file at {self.input_path}\n - After processing, writing output file to {self.output_path}\n - {len(self.ref_sequences)} reference sequence(s) found in file {self.ref_path}\n" + filter_n_reads + filter_perc_mis + filter_mean_qual + filter_region
         return o
 
+
+    #################################################################################################################
+    #                                   Functions called during initialization                                      #
+    #################################################################################################################
+
     def check_get_in_path(self, in_path: str) -> str:
         """
         Check if the given input path is valid and of the expected file type.
@@ -175,7 +180,6 @@ class FeatureExtractor:
         FileNotFoundError
             If the output directory or path to the output file does not exist.
         """
-        # check if directory/file exists
         if os.path.isdir(out_path):
             if not os.path.exists(out_path):
                 raise FileNotFoundError(f"Output directory not found. '{out_path}' does not exist.")
@@ -311,6 +315,11 @@ class FeatureExtractor:
         if end <= 0 or end > chr_len:
             raise Exception(f"Chromosome region error: End position {end} not in range of corrdinates 1-{chr_len} (both incl.).")
         return True
+
+
+    #################################################################################################################
+    #                                  Functions called during feature extraction                                   #
+    #################################################################################################################
 
     def process_file(self) -> None:
         """
