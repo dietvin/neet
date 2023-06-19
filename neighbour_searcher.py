@@ -5,6 +5,7 @@ import os
 from tqdm import tqdm
 from pyfiglet import Figlet
 from itertools import takewhile, repeat
+from helper_functions import float_between_zero_and_one
 
 class NeighbourSearcher:
     """
@@ -239,31 +240,6 @@ class NeighbourSearcher:
         bufgen = takewhile(lambda x: x, (f.raw.read(1024*1024) for _ in repeat(None)))
         return sum( buf.count(b'\n') for buf in bufgen )
 
-
-def float_between_zero_and_one(value: Any) -> float:
-    """
-    Convert the given value to a float and validate that it is between 0 and 1 (inclusive).
-
-    Parameters
-    ----------
-    value : Any
-        The value to be converted and validated.
-
-    Returns
-    -------
-    float
-        The converted and validated float value.
-
-    Raises
-    ------
-    argparse.ArgumentTypeError
-        If the value is not a float between 0 and 1.
-
-    """
-    fvalue = float(value)
-    if not 0 <= fvalue <= 1:
-        raise argparse.ArgumentTypeError(f"{value} is not a float between 0 and 1")
-    return fvalue
 
 
 if __name__ == "__main__":
