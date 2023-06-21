@@ -243,9 +243,8 @@ class NeighbourSearcher:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog="Pileup feature extractor",
-                                        description="Extracs different characteristics from a\
-                                        given pileup file.")
+    parser = argparse.ArgumentParser(prog="Neighbourhood searcher",
+                                        description="Adds information about neighbouring error positions.")
     parser.add_argument('-i', '--input', type=str, required=True,
                         help='Path to the input file')
 

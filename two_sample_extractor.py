@@ -42,6 +42,9 @@ class TwoSampleExtractor(FeatureExtractor):
         self.basename_1 = self.get_basename(in_path_1)
         self.basename_2 = self.get_basename(in_path_2)
         
+    def __str__(self) -> str:
+        return super().__str__()
+
     def get_basename(self, in_path: str) -> str:
         """
         Extracts the basename of a file from the given path.
@@ -186,7 +189,7 @@ class TwoSampleExtractor(FeatureExtractor):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog="Pileup feature extractor",
+    parser = argparse.ArgumentParser(prog="Two sample merger",
                                         description="Merges two files containing extracted features as given by PileupExtractor or NeighbourhoodSearcher.")
     parser.add_argument('-a', '--file_a', type=str, required=True,
                         help='Path to the first file from PileupExtractor or NeighbourhoodSearcher')
