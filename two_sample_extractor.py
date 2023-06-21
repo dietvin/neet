@@ -1,8 +1,9 @@
 from pileup_extractor import FeatureExtractor
-import csv, os, warnings
+import csv, os, warnings, argparse
+from tqdm import tqdm
+from pyfiglet import Figlet
 
-
-class TwoSampleExtractor:
+class TwoSampleExtractor(FeatureExtractor):
     """
     A class for extracting and merging two TSV files based on position.
 
@@ -34,10 +35,10 @@ class TwoSampleExtractor:
     basename_1: str = "a"
     basename_2: str = "b"
 
-    def __init__(self, in_path_1: str, in_path_2: str, out_path: str, ) -> None:
-        self.input_path_1 = in_path_1
-        self.input_path_2 = in_path_2
-        self.output_path = out_path
+    def __init__(self, in_path_1: str, in_path_2: str, out_path: str) -> None:
+        self.input_path_1 = self.check_get_in_path(in_path_1)
+        self.input_path_2 = self.check_get_in_path(in_path_2)
+        self.output_path = self.check_get_out_path(out_path, self.input_path_1, "_merged.tsv")
         self.basename_1 = self.get_basename(in_path_1)
         self.basename_2 = self.get_basename(in_path_2)
         
@@ -97,6 +98,12 @@ class TwoSampleExtractor:
         """
         file1 = self.input_path_1
         file2 = self.input_path_2
+
+        f = Figlet(font="slant")
+        print(f.renderText("Neet - file merger"))
+
+        progress_bar = tqdm(total=self.get_num_lines(file1)+self.get_num_lines(file2))
+
         output_file = self.output_path
         # Open input files in read mode, open output file in write mode
         with open(file1, "r") as file1_handle, open(file2, "r") as file2_handle, open(output_file, "w") as output_handle:
@@ -121,8 +128,10 @@ class TwoSampleExtractor:
 
             # Initialize current_row1 and current_row2 with the first rows from both input files
             current_row1 = next(reader1, None)
+            progress_bar.update()
             current_row2 = next(reader2, None)
-
+            progress_bar.update()
+            
             # Merge the rows from both input files based on "chr" and "site" columns
             while current_row1 and current_row2:
                 chr1 = current_row1[chr_index1]
@@ -136,13 +145,17 @@ class TwoSampleExtractor:
                     writer.writerow(output_row)
                     # Move to the next row in both input files
                     current_row1 = next(reader1, None)
+                    progress_bar.update()
                     current_row2 = next(reader2, None)
+                    progress_bar.update()                    
+
 
                 elif chr1 < chr2 or (chr1 == chr2 and site1 < site2):
                     # Row 2 has a later position (i.e. position is missing in file 1)
                     writer.writerow(current_row1 + [""] * (len(header2) - 2))
                     # Move to the next row in the first input file
                     current_row1 = next(reader1, None)
+                    progress_bar.update()
 
                 else:
                     # Row 1 has a later position (i.e. position is missing in file 2)
@@ -150,11 +163,14 @@ class TwoSampleExtractor:
                     writer.writerow(output_row)
                     # Move to the next row in the second input file
                     current_row2 = next(reader2, None)
+                    progress_bar.update()
 
             # Write remaining rows from file1, if any
             while current_row1:
                 writer.writerow(current_row1 + [""] * (len(header2) - 2))
                 current_row1 = next(reader1, None)
+                progress_bar.update()
+
 
             # Write remaining rows from file2, if any
             while current_row2:
@@ -164,3 +180,21 @@ class TwoSampleExtractor:
                 output_row = [chr2, site2] + [""] * (len(header1) - 2) + [col for i, col in enumerate(current_row2) if i != chr_index2 and i != site_index2]
                 writer.writerow(output_row)
                 current_row2 = next(reader2, None)
+                progress_bar.update()
+
+            progress_bar.close()
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(prog="Pileup feature extractor",
+                                        description="Merges two files containing extracted features as given by PileupExtractor or NeighbourhoodSearcher.")
+    parser.add_argument('-a', '--file_a', type=str, required=True,
+                        help='Path to the first file from PileupExtractor or NeighbourhoodSearcher')
+    parser.add_argument('-b', '--file_b', type=str, required=True,
+                        help='Path to the second file from PileupExtractor or NeighbourhoodSearcher')
+    parser.add_argument('-o', '--output', type=str, required=False,
+                        help='Path to the output file')
+    args = parser.parse_args()
+
+    feature_extractor = TwoSampleExtractor(args.file_a, args.file_b, args.output)
+    feature_extractor.merge_tsv_files()

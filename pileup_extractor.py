@@ -158,7 +158,7 @@ class FeatureExtractor:
         
         return in_path
 
-    def check_get_out_path(self, out_path: str, in_path: str) -> str:
+    def check_get_out_path(self, out_path: str, in_path: str, suffix: str = "_extracted.tsv") -> str:
         """
         Check if the given out_put path is valid. Can be either a filename or directory.
         If a directory is given, output path will be '[DIR-path]/[INPUT-FILE-BASENAME]_extracted.tsv'.
@@ -188,7 +188,7 @@ class FeatureExtractor:
             if not out_path.endswith("/"):
                 out_path += "/"
 
-            return os.path.join(out_path, in_basename + "_extracted.tsv")
+            return os.path.join(out_path, in_basename + suffix)
         
         else:
             dirname = os.path.dirname(out_path)
