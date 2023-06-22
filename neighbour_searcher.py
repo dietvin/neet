@@ -49,7 +49,11 @@ class NeighbourSearcher:
         self.error_threshold = err_thresh if err_thresh is not None else 0
 
     def __str__(self) -> str:
-        o = f"NeighbourhoodSearcher instance information:\n\n - Using PileupExtractor file at {self.input_path} as input\n - After processing, writing output file to {self.output_path}\n - Searching neighbours {self.window_size} bases up- and downstream from a given position\n - A neighbouring position must have a error percentage of at least {self.error_threshold} to be included\n"
+        o = f"NeighbourhoodSearcher instance information:\n\n"
+        o += f" - input file path: {self.input_path}\n"
+        o += f" - writing output file to {self.output_path}\n"
+        o += f" - searching neighbours {self.window_size} bases up- and downstream from a given position\n"
+        o += f" - neighbouring positions must have an error percentage of >={self.error_threshold} to be regarded as errors\n"
         return o
     
     def sort_extractor_file(self) -> None:

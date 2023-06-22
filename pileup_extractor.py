@@ -113,11 +113,14 @@ class FeatureExtractor:
         self.num_processes = num_processes
 
     def __str__(self) -> str:
-        filter_n_reads = f" - Filtering positions with less than {self.filter_num_reads} reads.\n"
-        filter_perc_mis = f" - Filtering positions with less than {self.filter_perc_mismatch*100}% of reads mismatched.\n" if self.filter_perc_mismatch>0 else " - No filtering based on the mismatch percentage\n"
-        filter_mean_qual = f" - Filtering positions with mean read qualities lower that {self.filter_mean_quality}.\n" if self.filter_mean_quality>0 else " - No filtering based on the mean read quality.\n"
-        filter_region = f" - Extracting positions only on chromosome '{self.filter_genomic_region[0]}' from position {self.filter_genomic_region[1]} to {self.filter_genomic_region[2]}.\n" if self.filter_genomic_region else " - Extracting all genomic positions\n"
-        o = f"FeatureExtractor instance information:\n\n - Using input pileup file at {self.input_path}\n - After processing, writing output file to {self.output_path}\n - {len(self.ref_sequences)} reference sequence(s) found in file {self.ref_path}\n" + filter_n_reads + filter_perc_mis + filter_mean_qual + filter_region
+        o = f"FeatureExtractor instance information:\n\n"
+        o += f" - input pileup file: {self.input_path}\n"
+        o += f" - writing output file to {self.output_path}\n"
+        o += f" - {len(self.ref_sequences)} reference sequence(s) found in file {self.ref_path}\n"
+        o += f" - ignoring positions with  <{self.filter_num_reads} reads\n"
+        o += f" - ignoring positions with  <{self.filter_perc_mismatch*100}% read errors\n" if self.filter_perc_mismatch>0 else " - no filtering by error percentage\n"
+        o += f" - ignoring positions with mean read qualities  <{self.filter_mean_quality}\n" if self.filter_mean_quality>0 else " - no filtering by mean read quality\n"
+        o += f" - extracting positions only on chromosome '{self.filter_genomic_region[0]}' from position {self.filter_genomic_region[1]} to {self.filter_genomic_region[2]}\n" if self.filter_genomic_region else " - extracting all genomic positions\n"
         return o
 
 
@@ -125,7 +128,9 @@ class FeatureExtractor:
     #                                   Functions called during initialization                                      #
     #################################################################################################################
 
-    def check_get_in_path(self, in_path: str) -> str:
+    def check_get_in_path(self, in_path: str, 
+                          exp_extensions: List[str] = [".msf", ".pup", ".pileup"],
+                          warn_expected_text: str = "Expected .pileup file or similar.") -> str:
         """
         Check if the given input path is valid and of the expected file type.
 
@@ -133,7 +138,10 @@ class FeatureExtractor:
         ----------
         in_path : str
             Path to the input file given by the user.
-
+        exp_extensions : List[str]
+            File extensions of the given input format
+        warn_expected_text : str
+            Text to be displayed in the warning if another format is given
         Returns
         -------
         str
@@ -153,8 +161,8 @@ class FeatureExtractor:
         if not os.path.exists(in_path): # does file exist?
             raise FileNotFoundError(f"Input file not found. File '{in_path}' does not exist.")
         file_type = os.path.splitext(in_path)[1]
-        if not file_type in [".msf", ".pup", ".pileup"]: # is file likely in pileup format?
-            warnings.warn(f"Input file of type {file_type}. Make sure that this is a pileup file as produced by Samtools' mpileup function.", Warning)
+        if not file_type in exp_extensions: # is file likely in pileup format?
+            warnings.warn(f"Input file of type {file_type}. {warn_expected_text}", Warning)
         
         return in_path
 

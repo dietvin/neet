@@ -3,7 +3,7 @@ import csv, os, warnings, argparse
 from tqdm import tqdm
 from pyfiglet import Figlet
 
-class TwoSampleExtractor(FeatureExtractor):
+class TwoSampleMerger(FeatureExtractor):
     """
     A class for extracting and merging two TSV files based on position.
 
@@ -23,7 +23,7 @@ class TwoSampleExtractor(FeatureExtractor):
     Methods
     -------
     __init__(in_path_1: str, in_path_2: str, out_path: str)
-        Initializes the TwoSampleExtractor instance.
+        Initializes the TwoSampleMerger instance.
     get_basename(in_path: str) -> str
         Extracts the basename of a file from the given path.
     merge_tsv_files()
@@ -36,14 +36,18 @@ class TwoSampleExtractor(FeatureExtractor):
     basename_2: str = "b"
 
     def __init__(self, in_path_1: str, in_path_2: str, out_path: str) -> None:
-        self.input_path_1 = self.check_get_in_path(in_path_1)
-        self.input_path_2 = self.check_get_in_path(in_path_2)
+        self.input_path_1 = self.check_get_in_path(in_path_1, [".tsv"], "Expected .tsv format.")
+        self.input_path_2 = self.check_get_in_path(in_path_2, [".tsv"], "Expected .tsv format.")
         self.output_path = self.check_get_out_path(out_path, self.input_path_1, "_merged.tsv")
         self.basename_1 = self.get_basename(in_path_1)
         self.basename_2 = self.get_basename(in_path_2)
         
     def __str__(self) -> str:
-        return super().__str__()
+        o = "TwoSampleMerger instance information"
+        o += f" - first input file:  {self.input_path_1}"
+        o += f" - second input file: {self.input_path_2}"
+        o += f" - writing output to file '{self.output_path}'"
+        return o
 
     def get_basename(self, in_path: str) -> str:
         """
@@ -199,5 +203,5 @@ if __name__ == "__main__":
                         help='Path to the output file')
     args = parser.parse_args()
 
-    feature_extractor = TwoSampleExtractor(args.file_a, args.file_b, args.output)
+    feature_extractor = TwoSampleMerger(args.file_a, args.file_b, args.output)
     feature_extractor.merge_tsv_files()
