@@ -1,4 +1,4 @@
-from typing import List, Any
+from typing import List, Tuple, Any
 import argparse
 import warnings
 import os
@@ -150,7 +150,8 @@ class NeighbourSearcher:
         print(f.renderText("Neet - neighbourhood searcher"))
         print(str(self))
 
-        window_size = 1 + 2 * self.window_size
+        k = self.window_size
+        window_size = 1 + 2 * k
 
         n_lines = self.get_num_lines(self.input_path) - 1 # -1 because header is excluded
 
@@ -159,7 +160,8 @@ class NeighbourSearcher:
             o.write(header.strip("\n")+"\thas_neighbour_error\tneighbour_error_pos\n")
 
             progress_bar = tqdm(total=n_lines)
-            lines = []            
+            lines = []      
+            first = True      
             for line in file:
                 lines.append(line)
 
@@ -167,12 +169,43 @@ class NeighbourSearcher:
                     lines.pop(0)
                 
                 if len(lines) == window_size:
+                    # once lines hits the max. size for the first time, get and write the first k lines
+                    if first:
+                        first = False
+                        for current_pos in range(k):
+                            outline = self.process_edge(current_pos, lines)
+                            o.write(outline)
+
                     outline = self.process_neighbourhood(lines)
                     o.write(outline)
 
                 progress_bar.update()
-            
+
+            # after the last center line was added to lines, process the last k lines
+            for current_pos in range(k+1, window_size):
+                outline = self.process_edge(current_pos, lines, start=False)
+                o.write(outline)
+
             progress_bar.close()
+
+    def process_edge(self, current_pos: int, neighbourhood: List[str], start: bool = True) -> str:
+        k = self.window_size
+
+        ref_str = neighbourhood[current_pos].strip("\n")
+        nb = neighbourhood.copy()
+        ref = nb[current_pos].strip("\n").split("\t")
+
+        if start:
+            nb = nb[:current_pos+k+1]
+            del(nb[current_pos])
+        else:       
+            del(nb[current_pos])
+            nb = nb[current_pos-k:]
+
+        has_nb, nb_info = self.get_neighbour_info(ref, nb)
+        ref_str += f"\t{has_nb}\t{nb_info}\n"
+        return ref_str
+
 
     def process_neighbourhood(self, neighbourhood: List[str]) -> str:
         """
@@ -201,15 +234,41 @@ class NeighbourSearcher:
         nb = neighbourhood.copy()
 
         ref = nb[k].strip("\n").split("\t")
-        ref_chr = ref[0]
-        ref_site = int(ref[1])
         del nb[k]
 
-        # for each neighbour check if they are 1.on the same chr and 2.neighbours
+        has_nb, nb_info = self.get_neighbour_info(ref, nb)
+        ref_str += f"\t{has_nb}\t{nb_info}\n"
+        return ref_str
+
+    def get_neighbour_info(self, ref: List[str], neighbourhood: List[str]) -> Tuple[bool, str]:
+        """
+        From a range of neighbouring lines in a file (neighbourhood), check if positions in these
+        lines are neighbours on the reference genome (based on chromosome and site) and if close
+        genomic positions can be regarded as errors based on the given error threshold.
+
+        Parameters
+        ----------
+        ref : List[str]
+            line of the central position for which neighbours are searched
+        neighbourhood : List[str]
+            list containing the lines surrounding the central position
+
+        Returns
+        -------
+        Tuple[bool, str]
+            - boolean indicating if any neighbouring error was found
+            - string giving the relative distance to all neighbouring errors to the central position,
+              if any were found 
+        """
+        k = self.window_size
+        ref_chr = ref[0]
+        ref_site = int(ref[1])
+
         has_nb = False
         nb_info = ""
 
-        for pos in nb:
+        # for each neighbour check if they are 1.on the same chr and 2.neighbours
+        for pos in neighbourhood:
             pos = pos.strip("\n").split("\t")
             chr = pos[0]
             perc_error = float(pos[18])
@@ -221,9 +280,8 @@ class NeighbourSearcher:
                 if (abs(relative_pos) <= k): # check if pos are close to each other
                     has_nb = True
                     nb_info += str(relative_pos)+","
+        return has_nb, nb_info
 
-        ref_str += f"\t{has_nb}\t{nb_info}\n"
-        return ref_str
 
     def get_num_lines(self, path: str) -> int:
         """
