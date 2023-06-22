@@ -200,8 +200,8 @@ class NeighbourSearcher:
         from_stdin = False if self.input_path else True
         to_stdout = False if self.output_path else True
 
-        f = Figlet(font="slant")
         if not to_stdout:
+            f = Figlet(font="slant")
             print(f.renderText("Neet - neighbourhood searcher"))
             print(str(self))
 
