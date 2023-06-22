@@ -1,4 +1,4 @@
-import re, os, warnings, argparse, sys
+import re, os, warnings, argparse, sys, io
 from typing import Dict, List, Tuple, Union, Any
 from tqdm import tqdm
 from pyfiglet import Figlet
@@ -84,7 +84,8 @@ class FeatureExtractor:
     filter_genomic_region: Tuple[str, int, int]
     num_processes: int
 
-    def __init__(self, in_path: str, ref_path: str,
+    def __init__(self, ref_path: str,
+                 in_path: str = None,
                  out_path: str = None, 
                  num_reads: int = None, 
                  perc_mismatch: float = None,
@@ -92,10 +93,9 @@ class FeatureExtractor:
                  genomic_region: str = None,
                  num_processes: int = None) -> None:
         
-        self.input_path = self.check_get_in_path(in_path)
         self.ref_path = self.check_get_ref_path(ref_path)
-
-        self.output_path = self.check_get_out_path(out_path, in_path) if out_path is not None else None
+        self.input_path = self.check_get_in_path(in_path) if in_path else None
+        self.output_path = self.check_get_out_path(out_path, in_path) if out_path else None
     
         self.ref_sequences = self.get_references(ref_path)
         # if no argument is given (i.e. num_reads=None) the minimum number of reads is 1, 
@@ -103,9 +103,9 @@ class FeatureExtractor:
         self.filter_num_reads = num_reads if num_reads is not None else 1
         # if no argument is given (i.e. perc_mismatch=None) set minimum %mismatched to 0
         # so all positions are included 
-        self.filter_perc_mismatch = perc_mismatch if perc_mismatch is not None else 0
-        self.filter_mean_quality = mean_quality if mean_quality is not None else 0
-        self.filter_genomic_region = self.extract_positional_info(genomic_region) if genomic_region is not None else None
+        self.filter_perc_mismatch = perc_mismatch if perc_mismatch else 0
+        self.filter_mean_quality = mean_quality if mean_quality else 0
+        self.filter_genomic_region = self.extract_positional_info(genomic_region) if genomic_region else None
 
         self.num_processes = num_processes
 
@@ -344,50 +344,93 @@ class FeatureExtractor:
         -------
         None
         """
-        n_lines = self.get_num_lines(self.input_path)
-
-        with open(self.input_path, "r") as i:
-        
+        from_stdin = False if self.input_path else True
+        to_stdout = False if self.output_path else True
+        def output_line(line: str, output: io.TextIOWrapper = None) -> None:
+            if output:
+                output.write(line)
+            else:
+                sys.stdout.write(line)
+        def write(file_input):
             with Pool(processes=self.num_processes) as pool:
-                
+                o = None if to_stdout else open(self.output_path, "w")
+
+                if not to_stdout:
+                    progress_bar = tqdm() if from_stdin else tqdm(total=self.get_num_lines(self.input_path))
+
                 header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_ins\tn_del\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_ins_rel\tn_del_rel\tmotif\tperc_error\tq_mean\tq_std\n"
+                output_line(header, o)
                 results = []
 
-                # if no output is given, write to stdout
-                if self.output_path is None:
-                    sys.stdout.write(header)
-                    #print(header.strip("\n"))
-                    for line in i:
-                        result = pool.apply_async(self.process_position, args=(line.split("\t"),))
-                        results.append((line, result))
+                for line in file_input:
+                    result = pool.apply_async(self.process_position, args=(line.split("\t"),))
+                    results.append((line, result))
 
-                    for line, result in results:
-                        outline = result.get()
-                        if len(outline) > 0:
-                            sys.stdout.write(outline)
-                            #print(outline.strip("\n"))
-
-                # if outpath is given, write to file
-                else:
-                    f = Figlet(font="slant")
-                    print(f.renderText("Neet - pileup extractor"))
-                    print(str(self))
-
-                    with open(self.output_path, "w") as o:
-                        o.write(header)
-
-                        progress_bar = tqdm(total=n_lines)
-
-                        for line in i:
-                            result = pool.apply_async(self.process_position, args=(line.split("\t"),))
-                            results.append((line, result))
-
-                        for line, result in results:
-                            outline = result.get()
-                            o.write(outline)
+                for line, result in results:
+                    outline = result.get()
+                    if len(outline) > 0:
+                        output_line(outline, o)
+                        if not to_stdout:
                             progress_bar.update()
 
-                        progress_bar.close()
+                if not to_stdout:
+                    o.close()
+                    progress_bar.close()
+
+        if not to_stdout:
+            f = Figlet(font="slant")
+            print(f.renderText("Neet - pileup extractor"))
+            print(str(self))
+
+        if from_stdin:
+            write(sys.stdin)
+        else:
+            with open(self.input_path, "r") as i:
+                write(i)
+
+        # n_lines = self.get_num_lines(self.input_path)
+        
+        # with open(self.input_path, "r") as i:
+        
+        #     with Pool(processes=self.num_processes) as pool:
+                
+        #         header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_ins\tn_del\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_ins_rel\tn_del_rel\tmotif\tperc_error\tq_mean\tq_std\n"
+        #         results = []
+
+        #         # if no output is given, write to stdout
+        #         if self.output_path is None:
+        #             sys.stdout.write(header)
+
+        #             for line in i:
+        #                 result = pool.apply_async(self.process_position, args=(line.split("\t"),))
+        #                 results.append((line, result))
+
+        #             for line, result in results:
+        #                 outline = result.get()
+        #                 if len(outline) > 0:
+        #                     sys.stdout.write(outline)
+
+        #         # if outpath is given, write to file
+        #         else:
+        #             f = Figlet(font="slant")
+        #             print(f.renderText("Neet - pileup extractor"))
+        #             print(str(self))
+
+        #             with open(self.output_path, "w") as o:
+        #                 o.write(header)
+
+        #                 progress_bar = tqdm(total=n_lines)
+
+        #                 for line in i:
+        #                     result = pool.apply_async(self.process_position, args=(line.split("\t"),))
+        #                     results.append((line, result))
+
+        #                 for line, result in results:
+        #                     outline = result.get()
+        #                     o.write(outline)
+        #                     progress_bar.update()
+
+        #                 progress_bar.close()
 
     def get_num_lines(self, path: str) -> int:
         """
@@ -695,12 +738,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="Pileup feature extractor",
                                         description="Extracs different characteristics from a\
                                         given pileup file.")
-    parser.add_argument('-i', '--input', type=str, required=True,
-                        help='Path to the input file')
     parser.add_argument('-r', '--reference', type=str, required=True,
                         help='Path to the reference file')
+    parser.add_argument('-i', '--input', type=str, required=False,
+                        help='Path to the input file. If not specified, read from stdin')
     parser.add_argument('-o', '--output', type=str, required=False,
-                        help='Path to the output file')
+                        help='Path to the output file. If not specified, write to stdout')
     parser.add_argument('-n', '--num_reads', type=positive_int, required=False,
                         help='Filter by minimum number of reads at a position')
     parser.add_argument('-p', '--perc_mismatched', type=float_between_zero_and_one, required=False,
@@ -713,8 +756,8 @@ if __name__ == "__main__":
                         help='Number of threads to use for processing.')
 
     args = parser.parse_args()
-
-    feature_extractor = FeatureExtractor(args.input, args.reference, args.output, 
+    
+    feature_extractor = FeatureExtractor(args.reference, args.input, args.output, 
                                          num_reads=args.num_reads, 
                                          perc_mismatch=args.perc_mismatched,
                                          mean_quality=args.mean_quality,

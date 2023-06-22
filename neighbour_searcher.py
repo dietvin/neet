@@ -158,7 +158,7 @@ class NeighbourSearcher:
                 outline = self.process_edge(current_pos, neighbourhood, start)
                 output_line(outline, outfile)
 
-        def write(file_input, n_lines: int = None):
+        def write(file_input):
             window_size = 1 + 2 * self.window_size
             lines = []      
             first = True
