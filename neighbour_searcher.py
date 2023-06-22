@@ -1,7 +1,5 @@
 from typing import List, Tuple, Any
-import argparse
-import warnings
-import os
+import argparse, sys, warnings, os, io
 from tqdm import tqdm
 from pyfiglet import Figlet
 from itertools import takewhile, repeat
@@ -42,9 +40,9 @@ class NeighbourSearcher:
     window_size: int
     error_threshold: float
 
-    def __init__(self, in_path: str, out_path: str, window_size: int, err_thresh: float = None) -> None:
-        self.input_path = self.check_get_in_path(in_path)
-        self.output_path = self.check_get_out_path(out_path, in_path)
+    def __init__(self, window_size: int, in_path: str, out_path: str, err_thresh: float = None) -> None:
+        self.input_path = self.check_get_in_path(in_path) if in_path else None
+        self.output_path = self.check_get_out_path(out_path, in_path) if out_path else None
         self.window_size = window_size
         self.error_threshold = err_thresh if err_thresh is not None else 0
 
@@ -146,47 +144,74 @@ class NeighbourSearcher:
         """
         Read and process each line of a tsv file from the pileup extractor
         """
-        f = Figlet(font="slant")
-        print(f.renderText("Neet - neighbourhood searcher"))
-        print(str(self))
 
-        k = self.window_size
-        window_size = 1 + 2 * k
+        def output_line(line, output: io.TextIOWrapper = None) -> None:
+            if output:
+                output.write(line)
+            else:
+                sys.stdout.write(line)
 
-        n_lines = self.get_num_lines(self.input_path) - 1 # -1 because header is excluded
+        def write_edge_lines(neighbourhood: List[str], outfile: io.TextIOWrapper, start: bool = True):
+            k = self.window_size
+            r = range(k) if start else range(k+1, 2*k+1)
+            for current_pos in r:
+                outline = self.process_edge(current_pos, neighbourhood, start)
+                output_line(outline, outfile)
 
-        with open(self.input_path, 'r') as file, open(self.output_path, "w") as o:
-            header = next(file)
-            o.write(header.strip("\n")+"\thas_neighbour_error\tneighbour_error_pos\n")
-
-            progress_bar = tqdm(total=n_lines)
+        def write(file_input, n_lines: int = None):
+            window_size = 1 + 2 * self.window_size
             lines = []      
-            first = True      
-            for line in file:
+            first = True
+
+            o = None if to_stdout else open(self.output_path, "w")
+
+            header = next(file_input)
+            header = header.strip("\n")+"\thas_neighbour_error\tneighbour_error_pos\n" 
+            output_line(header, o)
+
+            if not to_stdout:
+                progress_bar = tqdm() if from_stdin else tqdm(total=self.get_num_lines(self.input_path) - 1)
+
+            for line in file_input:
                 lines.append(line)
 
-                if len(lines) > window_size:
+                if len(lines) > window_size:  
                     lines.pop(0)
-                
+            
                 if len(lines) == window_size:
                     # once lines hits the max. size for the first time, get and write the first k lines
                     if first:
                         first = False
-                        for current_pos in range(k):
-                            outline = self.process_edge(current_pos, lines)
-                            o.write(outline)
+                        write_edge_lines(lines, o, start=True)
 
                     outline = self.process_neighbourhood(lines)
-                    o.write(outline)
+                    output_line(outline, o)
 
-                progress_bar.update()
+                if not to_stdout:
+                    progress_bar.update()
 
             # after the last center line was added to lines, process the last k lines
-            for current_pos in range(k+1, window_size):
-                outline = self.process_edge(current_pos, lines, start=False)
-                o.write(outline)
+            write_edge_lines(lines, o, start=False)
 
-            progress_bar.close()
+            if not to_stdout:
+                o.close()
+                progress_bar.close()
+
+        from_stdin = False if self.input_path else True
+        to_stdout = False if self.output_path else True
+
+        f = Figlet(font="slant")
+        if not to_stdout:
+            print(f.renderText("Neet - neighbourhood searcher"))
+            print(str(self))
+
+        # Reading data from STDIN
+        if from_stdin:
+            write(sys.stdin)
+        # Reading data from file
+        else:
+            with open(self.input_path, 'r') as file:
+                write(file)
 
     def process_edge(self, current_pos: int, neighbourhood: List[str], start: bool = True) -> str:
         k = self.window_size
@@ -307,23 +332,17 @@ class NeighbourSearcher:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="Neighbourhood searcher",
                                         description="Adds information about neighbouring error positions.")
-    parser.add_argument('-i', '--input', type=str, required=True,
-                        help='Path to the input file')
-
-    parser.add_argument('-o', '--output', type=str, required=True,
-                        help='Path to the output file')
-
     parser.add_argument('-w', '--window_size', type=int, required=True, default=3,
                         help='Size of the sliding window = 2*w+1')
-    
+    parser.add_argument('-i', '--input', type=str, required=False,
+                        help='Path to the input file')
+    parser.add_argument('-o', '--output', type=str, required=False,
+                        help='Path to the output file')
     parser.add_argument('-t', '--error_threshold', type=float_between_zero_and_one, required=False,
                         help='Filter by minimum fraction of mismatched/deleted/inserted bases')
 
-    parser.add_argument('-p', '--num_processes', type=int, required=False,
-                        help='Number of threads to use for processing.')
-
     args = parser.parse_args()
 
-    neighbour_searcher = NeighbourSearcher(args.input, args.output, args.window_size, args.error_threshold)
+    neighbour_searcher = NeighbourSearcher(args.window_size, args.input, args.output, args.error_threshold)
     
     neighbour_searcher.read_lines_sliding_window()

@@ -1,8 +1,5 @@
-import re
-import os
-import warnings
+import re, os, warnings, argparse, sys
 from typing import Dict, List, Tuple, Union, Any
-import argparse
 from tqdm import tqdm
 from pyfiglet import Figlet
 import numpy as np
@@ -358,7 +355,8 @@ class FeatureExtractor:
 
                 # if no output is given, write to stdout
                 if self.output_path is None:
-                    print(header.strip("\n"))
+                    sys.stdout.write(header)
+                    #print(header.strip("\n"))
                     for line in i:
                         result = pool.apply_async(self.process_position, args=(line.split("\t"),))
                         results.append((line, result))
@@ -366,7 +364,8 @@ class FeatureExtractor:
                     for line, result in results:
                         outline = result.get()
                         if len(outline) > 0:
-                            print(outline.strip("\n"))
+                            sys.stdout.write(outline)
+                            #print(outline.strip("\n"))
 
                 # if outpath is given, write to file
                 else:
