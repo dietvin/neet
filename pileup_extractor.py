@@ -69,7 +69,7 @@ class FeatureExtractor:
             - get_relative_count(self, count_dict: Dict[str, Union[str, int]], n_reads: int) -> Dict[str, Union[str, int, float]]
             - get_majority_base(self, count_dict: Dict[str, Union[str, int, float]]) -> str
             - get_motif(self, chr: str, site: int, ref: str, k: int) -> str
-            - get_allele_fraction(self, count_dict: Dict[str, Union[str, int, float]], ref_base: str) -> int
+            - get_mismatch_perc(self, count_dict: Dict[str, Union[str, int, float]], ref_base: str) -> int
             - get_read_quality(self, read_qualities: str) -> Tuple[float, float]
     """
 
@@ -358,7 +358,7 @@ class FeatureExtractor:
                 if not to_stdout:
                     progress_bar = tqdm() if from_stdin else tqdm(total=self.get_num_lines(self.input_path))
 
-                header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_ins\tn_del\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_ins_rel\tn_del_rel\tmotif\tperc_error\tq_mean\tq_std\n"
+                header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tperc_mismatch\tmotif\tq_mean\tq_std\n"
                 output_line(header, o)
                 results = []
 
@@ -495,10 +495,10 @@ class FeatureExtractor:
         count = self.get_relative_count(count, n_reads)
 
         # get allele fraction
-        allele_fraction = self.get_allele_fraction(count, ref_base)
+        perc_mismatch = self.get_mismatch_perc(count, ref_base)
 
-        # filter by allele_fraction
-        if allele_fraction < self.filter_perc_mismatch:
+        # filter by perc_mismatch
+        if perc_mismatch < self.filter_perc_mismatch:
             return ""
 
         # get majority base
@@ -507,14 +507,16 @@ class FeatureExtractor:
         # get 11b motif
         motif = self.get_motif(chr, site, ref, k=5)
 
-        out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["t"]}\t{count["ins"]}\t{count["del"]}\t{count["a_rel"]}\t{count["c_rel"]}\t{count["g_rel"]}\t{count["t_rel"]}\t{count["ins_rel"]}\t{count["del_rel"]}\t{motif}\t{allele_fraction}\t{quality_mean}\t{quality_std}\n'
+        out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["t"]}\t{count["del"]}\t{count["a_rel"]}\t{count["c_rel"]}\t{count["g_rel"]}\t{count["t_rel"]}\t{count["del_rel"]}\t{perc_mismatch}\t{motif}\t{quality_mean}\t{quality_std}\n'
         return out
 
     def remove_indels(self, pileup_string: str) -> str:
         """
         Takes a pileup string and removes all occurences of the following patterns:
-        '\+[0-9]+[ACGTNacgtn]+' for insertions
-        '\-[0-9]+[ACGTNacgtn]+' for deletions
+        '\+[0-9]+' for insertions
+        '\-[0-9]+' for deletions
+        In addition to the pattern itself, remove the following n characters,
+        where n is the number specified after + or -.
 
         Parameters
         ----------
@@ -526,14 +528,16 @@ class FeatureExtractor:
         str
             Pileup strings with all occurences of the patterns above removed
         """
-        pattern = "(\+|\-)[0-9]+[ACGTNacgtn]+"
+        pattern = "(\+|\-)[0-9]+"
         
         # get the start and end indices of all found patterns 
         coords = []
         for m in re.finditer(pattern, pileup_string):
-            str_len = int(pileup_string[m.start(0)+1]) + 1
-            coords.append((m.start(0), m.start(0)+1+str_len))
-            
+            str_len_as_str = pileup_string[m.start()+1:m.end()]
+            num_digits = len(str_len_as_str)
+            str_len = int(str_len_as_str)
+            coords.append((m.start(), m.start()+1+num_digits+str_len))
+
         # remove the patterns by the indices
         for start, end in reversed(coords): # reverse list as to not shift the index downstream
             pileup_string = pileup_string[:start] + pileup_string[end:]
@@ -564,14 +568,12 @@ class FeatureExtractor:
         pileup_string = re.sub(r'\^.', '', pileup_string)
 
         ref_base = ref_base.lower()
-        count_dict = {"a": 0, "t": 0, "c": 0, "g": 0, "ins": 0, "del": 0}
-
-        # get number of insertions
-        count_dict["ins"] = len(re.findall(r'\+[0-9]+[ACGTNacgtn]+', pileup_string))
-
+        count_dict = {"a": 0, "t": 0, "c": 0, "g": 0, "del": 0}
+        
         # get number of deletions
-        count_dict["del"] = len(re.findall(r'\-[0-9]+[ACGTNacgtn]*|\*', pileup_string))
-
+        count_dict["del"] = pileup_string.count("*")
+        # get number of insertions
+        
         # remove indel patterns to count the number of mismatches correctly
         pileup_string = self.remove_indels(pileup_string)
 
@@ -584,6 +586,8 @@ class FeatureExtractor:
         # get number of matches (determine where to count matches bases on ref_base)
         n_matches = pileup_string.count('.') + pileup_string.count(',')
         count_dict[ref_base] = n_matches
+
+        # for now removing the count of insertions, as the pileup format cannot provide the information
 
         return count_dict
 
@@ -609,7 +613,6 @@ class FeatureExtractor:
             count_dict["c_rel"] = count_dict["c"] / n_reads
             count_dict["g_rel"] = count_dict["g"] / n_reads
             count_dict["t_rel"] = count_dict["t"] / n_reads
-            count_dict["ins_rel"] = count_dict["ins"] / n_reads
             count_dict["del_rel"] = count_dict["del"] / n_reads
 
         except ZeroDivisionError:
@@ -617,9 +620,7 @@ class FeatureExtractor:
             count_dict["c_rel"] = 0
             count_dict["g_rel"] = 0
             count_dict["t_rel"] = 0
-            count_dict["ins_rel"] = 0
             count_dict["del_rel"] = 0
-
 
         return count_dict
 
@@ -685,7 +686,7 @@ class FeatureExtractor:
 
             return motif
         
-    def get_allele_fraction(self, count_dict: Dict[str, Union[str, int, float]], ref_base: str) -> int:
+    def get_mismatch_perc(self, count_dict: Dict[str, Union[str, int, float]], ref_base: str) -> int:
         """
         Calculates the number of reads containing a mismatch, insertion or deletion 
         at a given position.
@@ -702,12 +703,12 @@ class FeatureExtractor:
         int
             Number of mismatched reads a the given position
         """
-        mismatch_count_sum = 0
-        for b in ["a", "c", "g", "t", "ins", "del"]:
+        mismatch_perc_sum = 0
+        for b in ["a", "c", "g", "t"]:
             if b != ref_base.lower():
-                mismatch_count_sum += count_dict[b+"_rel"]
+                mismatch_perc_sum += count_dict[b+"_rel"]
 
-        return mismatch_count_sum
+        return mismatch_perc_sum
 
     def get_read_quality(self, read_qualities: str) -> Tuple[float, float]:
         """
