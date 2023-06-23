@@ -370,8 +370,8 @@ class FeatureExtractor:
                     outline = result.get()
                     if len(outline) > 0:
                         output_line(outline, o)
-                        if not to_stdout:
-                            progress_bar.update()
+                    if not to_stdout:
+                        progress_bar.update()
 
                 if not to_stdout:
                     o.close()
@@ -753,7 +753,7 @@ if __name__ == "__main__":
                         help='Filter by minimum number of reads at a position')
     parser.add_argument('-p', '--perc_mismatched', type=float_between_zero_and_one, required=False,
                         help='Filter by minimum fraction of mismatched/deleted/inserted bases')
-    parser.add_argument('-p', '--perc_deletion', type=float_between_zero_and_one, required=False,
+    parser.add_argument('-d', '--perc_deletion', type=float_between_zero_and_one, required=False,
                         help='Filter by minimum percentage of deleted bases')
     parser.add_argument('-q', '--mean_quality', type=positive_float, required=False,
                         help='Filter by mean read quality scores')

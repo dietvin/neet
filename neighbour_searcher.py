@@ -169,29 +169,41 @@ class NeighbourSearcher:
             header = header.strip("\n")+"\thas_neighbour_error\tneighbour_error_pos\n" 
             output_line(header, o)
 
+            n_lines = self.get_num_lines(self.input_path)
             if not to_stdout:
-                progress_bar = tqdm() if from_stdin else tqdm(total=self.get_num_lines(self.input_path) - 1)
+                progress_bar = tqdm() if from_stdin else tqdm(total=n_lines - 1)
 
-            for line in file_input:
-                lines.append(line)
-
-                if len(lines) > window_size:  
-                    lines.pop(0)
-            
-                if len(lines) == window_size:
-                    # once lines hits the max. size for the first time, get and write the first k lines
-                    if first:
-                        first = False
-                        write_edge_lines(lines, o, start=True)
-
-                    outline = self.process_neighbourhood(lines)
+##############
+            if n_lines-1 < window_size:
+                lines = []
+                for line in file_input:
+                    lines.append(line)
+                for current_pos in range(n_lines-1):
+                    outline = self.process_small(current_pos, lines, n_lines)
                     output_line(outline, o)
-
-                if not to_stdout:
                     progress_bar.update()
+##############
+            else:
+                for line in file_input:
+                    lines.append(line)
 
-            # after the last center line was added to lines, process the last k lines
-            write_edge_lines(lines, o, start=False)
+                    if len(lines) > window_size:  
+                        lines.pop(0)
+                
+                    if len(lines) == window_size:
+                        # once lines hits the max. size for the first time, get and write the first k lines
+                        if first:
+                            first = False
+                            write_edge_lines(lines, o, start=True)
+
+                        outline = self.process_neighbourhood(lines)
+                        output_line(outline, o)
+
+                    if not to_stdout:
+                        progress_bar.update()
+
+                # after the last center line was added to lines, process the last k lines
+                write_edge_lines(lines, o, start=False)
 
             if not to_stdout:
                 o.close()
@@ -213,9 +225,18 @@ class NeighbourSearcher:
             with open(self.input_path, 'r') as file:
                 write(file)
 
+    def process_small(self, current_pos: int, neighbourhood: List[str], n_lines: int) -> str:
+        ref_str = neighbourhood[current_pos].strip("\n")
+        nb = neighbourhood.copy()
+        ref = nb[current_pos].strip("\n").split("\t")
+        del(nb[current_pos])
+
+        has_nb, nb_info = self.get_neighbour_info(ref, nb)
+        ref_str += f"\t{has_nb}\t{nb_info}\n"
+        return ref_str
+
     def process_edge(self, current_pos: int, neighbourhood: List[str], start: bool = True) -> str:
         k = self.window_size
-
         ref_str = neighbourhood[current_pos].strip("\n")
         nb = neighbourhood.copy()
         ref = nb[current_pos].strip("\n").split("\t")
