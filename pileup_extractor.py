@@ -89,6 +89,7 @@ class FeatureExtractor:
                  out_path: str = None, 
                  num_reads: int = None, 
                  perc_mismatch: float = None,
+                 perc_deletion: float = None,
                  mean_quality: float = None,
                  genomic_region: str = None,
                  num_processes: int = None) -> None:
@@ -98,12 +99,11 @@ class FeatureExtractor:
         self.output_path = self.check_get_out_path(out_path, in_path) if out_path else None
     
         self.ref_sequences = self.get_references(ref_path)
-        # if no argument is given (i.e. num_reads=None) the minimum number of reads is 1, 
-        # so only positions with no reads are filtered out
+
+        # if no argument is given (e.g. num_reads=None) the minimum number of reads is set to the value that includes all pos.
         self.filter_num_reads = num_reads if num_reads is not None else 1
-        # if no argument is given (i.e. perc_mismatch=None) set minimum %mismatched to 0
-        # so all positions are included 
         self.filter_perc_mismatch = perc_mismatch if perc_mismatch else 0
+        self.filter_perc_deletion = perc_deletion if perc_deletion else 0
         self.filter_mean_quality = mean_quality if mean_quality else 0
         self.filter_genomic_region = self.extract_positional_info(genomic_region) if genomic_region else None
 
@@ -494,6 +494,10 @@ class FeatureExtractor:
         # get relative number of A, C, G and T counts
         count = self.get_relative_count(count, n_reads)
 
+        # filter by percentage of deletions
+        if count["del_rel"] < self.filter_perc_deletion:
+            return ""
+
         # get allele fraction
         perc_mismatch = self.get_mismatch_perc(count, ref_base)
 
@@ -749,6 +753,8 @@ if __name__ == "__main__":
                         help='Filter by minimum number of reads at a position')
     parser.add_argument('-p', '--perc_mismatched', type=float_between_zero_and_one, required=False,
                         help='Filter by minimum fraction of mismatched/deleted/inserted bases')
+    parser.add_argument('-p', '--perc_deletion', type=float_between_zero_and_one, required=False,
+                        help='Filter by minimum percentage of deleted bases')
     parser.add_argument('-q', '--mean_quality', type=positive_float, required=False,
                         help='Filter by mean read quality scores')
     parser.add_argument('-g', '--genomic_region', type=str, required=False,
@@ -761,6 +767,7 @@ if __name__ == "__main__":
     feature_extractor = FeatureExtractor(args.reference, args.input, args.output, 
                                          num_reads=args.num_reads, 
                                          perc_mismatch=args.perc_mismatched,
+                                         perc_deletion=args.perc_deletion,
                                          mean_quality=args.mean_quality,
                                          genomic_region=args.genomic_region,
                                          num_processes=args.num_processes)
