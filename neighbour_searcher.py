@@ -160,28 +160,36 @@ class NeighbourSearcher:
 
         def write(file_input):
             window_size = 1 + 2 * self.window_size
-            lines = []      
+            lines = []
             first = True
 
             o = None if to_stdout else open(self.output_path, "w")
 
-            header = next(file_input)
+            if from_stdin:
+                # read stdin into variable to (partly) iterate through it twice
+                file_input = sys.stdin.readlines()
+                header = file_input.pop(0)
+                n_lines = len(file_input)
+            else:
+                n_lines = self.get_num_lines(self.input_path) - 1
+                header = next(file_input)
+
             header = header.strip("\n")+"\thas_neighbour_error\tneighbour_error_pos\n" 
             output_line(header, o)
 
-            n_lines = self.get_num_lines(self.input_path)
             if not to_stdout:
-                progress_bar = tqdm() if from_stdin else tqdm(total=n_lines - 1)
+                progress_bar = tqdm(total=n_lines)
 
 ##############
-            if n_lines-1 < window_size:
+            if n_lines < window_size:
                 lines = []
                 for line in file_input:
                     lines.append(line)
-                for current_pos in range(n_lines-1):
+                for current_pos in range(n_lines):
                     outline = self.process_small(current_pos, lines, n_lines)
                     output_line(outline, o)
-                    progress_bar.update()
+                    if not to_stdout:
+                        progress_bar.update()
 ##############
             else:
                 for line in file_input:
@@ -220,10 +228,12 @@ class NeighbourSearcher:
         # Reading data from STDIN
         if from_stdin:
             write(sys.stdin)
+            sys.stdin.close()
         # Reading data from file
         else:
             with open(self.input_path, 'r') as file:
                 write(file)
+
 
     def process_small(self, current_pos: int, neighbourhood: List[str], n_lines: int) -> str:
         ref_str = neighbourhood[current_pos].strip("\n")
