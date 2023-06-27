@@ -358,7 +358,7 @@ class FeatureExtractor:
                 if not to_stdout:
                     progress_bar = tqdm() if from_stdin else tqdm(total=self.get_num_lines(self.input_path))
 
-                header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tperc_mismatch\tmotif\tq_mean\tq_std\n"
+                header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tperc_mismatch\tmotif\tq_mean\tq_std\n"
                 output_line(header, o)
                 results = []
 
@@ -387,50 +387,6 @@ class FeatureExtractor:
         else:
             with open(self.input_path, "r") as i:
                 write(i)
-
-        # n_lines = self.get_num_lines(self.input_path)
-        
-        # with open(self.input_path, "r") as i:
-        
-        #     with Pool(processes=self.num_processes) as pool:
-                
-        #         header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_ins\tn_del\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_ins_rel\tn_del_rel\tmotif\tperc_error\tq_mean\tq_std\n"
-        #         results = []
-
-        #         # if no output is given, write to stdout
-        #         if self.output_path is None:
-        #             sys.stdout.write(header)
-
-        #             for line in i:
-        #                 result = pool.apply_async(self.process_position, args=(line.split("\t"),))
-        #                 results.append((line, result))
-
-        #             for line, result in results:
-        #                 outline = result.get()
-        #                 if len(outline) > 0:
-        #                     sys.stdout.write(outline)
-
-        #         # if outpath is given, write to file
-        #         else:
-        #             f = Figlet(font="slant")
-        #             print(f.renderText("Neet - pileup extractor"))
-        #             print(str(self))
-
-        #             with open(self.output_path, "w") as o:
-        #                 o.write(header)
-
-        #                 progress_bar = tqdm(total=n_lines)
-
-        #                 for line in i:
-        #                     result = pool.apply_async(self.process_position, args=(line.split("\t"),))
-        #                     results.append((line, result))
-
-        #                 for line, result in results:
-        #                     outline = result.get()
-        #                     o.write(outline)
-        #                     progress_bar.update()
-
-        #                 progress_bar.close()
 
     def get_num_lines(self, path: str) -> int:
         """
@@ -511,7 +467,7 @@ class FeatureExtractor:
         # get 11b motif
         motif = self.get_motif(chr, site, ref, k=5)
 
-        out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["t"]}\t{count["del"]}\t{count["a_rel"]}\t{count["c_rel"]}\t{count["g_rel"]}\t{count["t_rel"]}\t{count["del_rel"]}\t{perc_mismatch}\t{motif}\t{quality_mean}\t{quality_std}\n'
+        out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["t"]}\t{count["del"]}\t{count["ins"]}\t{count["a_rel"]}\t{count["c_rel"]}\t{count["g_rel"]}\t{count["t_rel"]}\t{count["del_rel"]}\t{count["ins_rel"]}\t{perc_mismatch}\t{motif}\t{quality_mean}\t{quality_std}\n'
         return out
 
     def remove_indels(self, pileup_string: str) -> str:
@@ -572,12 +528,13 @@ class FeatureExtractor:
         pileup_string = re.sub(r'\^.', '', pileup_string)
 
         ref_base = ref_base.lower()
-        count_dict = {"a": 0, "t": 0, "c": 0, "g": 0, "del": 0}
+        count_dict = {"a": 0, "t": 0, "c": 0, "g": 0, "del": 0, "ins": 0}
         
         # get number of deletions
         count_dict["del"] = pileup_string.count("*")
         # get number of insertions
-        
+        count_dict["ins"] = len(re.findall(r'\+[0-9]+[ACGTNacgtn]+', pileup_string))
+
         # remove indel patterns to count the number of mismatches correctly
         pileup_string = self.remove_indels(pileup_string)
 
@@ -612,12 +569,14 @@ class FeatureExtractor:
         dict[float]
             Dictionary containing the relative counts for A, C, G and T
         """
+        #n_reads = sum([count_dict["a"], count_dict["c"], count_dict["g"], count_dict["t"]])
         try:
             count_dict["a_rel"] = count_dict["a"] / n_reads
             count_dict["c_rel"] = count_dict["c"] / n_reads
             count_dict["g_rel"] = count_dict["g"] / n_reads
             count_dict["t_rel"] = count_dict["t"] / n_reads
             count_dict["del_rel"] = count_dict["del"] / n_reads
+            count_dict["ins_rel"] = count_dict["ins"] / n_reads
 
         except ZeroDivisionError:
             count_dict["a_rel"] = 0
@@ -625,6 +584,8 @@ class FeatureExtractor:
             count_dict["g_rel"] = 0
             count_dict["t_rel"] = 0
             count_dict["del_rel"] = 0
+            count_dict["ins_rel"] = 0
+
 
         return count_dict
 

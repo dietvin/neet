@@ -327,7 +327,7 @@ class NeighbourSearcher:
         for pos in neighbourhood:
             pos = pos.strip("\n").split("\t")
             chr = pos[0]
-            perc_error = float(pos[18])
+            perc_error = float(pos[20])
 
             if (chr == ref_chr) & (perc_error >= self.error_threshold): # check if same chromosome & if pos is error
                 site = int(pos[1])
