@@ -83,6 +83,7 @@ class FeatureExtractor:
     filter_mean_quality: float
     filter_genomic_region: Tuple[str, int, int]
     num_processes: int
+    use_alt_coverage: bool
 
     def __init__(self, ref_path: str,
                  in_path: str = None,
@@ -92,7 +93,8 @@ class FeatureExtractor:
                  perc_deletion: float = None,
                  mean_quality: float = None,
                  genomic_region: str = None,
-                 num_processes: int = None) -> None:
+                 num_processes: int = None,
+                 use_alt_coverage: bool = False) -> None:
         
         self.ref_path = self.check_get_ref_path(ref_path)
         self.input_path = self.check_get_in_path(in_path) if in_path else None
@@ -109,6 +111,8 @@ class FeatureExtractor:
 
         self.num_processes = num_processes
 
+        self.use_alt_coverage = use_alt_coverage
+
     def __str__(self) -> str:
         o = f"FeatureExtractor instance information:\n\n"
         o += f" - input pileup file: {self.input_path}\n"
@@ -118,6 +122,7 @@ class FeatureExtractor:
         o += f" - ignoring positions with  <{self.filter_perc_mismatch*100}% read errors\n" if self.filter_perc_mismatch>0 else " - no filtering by error percentage\n"
         o += f" - ignoring positions with mean read qualities  <{self.filter_mean_quality}\n" if self.filter_mean_quality>0 else " - no filtering by mean read quality\n"
         o += f" - extracting positions only on chromosome '{self.filter_genomic_region[0]}' from position {self.filter_genomic_region[1]} to {self.filter_genomic_region[2]}\n" if self.filter_genomic_region else " - extracting all genomic positions\n"
+        o += f" - extracting number of reads from pileup file" if not self.use_alt_coverage else f" - calculating number of reads from matched & mismatched reads only"
         return o
 
 
@@ -423,7 +428,7 @@ class FeatureExtractor:
             steps.
         """
         # extract elements from list
-        chr, site, ref_base, n_reads, read_bases, read_qualities = line[0], int(line[1]), line[2], int(line[3]), line[4], line[5]
+        chr, site, ref_base, read_bases, read_qualities = line[0], int(line[1]), line[2], line[4], line[5]
         
         # filter by genomic region
         region = self.filter_genomic_region
@@ -431,28 +436,35 @@ class FeatureExtractor:
             if not(chr == region[0] and site >= region[1] and site <= region[2]): # both start and end inclusive
                 return ""
 
-        # filter by number of reads
-        if n_reads < self.filter_num_reads:
-            return ""
+        # extract coverage and filter by number of reads if the standard coverage option is used 
+        if not self.use_alt_coverage:
+            n_reads = int(line[3])
+            if n_reads < self.filter_num_reads: return ""
 
         # get qualitiy measures
         quality_mean, quality_std = self.get_read_quality(read_qualities)
 
         # filter by mean read quality
-        if quality_mean < self.filter_mean_quality:
-            return ""
+        if quality_mean < self.filter_mean_quality: return ""
 
         # get reference sequence 
         ref = self.ref_sequences[chr]
         # get absolute number of A, C, G, T, ins, del
         count = self.parse_pileup_string(read_bases, ref_base)
 
+        # in case the alternative way of calculating the coverage is specified
+        # could use if else statement and get the other case down here, but then 
+        # the count will be calculated each time, potentially wasting time in case the 
+        # filter_num_reads is used
+        if self.use_alt_coverage:
+            n_reads = count["a"]+count["c"]+count["g"]+count["t"]
+            if n_reads < self.filter_num_reads: return ""
+
         # get relative number of A, C, G and T counts
         count = self.get_relative_count(count, n_reads)
 
         # filter by percentage of deletions
-        if count["del_rel"] < self.filter_perc_deletion:
-            return ""
+        if count["del_rel"] < self.filter_perc_deletion: return ""
 
         # get allele fraction
         perc_mismatch = self.get_mismatch_perc(count, ref_base)
@@ -722,6 +734,10 @@ if __name__ == "__main__":
                         help='Genomic region in "CHR:START-END" format. Specify to only extract information from a specific region.')
     parser.add_argument('-t', '--num_processes', type=int, required=False,
                         help='Number of threads to use for processing.')
+    parser.add_argument('--coverage_alt', action="store_true", 
+                        help='Specify which approach should be used to calculate the number of reads a given position. \
+                            Default: use coverage as calculated by samtools mpileup (i.e. #A+#C+#G+#T+#del).\
+                            Alternative: calculates coverage considering only matched and mismatched reads, not considering deletions')
 
     args = parser.parse_args()
     
@@ -731,6 +747,7 @@ if __name__ == "__main__":
                                          perc_deletion=args.perc_deletion,
                                          mean_quality=args.mean_quality,
                                          genomic_region=args.genomic_region,
-                                         num_processes=args.num_processes)
+                                         num_processes=args.num_processes,
+                                         use_alt_coverage=args.coverage_alt)
     
     feature_extractor.process_file()
