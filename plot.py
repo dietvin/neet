@@ -2,12 +2,13 @@ import argparse
 import plotly.graph_objects as go
 from typing import List, Tuple, Dict
 import sys
+from helper_functions import float_between_zero_and_one
 
-class Plotter:
+class CoverageTrackPlotter:
     """
     A class for creating bar chart visualizations based on provided data.
 
-    The Plotter class allows you to create bar chart visualizations based on data and settings
+    The CoverageTrackPlotter class allows you to create bar chart visualizations based on data and settings
     provided as input. The resulting plot can be displayed or saved to a file.
 
     Attributes:
@@ -21,7 +22,7 @@ class Plotter:
 
     Methods:
         __init__(self, in_path: str, out_path: str, ref_path: str, threshold: float, chromosome: str = None) -> None:
-            Initializes the Plotter object with the provided parameters.
+            Initializes the CoverageTrackPlotter object with the provided parameters.
 
         get_ref_sequence(self, ref: str) -> str:
             Retrieves the sequence from a reference file based on the given chromosome.
@@ -57,7 +58,7 @@ class Plotter:
                  threshold: float, 
                  chromosome: str = None) -> None:
         """
-        Initializes the Plotter object with the provided parameters.
+        Initializes the CoverageTrackPlotter object with the provided parameters.
 
         Args:
             in_path (str): The path to the input file.
@@ -73,16 +74,9 @@ class Plotter:
         self.in_path = in_path
         self.out_path = out_path
         self.chromosome = chromosome
-
-        sys.stdout.write(f"[Plotter] Retrieving sequence of chromosome '{self.chromosome}'...")
         self.ref = self.get_ref_sequence(ref_path)
-        sys.stdout.write(f" Done.\n")
-
         self.threshold = threshold
-
-        sys.stdout.write(f"[Plotter] Retrieving data from file '{self.in_path}'...")
         self.data_above_threshold, self.data_below_threshold = self.set_up_data()
-        sys.stdout.write(f" Done.\n")
 
     def get_ref_sequence(self, ref: str) -> str:
         """
@@ -296,9 +290,29 @@ class Plotter:
 
 
 if __name__=="__main__":
-    plotter = Plotter(in_path="/home/vincent/masterthesis/data/epinano_data/processed/curlcake_mod_extracted_w_nb.tsv",
-                      out_path="./test.html",
-                      ref_path= "/home/vincent/masterthesis/data/epinano_data/curlcake_ref.fa",
-                      threshold=0.4,
-                      chromosome="cc6m_2244_t7_ecorv")
-    plotter.create_plot()
+    parser = argparse.ArgumentParser(prog="CoverageTrackPlotter",
+                                     description="Provides different plotting functionalities.")
+    subparsers = parser.add_subparsers(dest="subcommand")
+    coverage_track_parser = subparsers.add_parser("coverage_track")
+    coverage_track_parser.add_argument("-i", "--input", type=str, required=True,
+                                       help="Path to the input file")
+    coverage_track_parser.add_argument("-o", "--output", type=str, required=False,
+                                       help="Path to the output file")
+    coverage_track_parser.add_argument("-r", "--reference", type=str, required=True,
+                                       help="Path to the reference fasta file")
+    coverage_track_parser.add_argument('-t', '--error_threshold', type=float_between_zero_and_one, required=True,
+                        help="Percentage of error threshold for coloring positions [0,1]")
+    coverage_track_parser.add_argument('-c', '--chromosome', type=str, required=True,
+                        help="Chromosome to be plotted")
+    
+    args = parser.parse_args()
+
+    if args.subcommand == "coverage_track":
+        plotter = CoverageTrackPlotter(in_path=args.input,
+                          ref_path=args.reference,
+                          threshold=args.error_threshold,
+                          chromosome=args.chromosome,
+                          out_path=args.output)
+        plotter.create_plot()
+    else:
+        parser.print_help()
