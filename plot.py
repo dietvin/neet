@@ -4,6 +4,45 @@ from typing import List, Tuple, Dict
 import sys
 
 class Plotter:
+    """
+    A class for creating bar chart visualizations based on provided data.
+
+    The Plotter class allows you to create bar chart visualizations based on data and settings
+    provided as input. The resulting plot can be displayed or saved to a file.
+
+    Attributes:
+        in_path (str): The path to the input file.
+        out_path (str): The path to save the output file.
+        threshold (float): The threshold value for categorizing the data.
+        chromosome (str): The chromosome to retrieve the sequence from.
+        ref (str): The reference sequence for the chromosome.
+        data_above_threshold (Dict[str, int]): Dictionary containing data points above the threshold.
+        data_below_threshold (Dict[str, int]): Dictionary containing data points below the threshold.
+
+    Methods:
+        __init__(self, in_path: str, out_path: str, ref_path: str, threshold: float, chromosome: str = None) -> None:
+            Initializes the Plotter object with the provided parameters.
+
+        get_ref_sequence(self, ref: str) -> str:
+            Retrieves the sequence from a reference file based on the given chromosome.
+
+        add_line(self, line: List[str], data_dict: Dict) -> Dict:
+            Adds data from a line to a dictionary.
+
+        set_up_data(self) -> Tuple[Dict[str, int]]:
+            Sets up data from a file into separate dictionaries based on a threshold.
+
+        get_custom_data(self, data_dict: dict) -> List[List[str|int]]:
+            Retrieves custom data from a data dictionary to fill the hover templates.
+
+        create_traces(self) -> List[go.Bar]:
+            Creates traces for a bar chart visualization.
+
+        create_plot(self) -> None:
+            Creates a plot based on the provided data.
+
+    """
+
     in_path: str
     out_path: str
     threshold: float
@@ -17,7 +56,20 @@ class Plotter:
                  ref_path: str, 
                  threshold: float, 
                  chromosome: str = None) -> None:
-        
+        """
+        Initializes the Plotter object with the provided parameters.
+
+        Args:
+            in_path (str): The path to the input file.
+            out_path (str): The path to save the output file.
+            ref_path (str): The path to the reference file.
+            threshold (float): The threshold value for categorizing the data.
+            chromosome (str, optional): The chromosome to retrieve the sequence from. Defaults to None.
+
+        Returns:
+            None
+
+        """
         self.in_path = in_path
         self.out_path = out_path
         self.chromosome = chromosome
@@ -111,6 +163,19 @@ class Plotter:
         return above_thr, below_thr
 
     def get_custom_data(self, data_dict: dict) -> List[List[str|int]]:
+        """
+        Retrieves custom data from a data dictionary to fill the hover templates.
+
+        The function takes a data dictionary as input and retrieves custom data from it.
+        The custom data consists of a list of lists, where each inner list represents a data point
+        and contains the following elements: Chromosome, Reads, A, C, G, T, Deletion (Del), Insertion (Ins), Reference (Ref)
+
+        Args:
+            data_dict (dict): A dictionary containing the data points.
+
+        Returns:
+            List[List[str|int]]: A list of lists representing the custom data.
+        """
         custom_data = [[self.chromosome, 
                         data_dict["reads"][i],
                         data_dict["a"][i],
@@ -124,7 +189,16 @@ class Plotter:
         return custom_data
 
     def create_traces(self) -> List[go.Bar]:
+        """
+        Creates traces for a bar chart visualization.
 
+        The function creates traces for a bar chart visualization based on the data provided.
+        The resulting traces represent different data points and are returned as a list.
+
+        Returns:
+            List[go.Bar]: A list of traces for a bar chart visualization.
+
+        """
         hover_template_top = "%{customdata[0]}:%{x}<br>" + \
             "Total count: %{customdata[1]}<br>" + \
             "----------"
@@ -189,7 +263,15 @@ class Plotter:
         return all_traces
 
     def create_plot(self) -> None:
-        
+        """
+        Creates a plot based on the provided data.
+
+        The function creates a plot based on the data and settings provided. The resulting plot
+        is displayed or saved to a file, depending on the configuration.
+
+        Returns:
+            None
+        """
         all_traces = self.create_traces()
 
         fig = go.Figure()
