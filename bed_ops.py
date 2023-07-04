@@ -1,4 +1,4 @@
-import argparse, os
+import argparse, os, csv
 
 def tsv_to_bed(in_path: str, out_path: str) -> None:
     """
@@ -63,6 +63,44 @@ def intersect_beds(file_a: str,
         for line in exclusive_file_b:
             out.write("\t".join(line)+f"\t{label_b}\n")
 
+def add_bed_info(tsv_file: str, bed_file: str, out_file: str) -> None:
+    """
+    Reads data from a TSV file and a BED file, combines the information, and writes the updated data to an output file.
+
+    Args:
+        tsv_file (str): Path to the TSV file.
+        bed_file (str): Path to the BED file.
+        out_file (str): Path to the output file.
+
+    Returns:
+        None
+    """
+    bed_data = {}
+    with open(bed_file, "r") as bed:
+        bed_reader = csv.DictReader(bed, delimiter="\t")
+        for row in bed_reader:
+            chromosome = row[0]
+            start = int(row[1]) + 1 # get it to 1-indexed to fit tsv file
+            name = row[3]
+            bed_data[(chromosome, start)] = name
+
+    with open(tsv_file, "r") as tsv, open(out_file, "w") as out:
+        tsv_reader = csv.reader(tsv, delimiter="\t")
+        out_writer = csv.writer(out, delimiter="\t")
+        
+        header = next(tsv_reader).append("bed_info")
+        out_writer.writerow(header)
+        
+        for row in tsv_reader:
+            chromosome = row[0]
+            site = row[1]
+            bed_entry = bed_data[(chromosome, site)]
+            if bed_entry:
+                row.append(bed_entry)
+
+            out_writer.writerow(row)
+
+
 
 
 
@@ -91,6 +129,13 @@ if __name__=="__main__":
                                   help="Label given to the output for file a")
     intersect_parser.add_argument("--label_b", type=str, required=False,
                                   help="Label given to the output for file b")
+
+    add_bed_parser = subparsers.add_parser("add_bed_info", prog="Add bed info to TSV file from PileupExtractor.",
+                                           description="Add the name column from a BED file to the respective line in the TSV file.")
+    add_bed_parser.add_argument("-i", "--input", type=str, required=True,
+                                help="TSV output from PileupExtractor/NeighbourhoodSearcher")
+    add_bed_parser.add_argument("-b", "--bed", type=str, required=True,
+                                help="BED file containing additional information in the 'name' column")
 
     args = parser.parse_args()
 
