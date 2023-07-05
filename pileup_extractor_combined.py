@@ -710,6 +710,10 @@ class FeatureExtractor:
 
         return mean, std 
     
+    #################################################################################################################
+    #                                  Functions called during neighbour search                                     #
+    #################################################################################################################
+
 
 
 if __name__ == "__main__":
@@ -738,6 +742,15 @@ if __name__ == "__main__":
                         help='Specify which approach should be used to calculate the number of reads a given position. \
                             Default: use coverage as calculated by samtools mpileup (i.e. #A+#C+#G+#T+#del).\
                             Alternative: calculates coverage considering only matched and mismatched reads, not considering deletions')
+    parser.add_argument("--search_neighbours", action="store_true",
+                        help="Specify if neighbourhood search should be performed. For each position, \
+                            check if and where errors appear in the genomic surroundings. \
+                            When specified, make sure to add -nw and -nt flag.")
+    parser.add_argument('-nw', '--window_size', type=int, required=False, default=3,
+                        help='Size of the sliding window = 2*w+1. Required when -s flag is set')
+    parser.add_argument("-nt", "--neighbour_thresh", type=float_between_zero_and_one, required=False,
+                        help="Threshold of error percentage (--perc_mismatched / --perc_deletion), from which a neighbouring position \
+                            should be considered as an error.")
 
     args = parser.parse_args()
     
