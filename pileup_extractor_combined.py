@@ -1,4 +1,4 @@
-import re, os, warnings, argparse, sys, io
+import re, os, warnings, argparse, sys, io, tempfile
 from typing import Dict, List, Tuple, Union, Any
 from tqdm import tqdm
 from pyfiglet import Figlet
@@ -84,6 +84,10 @@ class FeatureExtractor:
     filter_genomic_region: Tuple[str, int, int]
     num_processes: int
     use_alt_coverage: bool
+    tmp_data: List[str]
+    no_neighbour_search: bool
+    window_size: int
+    neighbour_error_threshold: float
 
     def __init__(self, ref_path: str,
                  in_path: str = None,
@@ -94,7 +98,10 @@ class FeatureExtractor:
                  mean_quality: float = None,
                  genomic_region: str = None,
                  num_processes: int = None,
-                 use_alt_coverage: bool = False) -> None:
+                 use_alt_coverage: bool = False,
+                 no_neighbour_search: bool = False,
+                 window_size: int = None,
+                 neighbour_error_threshold: float = None) -> None:
         
         self.ref_path = self.check_get_ref_path(ref_path)
         self.input_path = self.check_get_in_path(in_path) if in_path else None
@@ -112,6 +119,12 @@ class FeatureExtractor:
         self.num_processes = num_processes
 
         self.use_alt_coverage = use_alt_coverage
+
+        self.no_neighbour_search = no_neighbour_search
+        self.window_size = window_size
+        self.neighbour_error_threshold = neighbour_error_threshold
+
+        self.tmp_data = []
 
     def __str__(self) -> str:
         o = f"FeatureExtractor instance information:\n\n"
@@ -351,20 +364,43 @@ class FeatureExtractor:
         """
         from_stdin = False if self.input_path else True
         to_stdout = False if self.output_path else True
-        def output_line(line: str, output: io.TextIOWrapper = None) -> None:
-            if output:
+
+        def store_output_line(line: str, output: io.TextIOWrapper = None) -> None:
+            """
+            Stores the output line based on the neighbour search settings.
+
+            Args:
+                line (str): The line to be stored.
+                output (io.TextIOWrapper, optional): Output file. If not provided, the line is printed to the standard output. Default is None.
+
+            Returns:
+                None
+
+            Raises:
+                None
+
+            Notes:
+                If 'no_neighbour_search' is True and 'output' is provided, the line is written to the output file.
+                If 'no_neighbour_search' is True and 'output' is not provided, the line is printed to the standard output.
+                If 'no_neighbour_search' is False, the line is appended to the 'tmp_data' list.
+            """
+            if (self.no_neighbour_search) & (output is not None):
                 output.write(line)
-            else:
+            elif self.no_neighbour_search:
                 sys.stdout.write(line)
+            else:
+                self.tmp_data.append(line)
+            
         def write(file_input):
             with Pool(processes=self.num_processes) as pool:
-                o = None if to_stdout else open(self.output_path, "w")
+                o = None if (to_stdout | self.no_neighbour_search) else open(self.output_path, "w")
 
                 if not to_stdout:
-                    progress_bar = tqdm() if from_stdin else tqdm(total=self.get_num_lines(self.input_path))
+                    desc = "Processing pileup rows"
+                    progress_bar = tqdm(desc=desc) if from_stdin else tqdm(desc=desc, total=self.get_num_lines(self.input_path))
 
                 header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tperc_mismatch\tmotif\tq_mean\tq_std\n"
-                output_line(header, o)
+                store_output_line(header, o)
                 results = []
 
                 for line in file_input:
@@ -374,7 +410,7 @@ class FeatureExtractor:
                 for line, result in results:
                     outline = result.get()
                     if len(outline) > 0:
-                        output_line(outline, o)
+                        store_output_line(outline, o)
                     if not to_stdout:
                         progress_bar.update()
 
@@ -385,13 +421,17 @@ class FeatureExtractor:
         if not to_stdout:
             f = Figlet(font="slant")
             print(f.renderText("Neet - pileup extractor"))
-            print(str(self))
+            # print(str(self))
 
         if from_stdin:
             write(sys.stdin)
         else:
             with open(self.input_path, "r") as i:
                 write(i)
+
+        # start neighbourhood search
+        if not self.no_neighbour_search:
+            self.read_lines_sliding_window()
 
     def get_num_lines(self, path: str) -> int:
         """
@@ -598,7 +638,6 @@ class FeatureExtractor:
             count_dict["del_rel"] = 0
             count_dict["ins_rel"] = 0
 
-
         return count_dict
 
     def get_majority_base(self, count_dict: Dict[str, Union[str, int, float]]) -> str:
@@ -714,6 +753,227 @@ class FeatureExtractor:
     #                                  Functions called during neighbour search                                     #
     #################################################################################################################
 
+    def read_lines_sliding_window(self) -> None:
+        """
+        Reads lines from temporary data using a sliding window approach and performs processing on the lines.
+        Writes the processed output to the specified output file or stdout.
+
+        Returns:
+            None
+        """
+        def output_line(line, output: io.TextIOWrapper = None) -> None:
+            """
+            Writes a line to the specified output file or stdout.
+
+            Args:
+                line: The line to be written.
+                output: The output file to write the line to. If not provided, writes to stdout.
+
+            Returns:
+                None
+            """
+            if output:
+                output.write(line)
+            else:
+                sys.stdout.write(line)
+
+        def write_edge_lines(neighbourhood: List[str], outfile: io.TextIOWrapper, start: bool = True):
+            """
+            Writes the neighbourhood information for the first or last rows as returned by the process_edge method.
+
+            Args:
+                neighbourhood: A list of lines representing the current neighbourhood.
+                outfile: The output file to write the edge lines to.
+                start: A boolean indicating if it's the start or end of the neighbourhood.
+
+            Returns:
+                None
+            """
+            k = self.window_size
+            r = range(k) if start else range(k+1, 2*k+1)
+            for current_pos in r:
+                outline = self.process_edge(current_pos, neighbourhood, start)
+                output_line(outline, outfile)
+
+        to_stdout = False if self.output_path else True
+
+        window_size_full = 1 + 2 * self.window_size
+        lines = []
+        first = True
+
+        o = None if to_stdout else open(self.output_path, "w")
+
+        n_lines = len(self.tmp_data)
+        header = self.tmp_data.pop(0)
+        header = header.strip("\n")+"\thas_neighbour_error\tneighbour_error_pos\n" 
+        output_line(header, o)
+
+        if not to_stdout:
+            desc = "Searching for nearby errors"
+            progress_bar = tqdm(desc=desc, total=n_lines)
+
+        if n_lines < window_size_full:
+            lines = []
+            for line in self.tmp_data:
+                lines.append(line)
+            for current_pos in range(n_lines):
+                outline = self.process_small(current_pos, lines, n_lines)
+                output_line(outline, o)
+                if not to_stdout:
+                    progress_bar.update()
+        else:
+            for line in self.tmp_data:
+                lines.append(line)
+
+                if len(lines) > window_size_full:  
+                    lines.pop(0)
+            
+                if len(lines) == window_size_full:
+                    # once lines hits the max. size for the first time, get and write the first k lines
+                    if first:
+                        first = False
+                        write_edge_lines(lines, o, start=True)
+
+                    outline = self.process_neighbourhood(lines)
+                    output_line(outline, o)
+
+                if not to_stdout:
+                    progress_bar.update()
+
+            # after the last center line was added to lines, process the last k lines
+            write_edge_lines(lines, o, start=False)
+
+        if not to_stdout:
+            o.close()
+            progress_bar.update()
+            progress_bar.close()
+
+    def process_small(self, current_pos: int, neighbourhood: List[str], n_lines: int) -> str:
+        """
+        Process a small neighbourhood in case the full window size is smaller than the number
+        of lines.
+
+        Args:
+            current_pos: The current position within the neighbourhood.
+            neighbourhood: A list of lines representing the neighbourhood.
+            n_lines: The total number of lines in the input.
+
+        Returns:
+            The processed line as a string.
+        """
+        ref_str = neighbourhood[current_pos].strip("\n")
+        nb = neighbourhood.copy()
+        ref = nb[current_pos].strip("\n").split("\t")
+        del(nb[current_pos])
+
+        has_nb, nb_info = self.get_neighbour_info(ref, nb)
+        ref_str += f"\t{has_nb}\t{nb_info}\n"
+        return ref_str
+
+    def process_edge(self, current_pos: int, neighbourhood: List[str], start: bool = True) -> str:
+        """
+        Process a neighbourhood at the beginning or the end of the input.
+
+        Args:
+            current_pos: The current position within the neighbourhood.
+            neighbourhood: A list of lines representing the neighbourhood.
+            start: A boolean indicating if it's the start or end of the neighbourhood.
+
+        Returns:
+            The processed line as a string.
+        """
+
+        k = self.window_size
+        ref_str = neighbourhood[current_pos].strip("\n")
+        nb = neighbourhood.copy()
+        ref = nb[current_pos].strip("\n").split("\t")
+
+        if start:
+            nb = nb[:current_pos+k+1]
+            del(nb[current_pos])
+        else:       
+            del(nb[current_pos])
+            nb = nb[current_pos-k:]
+
+        has_nb, nb_info = self.get_neighbour_info(ref, nb)
+        ref_str += f"\t{has_nb}\t{nb_info}\n"
+        return ref_str
+
+    def process_neighbourhood(self, neighbourhood: List[str]) -> str:
+        """
+        Get 2*window_size+1 rows ([row i-k, ..., row i, ..., row i+k]) that 
+        are next to each other in the tsv file and compare the row i to all 
+        remaining ones. Check if the other rows are on the same chromosome 
+        and if the relative distance btw them is smaller or equal to k.
+        Create summary string that indicates the error position relative to 
+        the center position.
+        Add new information to row and return
+
+        Parameters
+        ----------
+        neighbourhood : List[str]
+            List of k number of rows extracted from a tsv file
+
+        Returns
+        -------
+        str
+            New line containing the neighbourhood information for a given
+            center position
+        """
+        k = self.window_size
+
+        ref_str = neighbourhood[k].strip("\n")
+        nb = neighbourhood.copy()
+
+        ref = nb[k].strip("\n").split("\t")
+        del nb[k]
+
+        has_nb, nb_info = self.get_neighbour_info(ref, nb)
+        ref_str += f"\t{has_nb}\t{nb_info}\n"
+        return ref_str
+
+    def get_neighbour_info(self, ref: List[str], neighbourhood: List[str]) -> Tuple[bool, str]:
+        """
+        From a range of neighbouring lines in a file (neighbourhood), check if positions in these
+        lines are neighbours on the reference genome (based on chromosome and site) and if close
+        genomic positions can be regarded as errors based on the given error threshold.
+
+        Parameters
+        ----------
+        ref : List[str]
+            line of the central position for which neighbours are searched
+        neighbourhood : List[str]
+            list containing the lines surrounding the central position
+
+        Returns
+        -------
+        Tuple[bool, str]
+            - boolean indicating if any neighbouring error was found
+            - string giving the relative distance to all neighbouring errors to the central position,
+              if any were found 
+        """
+        k = self.window_size
+        ref_chr = ref[0]
+        ref_site = int(ref[1])
+
+        has_nb = False
+        nb_info = ""
+
+        # for each neighbour check if they are 1.on the same chr and 2.neighbours
+        for pos in neighbourhood:
+            pos = pos.strip("\n").split("\t")
+            chr = pos[0]
+            perc_error = float(pos[17])
+
+            if (chr == ref_chr) & (perc_error >= self.neighbour_error_threshold): # check if same chromosome & if pos is error
+                site = int(pos[1])
+                relative_pos = site - ref_site
+
+                if (abs(relative_pos) <= k): # check if pos are close to each other
+                    has_nb = True
+                    nb_info += str(relative_pos)+","
+        return has_nb, nb_info
+
 
 
 if __name__ == "__main__":
@@ -742,13 +1002,13 @@ if __name__ == "__main__":
                         help='Specify which approach should be used to calculate the number of reads a given position. \
                             Default: use coverage as calculated by samtools mpileup (i.e. #A+#C+#G+#T+#del).\
                             Alternative: calculates coverage considering only matched and mismatched reads, not considering deletions')
-    parser.add_argument("--search_neighbours", action="store_true",
-                        help="Specify if neighbourhood search should be performed. For each position, \
-                            check if and where errors appear in the genomic surroundings. \
+    parser.add_argument("--no_neighbour_search", action="store_true",
+                        help="Specifies that the neighbourhood search should not be performed. If not specified, \
+                            checks for each position, if and where errors appear in the genomic surroundings. \
                             When specified, make sure to add -nw and -nt flag.")
-    parser.add_argument('-nw', '--window_size', type=int, required=False, default=3,
+    parser.add_argument('-nw', '--window_size', type=int, required=False, default=2,
                         help='Size of the sliding window = 2*w+1. Required when -s flag is set')
-    parser.add_argument("-nt", "--neighbour_thresh", type=float_between_zero_and_one, required=False,
+    parser.add_argument("-nt", "--neighbour_thresh", type=float_between_zero_and_one, required=False, default=0.0,
                         help="Threshold of error percentage (--perc_mismatched / --perc_deletion), from which a neighbouring position \
                             should be considered as an error.")
 
@@ -761,6 +1021,9 @@ if __name__ == "__main__":
                                          mean_quality=args.mean_quality,
                                          genomic_region=args.genomic_region,
                                          num_processes=args.num_processes,
-                                         use_alt_coverage=args.coverage_alt)
+                                         use_alt_coverage=args.coverage_alt,
+                                         no_neighbour_search=args.no_neighbour_search,
+                                         window_size=args.window_size,
+                                         neighbour_error_threshold=args.neighbour_thresh)
     
     feature_extractor.process_file()
