@@ -4,8 +4,7 @@ from tqdm import tqdm
 from pyfiglet import Figlet
 import numpy as np
 from multiprocessing import Pool
-from itertools import takewhile, repeat
-from helper_functions import positive_int, positive_float, float_between_zero_and_one
+from helper_functions import positive_int, positive_float, float_between_zero_and_one, get_num_lines
 
 class FeatureExtractor:
     """
@@ -397,7 +396,7 @@ class FeatureExtractor:
 
                 if not to_stdout:
                     desc = "Processing pileup rows"
-                    progress_bar = tqdm(desc=desc) if from_stdin else tqdm(desc=desc, total=self.get_num_lines(self.input_path))
+                    progress_bar = tqdm(desc=desc) if from_stdin else tqdm(desc=desc, total=get_num_lines(self.input_path))
 
                 header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tperc_mismatch\tmotif\tq_mean\tq_std\n"
                 store_output_line(header, o)
@@ -432,25 +431,6 @@ class FeatureExtractor:
         # start neighbourhood search
         if not self.no_neighbour_search:
             self.read_lines_sliding_window()
-
-    def get_num_lines(self, path: str) -> int:
-        """
-        Calculate the number of lines in a given file. Function taken from
-        https://stackoverflow.com/questions/845058/how-to-get-line-count-of-a-large-file-cheaply-in-python
-        
-        Parameters
-        ----------
-        path : str
-            Path to a file
-
-        Returns
-        -------
-        int
-            Number of lines in the given file
-        """
-        f = open(path, 'rb')
-        bufgen = takewhile(lambda x: x, (f.raw.read(1024*1024) for _ in repeat(None)))
-        return sum( buf.count(b'\n') for buf in bufgen )
 
     def process_position(self, line: List[str]) -> str:
         """

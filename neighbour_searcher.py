@@ -3,7 +3,7 @@ import argparse, sys, warnings, os, io
 from tqdm import tqdm
 from pyfiglet import Figlet
 from itertools import takewhile, repeat
-from helper_functions import float_between_zero_and_one
+from helper_functions import float_between_zero_and_one, get_num_lines
 
 class NeighbourSearcher:
     """
@@ -171,7 +171,7 @@ class NeighbourSearcher:
                 header = file_input.pop(0)
                 n_lines = len(file_input)
             else:
-                n_lines = self.get_num_lines(self.input_path) - 1
+                n_lines = get_num_lines(self.input_path) - 1
                 header = next(file_input)
 
             header = header.strip("\n")+"\thas_neighbour_error\tneighbour_error_pos\n" 
@@ -337,27 +337,6 @@ class NeighbourSearcher:
                     has_nb = True
                     nb_info += str(relative_pos)+","
         return has_nb, nb_info
-
-
-    def get_num_lines(self, path: str) -> int:
-        """
-        Calculate the number of lines in a given file. Function taken from
-        https://stackoverflow.com/questions/845058/how-to-get-line-count-of-a-large-file-cheaply-in-python
-        
-        Parameters
-        ----------
-        path : str
-            Path to a file
-
-        Returns
-        -------
-        int
-            Number of lines in the given file
-        """
-        f = open(path, 'rb')
-        bufgen = takewhile(lambda x: x, (f.raw.read(1024*1024) for _ in repeat(None)))
-        return sum( buf.count(b'\n') for buf in bufgen )
-
 
 
 if __name__ == "__main__":

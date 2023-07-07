@@ -1,5 +1,26 @@
 from typing import Any, List
 import argparse, os, warnings
+from itertools import takewhile, repeat
+
+def get_num_lines(path: str) -> int:
+    """
+    Calculate the number of lines in a given file. Function taken from
+    https://stackoverflow.com/questions/845058/how-to-get-line-count-of-a-large-file-cheaply-in-python
+    
+    Parameters
+    ----------
+    path : str
+        Path to a file
+
+    Returns
+    -------
+    int
+        Number of lines in the given file
+    """
+    f = open(path, 'rb')
+    bufgen = takewhile(lambda x: x, (f.raw.read(1024*1024) for _ in repeat(None)))
+    return sum( buf.count(b'\n') for buf in bufgen )
+
 
 def check_get_in_path(in_path: str, 
                       exp_extensions: List[str] = [".msf", ".pup", ".pileup"],

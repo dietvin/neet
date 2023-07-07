@@ -1,5 +1,5 @@
 import argparse, io, sys, re
-from helper_functions import check_get_in_path, check_get_out_path
+from helper_functions import check_get_in_path, check_get_out_path, get_num_lines
 from typing import List, Tuple, Callable
 
 class Filter:
