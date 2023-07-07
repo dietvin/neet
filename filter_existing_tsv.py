@@ -3,6 +3,38 @@ from helper_functions import check_get_in_path, check_get_out_path
 from typing import List, Tuple, Callable
 
 class Filter:
+    """
+    Class for filtering TSV files based on specified criteria.
+
+        Attributes:
+        input_path (str): Path to the input TSV file.
+        output_path (str): Path to the output TSV file.
+        chr (str): Filter by chromosome.
+        site (List[int]): Filter by site(s) or range.
+        n_reads (Tuple[int, Callable[[int, int], bool]]): Filter by coverage.
+        base (List[str]): Filter by reference base(s).
+        mismatched (bool): Filter mismatched positions.
+        perc_mismatched (Tuple[float, Callable[[float, float], bool]]): Filter by percent of mismatched reads.
+        motif (str): Filter by motif around position.
+        q_score (Tuple[float, Callable[[float, float], bool]]): Filter by mean quality.
+        OPERATORS (dict): Dictionary mapping comparison operators to their corresponding lambda functions.
+
+    Methods:
+        get_sites(site_str: str) -> List[int]:
+            Extracts site IDs from a string representation of sites.
+        get_n_reads(n_reads_str: str) -> Tuple[int, Callable[[int, int], bool]]:
+            Extracts the number of reads and the corresponding comparison function from the given string.
+        get_bases(base_str: str) -> List[str]:
+            Extracts the bases from the given string.
+        get_val_fun_float(string: str) -> Tuple[float, Callable[[float, float], bool]]:
+            Extracts the percentage of mismatched values and the corresponding comparison function from the given string.
+        filter_tsv() -> None:
+            Filters the TSV file based on the specified criteria.
+        output_line(line: str, output: io.TextIOWrapper = None) -> None:
+            Writes a line to the output file or stdout.
+        passes_filter(row: str) -> bool:
+            Checks if a row passes the specified filter criteria.
+    """
     input_path: str
     output_path: str
 
@@ -35,6 +67,21 @@ class Filter:
                  perc_mismatched: str, 
                  motif: str, 
                  q_score: str) -> None:
+        """
+        Initializes the Filter object.
+
+        Args:
+            input_path (str): Path to the input TSV file.
+            output_path (str): Path to the output TSV file.
+            chr (str): Filter by chromosome.
+            site (str): Filter by site(s) or range.
+            n_reads (str): Filter by coverage.
+            base (str): Filter by reference base(s).
+            mismatched (bool): Filter mismatched positions.
+            perc_mismatched (str): Filter by percent of mismatched reads.
+            motif (str): Filter by motif around position.
+            q_score (str): Filter by mean quality.
+        """
         self.input_path = check_get_in_path(input_path, 
                                             exp_extensions=[".tsv"], 
                                             warn_expected_text="Expected .tsv file") if input_path else None
@@ -54,7 +101,8 @@ class Filter:
         
 
     def get_sites(self, site_str: str) -> List[int]:
-        """Extracts site IDs from a string representation of sites.
+        """
+        Extracts site IDs from a string representation of sites.
 
         Args:
             site_str (str): A string representing site IDs. It can be a single ID,
@@ -66,15 +114,6 @@ class Filter:
 
         Raises:
             Exception: If the site IDs cannot be extracted from the given string.
-
-        Example:
-            >>> obj = MyClass()
-            >>> obj.get_sites('1')
-            [1]
-            >>> obj.get_sites('2,3,4')
-            [2, 3, 4]
-            >>> obj.get_sites('10-15')
-            [10, 11, 12, 13, 14, 15]
         """
         if site_str is None:
             return None
@@ -181,6 +220,9 @@ class Filter:
         return val, fun
 
     def filter_tsv(self) -> None:
+        """
+        Filters the TSV file based on the specified criteria.
+        """
         out = None if self.to_stdout else open(self.output_path, "w")
 
         with open(self.input_path, "r") as file:
@@ -194,12 +236,28 @@ class Filter:
             out.close()
 
     def output_line(self, line: str, output: io.TextIOWrapper = None) -> None:
+        """
+        Writes a line to the output file or stdout.
+
+        Args:
+            line (str): The line to be written.
+            output (io.TextIOWrapper, optional): The output file. Defaults to None.
+        """
         if output:
             output.write(line)
         else:
             sys.stdout.write(line)
 
     def passes_filter(self, row: str) -> bool:
+        """
+        Checks if a row passes the specified filter criteria.
+
+        Args:
+            row (str): A row from the TSV file.
+
+        Returns:
+            bool: True if the row passes the filter, False otherwise.
+        """
 
         def check_func(val, tup: Tuple[int | float, Callable[[int | float, int | float], bool]]) -> bool:
             val_ref = tup[0]
