@@ -1,6 +1,7 @@
 import argparse, io, sys, re
 from helper_functions import check_get_in_path, check_get_out_path, get_num_lines
 from typing import List, Tuple, Callable
+from tqdm import tqdm
 
 class Filter:
     """
@@ -224,16 +225,23 @@ class Filter:
         Filters the TSV file based on the specified criteria.
         """
         out = None if self.to_stdout else open(self.output_path, "w")
-
+        
+        if not self.to_stdout:
+            n_lines = get_num_lines(self.input_path) if self.input_path else None
+            progress_bar = tqdm(desc="Filtering lines", total=n_lines-1)
+        
         with open(self.input_path, "r") as file:
             header = next(file)
             self.output_line(header, out)
             for row in file:
                 if self.passes_filter(row):
                     self.output_line(row, out)
+                if not self.to_stdout:
+                    progress_bar.update()
         
         if not self.to_stdout:
             out.close()
+            progress_bar.close()
 
     def output_line(self, line: str, output: io.TextIOWrapper = None) -> None:
         """
