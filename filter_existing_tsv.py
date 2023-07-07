@@ -37,15 +37,19 @@ class Filter:
                  q_score: str) -> None:
         self.input_path = check_get_in_path(input_path, 
                                             exp_extensions=[".tsv"], 
-                                            warn_expected_text="Expected .tsv file")
-        self.output_path = check_get_out_path(output_path, self.input_path)
-        self.chromosome = chr
+                                            warn_expected_text="Expected .tsv file") if input_path else None
+        self.output_path = check_get_out_path(output_path, self.input_path) if output_path else None
+
+        self.from_stdin = False if input_path else True
+        self.to_stdout = False if output_path else True
+
+        self.chr = chr
         self.site = self.get_sites(site)
         self.n_reads = self.get_n_reads(n_reads)
         self.base = self.get_bases(base)
         self.mismatched = mismatched
         self.perc_mismatched = self.get_val_fun_float(perc_mismatched)
-        self.motif = motif
+        self.motif = motif.upper() if motif else None
         self.q_score = self.get_val_fun_float(q_score)
         
 
@@ -58,6 +62,7 @@ class Filter:
 
         Returns:
             list[int]: A list of site IDs extracted from the input string.
+            None if given string is None
 
         Raises:
             Exception: If the site IDs cannot be extracted from the given string.
@@ -71,6 +76,8 @@ class Filter:
             >>> obj.get_sites('10-15')
             [10, 11, 12, 13, 14, 15]
         """
+        if site_str is None:
+            return None
         try:
             site = [int(site_str)]
         except:
@@ -96,13 +103,16 @@ class Filter:
         Returns:
             Tuple[int, callable]: A tuple containing the extracted number of reads as an integer
                 and the corresponding comparison function.
+            None if given string is None
 
         Raises:
             Exception: If the string does not match any of the supported formats.
         """
+        if n_reads_str is None:
+            return None
         try:
             val = int(n_reads_str)
-            fun = self.OPERATORS.get("==")
+            fun = self.OPERATORS.get(">=")
         except:
             match = re.match(r'([<>]=?|==)(\d+)', n_reads_str)
             if match:
@@ -111,7 +121,7 @@ class Filter:
                 fun = self.OPERATORS.get(op)
             else:
                 raise Exception(f"Could not extract information from given string '{n_reads_str}'")
-        return val, fun
+        return value, fun
     
     def get_bases(self, base_str: str) -> List[str]:
         """
@@ -122,10 +132,14 @@ class Filter:
 
         Returns:
             List[str]: A list of unique bases extracted from the string.
+            None if given string is None
 
         Raises:
             Exception: If the string contains unexpected bases.
         """
+        if base_str is None:
+            return None
+        
         bases = base_str.split(",")
         bases = list(set(bases)) # remove duplicates
         for base in bases:
@@ -145,13 +159,17 @@ class Filter:
         Returns:
             Tuple[float, Callable[[float, float], bool]]: A tuple containing the extracted percentage
                 of mismatched values as a float and the corresponding comparison function.
-
+            None if given string is None
+                
         Raises:
             Exception: If the string does not match any of the supported formats.
         """
+        if string is None:
+            return None
+
         try:
             val = float(string)
-            fun = self.OPERATORS.get("==")
+            fun = self.OPERATORS.get(">=")
         except:
             match = re.match(r'([<>]=?|==)(\d+\.?\d*)', string)
             if match:
@@ -166,8 +184,10 @@ class Filter:
         out = None if self.to_stdout else open(self.output_path, "w")
 
         with open(self.input_path, "r") as file:
+            header = next(file)
+            self.output_line(header, out)
             for row in file:
-                if self.passes_filter():
+                if self.passes_filter(row):
                     self.output_line(row, out)
         
         if not self.to_stdout:
@@ -179,8 +199,41 @@ class Filter:
         else:
             sys.stdout.write(line)
 
-    def passes_filter(self) -> bool:
-        pass
+    def passes_filter(self, row: str) -> bool:
+
+        def check_func(val, tup: Tuple[int | float, Callable[[int | float, int | float], bool]]) -> bool:
+            val_ref = tup[0]
+            fun = tup[1]
+
+            return fun(val, val_ref)
+
+        row = row.strip("\n").split("\t")
+        chr = row[0]
+        site = int(row[1])
+        n_reads = int(row[2])
+        ref_base = row[3]
+        maj_base = row[4]
+        perc_mismatched = float(row[17])
+        motif = row[18]
+        q_score = float(row[19])
+
+        if self.chr:
+            if chr != self.chr: return False
+        if self.site: 
+            if site not in self.site: return False
+        if self.n_reads:
+            if not check_func(n_reads, self.n_reads): return False
+        if self.base:
+            if ref_base not in self.base: return False
+        if self.mismatched:
+            if maj_base == ref_base: return False
+        if self.perc_mismatched:
+            if not check_func(perc_mismatched, self.perc_mismatched): return False
+        if self.motif:
+            if motif != self.motif: return False
+        if self.q_score:
+            if not check_func(q_score, self.q_score): return False
+        return True
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="TSV filter",
@@ -197,7 +250,7 @@ if __name__ == "__main__":
                         help="Filter by coverage. To filter coverage >= x: 'x'; coverage <= x: '<=x'; coverage == x: '==x'")
     parser.add_argument("-b", "--base", type=str, required=False,
                         help="Filter by reference base(s). To filter single base (e.g. A): 'A'; multiple bases (e.g. A, C & T): 'A,C,T'")
-    parser.add_argument("-m", "--mismatched", action="store_true", type=str, required=False,
+    parser.add_argument("-m", "--mismatched", action="store_true", required=False,
                         help="Filter mismatched positions.")
     parser.add_argument("-p", "--percent_mismatched", type=str, required=False,
                         help="Filter by percent of mismatched reads. To filter perc_mismatched >= x: 'x'; perc_mismatched <= x: '<=x'")
@@ -206,4 +259,16 @@ if __name__ == "__main__":
     parser.add_argument("-q", "--q_score", type=str, required=False,
                         help="Filter by mean quality. To filter q_mean >= x: 'x'; q_mean <= x: '<=x'")
 
-    
+    args = parser.parse_args()
+
+    filter = Filter(input_path=args.input,
+                    output_path=args.output,
+                    chr=args.chromosome,
+                    site=args.site,
+                    n_reads=args.n_reads,
+                    base=args.base,
+                    mismatched=args.mismatched,
+                    perc_mismatched=args.percent_mismatched,
+                    motif=args.motif,
+                    q_score=args.q_score)
+    filter.filter_tsv()
