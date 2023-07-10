@@ -36,9 +36,11 @@ if __name__=="__main__":
                           chromosome=args.chromosome,
                           out_path=args.output)
         plotter.create_plot()
+
     elif args.subcommand == "composition_plot":
         plotter = CompositionPlotter(tsv_paths=args.input,
                                      bed_path=args.bed)
         plotter.create_plots()
+        
     else:
         parser.print_help()

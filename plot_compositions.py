@@ -5,17 +5,65 @@ from typing import Set, Tuple, List, Dict
 from helper_functions import check_get_in_path
 
 class CompositionPlotter:
+    """A class for creating composition plots based on TSV files and a BED file."""
+
     positions: Set[Tuple[str, int]]
     filenames: List[str]
     data: List[Dict[str, str|float]]
 
     def __init__(self, tsv_paths: str, bed_path: str) -> None:
-        
-        self.filenames = tsv_paths.split(",")
+        """
+        Initializes a CompositionPlotter object.
+
+        Args:
+            tsv_paths (str): Comma-separated paths to TSV files or a directory path containing TSV files.
+            bed_path (str): Path to the BED file.
+
+        Returns:
+            None
+        """
+        self.filenames = self.get_filenames(tsv_paths)
         self.positions = self.get_bed_positions(bed_path)
         self.data = self.get_info()
 
+
+    def get_filenames(self, tsv_paths: str) -> List[str]:
+        """
+        Retrieves the list of TSV file names.
+
+        Args:
+            tsv_paths (str): Comma-separated paths to TSV files or a directory path containing TSV files.
+
+        Returns:
+            List[str]: List of TSV file names.
+        """
+        def is_list_of_paths(tsv_paths: str) -> bool:
+            paths = tsv_paths.split(",")
+            for path in paths:
+                if not os.path.isfile(path.strip()):
+                    return False
+            return True
+        
+        if is_list_of_paths(tsv_paths):
+            return tsv_paths.split(",")
+        else:
+            file_names = []
+            for file_name in os.listdir(tsv_paths):
+                if file_name.endswith(".tsv") and os.path.isfile(os.path.join(tsv_paths, file_name)):
+                    file_names.append(os.path.join(tsv_paths, file_name))
+            return file_names
+
+
     def get_bed_positions(self, bed_file: str) -> Set[Tuple[str, int]]:
+        """
+        Retrieves positions from the BED file.
+
+        Args:
+            bed_file (str): Path to the BED file.
+
+        Returns:
+            Set[Tuple[str, int]]: Set of positions (chromosome, position).
+        """
         positions = set()
         with open(bed_file, 'r') as bed:
             for line in bed:
@@ -26,6 +74,12 @@ class CompositionPlotter:
         return positions
 
     def get_info(self) -> List[Dict[str, str|float]]:
+        """
+        Retrieves information from TSV files.
+
+        Returns:
+            List[Dict[str, str|float]]: List of dictionaries containing information for each position.
+        """
         counts = []
         for position in self.positions:
             pos_count = {"pos": f"{position[0]}:{position[1]}",
@@ -48,6 +102,16 @@ class CompositionPlotter:
         return counts
 
     def extract_rows(self, tsv_file: str, ref_position: str) -> Set[float]:
+        """
+        Extracts rows from the TSV file based on the reference position.
+
+        Args:
+            tsv_file (str): Path to the TSV file.
+            ref_position (str): Reference position (chromosome, position).
+
+        Returns:
+            Set[float]: Set of values extracted from the TSV file.
+        """
         with open(tsv_file, 'r') as tsv:
             next(tsv)
             for line in tsv:
@@ -60,6 +124,12 @@ class CompositionPlotter:
         return 0, 0, 0, 0
 
     def create_plots(self) -> None:
+        """
+        Creates and displays the composition plots using Plotly.
+
+        Returns:
+            None
+        """
         fig = make_subplots(rows=len(self.data), cols=1, shared_xaxes=True, subplot_titles=[d['pos'] for i, d in enumerate(self.data)])
 
         legend = True
