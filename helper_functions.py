@@ -36,6 +36,7 @@ def check_get_in_path(in_path: str,
         File extensions of the given input format
     warn_expected_text : str
         Text to be displayed in the warning if another format is given
+        
     Returns
     -------
     str

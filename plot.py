@@ -7,6 +7,7 @@ from plot_compositions import CompositionPlotter
 if __name__=="__main__":
     parser = argparse.ArgumentParser(prog="CoverageTrackPlotter",
                                      description="Provides different plotting functionalities.")
+    
     subparsers = parser.add_subparsers(dest="subcommand")
     coverage_track_parser = subparsers.add_parser("coverage_track")
     coverage_track_parser.add_argument("-i", "--input", type=str, required=True,
@@ -20,6 +21,12 @@ if __name__=="__main__":
     coverage_track_parser.add_argument('-c', '--chromosome', type=str, required=True,
                         help="Chromosome to be plotted")
     
+    composition_parser = subparsers.add_parser("composition_plot")
+    composition_parser.add_argument("-i", "--input", type=str, required=True,
+                                    help="Path to the input tsv files, separated by comma")
+    composition_parser.add_argument("-b", "--bed", type=str, required=False,
+                                    help="Path to the bed file")
+    
     args = parser.parse_args()
 
     if args.subcommand == "coverage_track":
@@ -29,5 +36,9 @@ if __name__=="__main__":
                           chromosome=args.chromosome,
                           out_path=args.output)
         plotter.create_plot()
+    elif args.subcommand == "composition_plot":
+        plotter = CompositionPlotter(tsv_paths=args.input,
+                                     bed_path=args.bed)
+        plotter.create_plots()
     else:
         parser.print_help()
