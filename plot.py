@@ -24,8 +24,11 @@ if __name__=="__main__":
     composition_parser = subparsers.add_parser("composition_plot")
     composition_parser.add_argument("-i", "--input", type=str, required=True,
                                     help="Path to the input tsv files, separated by comma")
-    composition_parser.add_argument("-b", "--bed", type=str, required=False,
+    composition_parser.add_argument("-b", "--bed", type=str, required=True,
                                     help="Path to the bed file")
+    composition_parser.add_argument("-o", "--output", type=str, required=False,
+                                       help="Path to the output file")
+
     
     args = parser.parse_args()
 
@@ -39,8 +42,9 @@ if __name__=="__main__":
 
     elif args.subcommand == "composition_plot":
         plotter = CompositionPlotter(tsv_paths=args.input,
-                                     bed_path=args.bed)
+                                     bed_path=args.bed,
+                                     out_path=args.output)
         plotter.create_plots()
-        
+
     else:
         parser.print_help()

@@ -1,0 +1,2 @@
+chr	site	n_reads	ref_base	majority_base	n_a	n_c	n_g	n_t	n_del	n_ins	n_a_rel	n_c_rel	n_g_rel	n_t_rel	n_del_rel	n_ins_rel	perc_mismatch	motif	q_mean	q_std	has_neighbour_error	neighbour_error_pos
+oligo	10	4	A	A	3	0	1	0	0	0	0.75	0.0	0.25	0.0	0.0	0.0	0.25	TCGACATAGAT	0.4	12.2245654319489	True	1,

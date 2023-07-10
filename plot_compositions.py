@@ -2,7 +2,7 @@ import os
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from typing import Set, Tuple, List, Dict
-from helper_functions import check_get_in_path
+from helper_functions import check_get_in_path, check_get_out_path
 
 class CompositionPlotter:
     """A class for creating composition plots based on TSV files and a BED file."""
@@ -11,7 +11,7 @@ class CompositionPlotter:
     filenames: List[str]
     data: List[Dict[str, str|float]]
 
-    def __init__(self, tsv_paths: str, bed_path: str) -> None:
+    def __init__(self, tsv_paths: str, bed_path: str, out_path: str) -> None:
         """
         Initializes a CompositionPlotter object.
 
@@ -26,6 +26,7 @@ class CompositionPlotter:
         self.positions = self.get_bed_positions(bed_path)
         self.data = self.get_info()
 
+        self.output_path = check_get_out_path(out_path, self.filenames[0], "_plot.html") if out_path else None
 
     def get_filenames(self, tsv_paths: str) -> List[str]:
         """
@@ -155,7 +156,10 @@ class CompositionPlotter:
             if i == 0:
                 legend = False
 
-        fig.show()
+        if self.output_path:
+            fig.write_html(self.output_path)
+        else:
+            fig.show()
 
 if __name__ == "__main__":
     file_mod = "/home/vincent/masterthesis/data/nanocompore_data/processed/Oligo_1_extracted.tsv"
