@@ -135,14 +135,7 @@ class CompositionPlotter:
 
         legend = True
         for i, data in enumerate(self.data):
-            sub_fig = go.Figure()
-            sub_fig.add_trace(go.Bar(x=data["name"], y=data["a"], name="A", marker_color="green", legendgroup="group_1", showlegend = legend))
-            sub_fig.add_trace(go.Bar(x=data["name"], y=data["c"], name="C", marker_color="blue", legendgroup="group_1", showlegend = legend))
-            sub_fig.add_trace(go.Bar(x=data["name"], y=data["g"], name="G", marker_color="orange", legendgroup="group_1", showlegend = legend))
-            sub_fig.add_trace(go.Bar(x=data["name"], y=data["t"], name="T", marker_color="red", legendgroup="group_1", showlegend = legend))
-            sub_fig.update_layout(
-                title=f"{data['pos']}")
-
+            sub_fig = self.create_subplot(data, legend)
             for trace in sub_fig.data:
                 fig.add_trace(trace, row=i + 1, col=1)
 
@@ -160,6 +153,33 @@ class CompositionPlotter:
             fig.write_html(self.output_path)
         else:
             fig.show()
+
+    def create_subplot(self, data: Dict[str, str | float], add_legend: bool = True) -> go.Figure:
+        """
+        Create a subplot with bar charts representing different data categories.
+
+        Args:
+            data (Dict[str, Union[str, float]]): A dictionary containing the data for the plot.
+                It should have the following keys:
+                - "name": A list of names for the x-axis categories.
+                - "a": A list of values for the "A" category.
+                - "c": A list of values for the "C" category.
+                - "g": A list of values for the "G" category.
+                - "t": A list of values for the "T" category.
+            add_legend (bool, optional): Whether to display the legend. Defaults to True.
+
+        Returns:
+            go.Figure: The created subplot as a Plotly Figure object.
+        """
+        fig = go.Figure()
+        fig.add_trace(go.Bar(x=data["name"], y=data["a"], name="A", marker_color="green", legendgroup="group_1", showlegend = add_legend))
+        fig.add_trace(go.Bar(x=data["name"], y=data["c"], name="C", marker_color="blue", legendgroup="group_1", showlegend = add_legend))
+        fig.add_trace(go.Bar(x=data["name"], y=data["g"], name="G", marker_color="orange", legendgroup="group_1", showlegend = add_legend))
+        fig.add_trace(go.Bar(x=data["name"], y=data["t"], name="T", marker_color="red", legendgroup="group_1", showlegend = add_legend))
+        fig.update_layout(
+            title=f"{data['pos']}")
+        return fig
+
 
 if __name__ == "__main__":
     file_mod = "/home/vincent/masterthesis/data/nanocompore_data/processed/Oligo_1_extracted.tsv"
