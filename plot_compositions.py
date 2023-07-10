@@ -187,5 +187,5 @@ if __name__ == "__main__":
     file_x = "/home/vincent/masterthesis/data/nanocompore_data/processed/Oligo_x_extracted.tsv"
     bed = "/home/vincent/masterthesis/data/nanocompore_data/processed/composition_plot_test.bed"
 
-    plotter = CompositionPlotter(file_mod+","+file_unm+","+file_x, bed)
+    plotter = CompositionPlotter(file_mod+","+file_unm+","+file_x, bed, None)
     plotter.create_plots()
