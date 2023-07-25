@@ -77,27 +77,29 @@ def add_bed_info(tsv_file: str, bed_file: str, out_file: str) -> None:
     """
     bed_data = {}
     with open(bed_file, "r") as bed:
-        bed_reader = csv.DictReader(bed, delimiter="\t")
-        for row in bed_reader:
+        data = []
+        for row in bed:
+            row = row.strip().split("\t")
             chromosome = row[0]
             start = int(row[1]) + 1 # get it to 1-indexed to fit tsv file
-            name = row[3]
-            bed_data[(chromosome, start)] = name
+            data = row[3:]
+            bed_data[(chromosome, start)] = data
+        n_cols = len(data)
 
     with open(tsv_file, "r") as tsv, open(out_file, "w") as out:
         tsv_reader = csv.reader(tsv, delimiter="\t")
         out_writer = csv.writer(out, delimiter="\t")
-        
-        header = next(tsv_reader).append("bed_info")
+        header = next(tsv_reader)
+        new_cols = [f"bed_col_{i}" for i in range(1,n_cols+1)]
+        header += new_cols
+
         out_writer.writerow(header)
-        
         for row in tsv_reader:
             chromosome = row[0]
-            site = row[1]
-            bed_entry = bed_data[(chromosome, site)]
+            site = int(row[1])
+            bed_entry = bed_data.get((chromosome, site), None)
             if bed_entry:
-                row.append(bed_entry)
-
+                row = row + bed_entry
             out_writer.writerow(row)
 
 
@@ -134,8 +136,11 @@ if __name__=="__main__":
                                            description="Add the name column from a BED file to the respective line in the TSV file.")
     add_bed_parser.add_argument("-i", "--input", type=str, required=True,
                                 help="TSV output from PileupExtractor/NeighbourhoodSearcher")
+    add_bed_parser.add_argument("-o", "--output", type=str, required=True,
+                                help="Path to the output file")
     add_bed_parser.add_argument("-b", "--bed", type=str, required=True,
                                 help="BED file containing additional information in the 'name' column")
+
 
     args = parser.parse_args()
 
@@ -143,5 +148,7 @@ if __name__=="__main__":
         tsv_to_bed(args.input, args.output)
     elif args.subcommand == "intersect_bed":
         intersect_beds(args.file_a, args.file_b, args.output, args.label_a, args.label_b)
+    elif args.subcommand == "add_bed_info":
+        add_bed_info(args.input, args.bed, args.output)
     else:
         parser.print_help()
