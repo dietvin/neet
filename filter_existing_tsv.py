@@ -7,7 +7,7 @@ class Filter:
     """
     Class for filtering TSV files based on specified criteria.
 
-        Attributes:
+    Attributes:
         input_path (str): Path to the input TSV file.
         output_path (str): Path to the output TSV file.
         chr (str): Filter by chromosome.

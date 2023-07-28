@@ -81,7 +81,7 @@ def add_bed_info(tsv_file: str, bed_file: str, out_file: str) -> None:
         for row in bed:
             row = row.strip().split("\t")
             chromosome = row[0]
-            start = int(row[1]) + 1 # get it to 1-indexed to fit tsv file
+            start = int(row[1]) #+ 1 # get it to 1-indexed to fit tsv file
             data = row[3:]
             bed_data[(chromosome, start)] = data
         n_cols = len(data)
