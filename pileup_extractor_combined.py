@@ -988,7 +988,7 @@ if __name__ == "__main__":
                             When specified, make sure to add -nw and -nt flag.")
     parser.add_argument('-nw', '--window_size', type=int, required=False, default=2,
                         help='Size of the sliding window = 2*w+1. Required when -s flag is set')
-    parser.add_argument("-nt", "--neighbour_thresh", type=float_between_zero_and_one, required=False, default=0.0,
+    parser.add_argument("-nt", "--neighbour_thresh", type=float_between_zero_and_one, required=False, default=0.5,
                         help="Threshold of error percentage (--perc_mismatched / --perc_deletion), from which a neighbouring position \
                             should be considered as an error.")
 
