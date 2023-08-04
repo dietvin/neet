@@ -7,71 +7,6 @@ from multiprocessing import Pool
 from helper_functions import positive_int, positive_float, float_between_zero_and_one, get_num_lines
 
 class FeatureExtractor:
-    """
-    From a pileup alignment file, extract the following features
-    at each genomic position:
-    - chromosome
-    - position on chromosome
-    - number of reads
-    - reference base
-    - majority base
-    - number of A, C, G, T (absolute & relative)
-    - number of insertions and deletions (abs. & rel.)
-    - motif surrounding a position
-    - percentage of reads with an error at a given position
-    - mean and standard deviation of the Qscore a a given position
-
-    Also allows for filtering positions by the number of reads, the error percentage,
-    the mean quality. Additionally, a specific genomic region can be extracted exlusively.
-
-    The pileup file should be created using Samtool's mpileup method as follows:
-
-    `samtools mpileup -f REF.fa -A -d 0 -Q 0 MAPPING.bam > OUTFILE.pileup` 
-
-    Attributes
-    ----------
-    input_path : str
-        path to a pileup file
-    output_path : str
-        path to newly created output file
-    ref_path : str
-        path to the reference fasta file
-    ref_sequences : Dict[str, str]
-        dictionary containing all sequences (values) and sequence names (keys) 
-        extracted from the reference fasta file
-    filter_num_reads : int
-        filtering option to keep only positions with at least filter_num_reads
-        number of reads 
-    filter_perc_mismatch : float
-        filtering option to keep only position with an error percentage of at 
-        least filter_perc_mismatch
-    filter_mean_quality : float
-        filtering option to keep only position with a mean Qscore of at least
-        filter_mean_quality 
-    filter_genomic_region : str
-        string of format CHR:START-END to specify a genomic region that should
-        be processed exclusively
-    num_processes
-        number of parallel processes during featrue extraction. Decreases 
-        computational time
-
-    Methods
-    -------
-    - get_references(path: str) -> Dict[str, str]
-    - extract_positional_info(data_string: str) -> Tuple[str, int, int]
-        - region_is_valid(self, chr, start, end) -> bool
-    - process_file(self) -> None
-        - get_num_lines(self, path: str) -> int
-        - process_position(self, line: List[str]) -> str
-            - remove_indels(self, pileup_string: str) -> str
-            - parse_pileup_string(self, pileup_string: str, ref_base: str) -> Dict[str, Union[str, int]]
-            - get_relative_count(self, count_dict: Dict[str, Union[str, int]], n_reads: int) -> Dict[str, Union[str, int, float]]
-            - get_majority_base(self, count_dict: Dict[str, Union[str, int, float]]) -> str
-            - get_motif(self, chr: str, site: int, ref: str, k: int) -> str
-            - get_mismatch_perc(self, count_dict: Dict[str, Union[str, int, float]], ref_base: str) -> int
-            - get_read_quality(self, read_qualities: str) -> Tuple[float, float]
-    """
-
 
     input_paths : List[str]
     output_paths : List[str]
@@ -266,12 +201,23 @@ class FeatureExtractor:
             lines = ref.readlines()
             i = 0
             refs = {}
-            for i in range(len(lines)):
+
+            if not lines[0].startswith(">"):
+                raise Exception(f"Fasta format error. The first line of fasta file '{path}' does not contain a header (starting with '>').")
+
+            chr_name = lines[0][1:].strip().split(" ")[0]
+            seq = ""
+            for i in range(1, len(lines)):
                 line = lines[i]
+
                 if line.startswith(">"):
-                    chr_name = line[1:].strip().split(" ")[0]
-                    refs[chr_name] = lines[i+1].strip()
-        
+                    refs[chr_name] = seq
+                    chr_name = line[1:].split(" ")[0]
+                    seq = ""
+                else:
+                    seq += line.strip()
+                    
+            refs[chr_name] = seq # add the last dict entry
         return refs
     
     def extract_positional_info(self, data_string: str) -> Tuple[str, int, int]:
