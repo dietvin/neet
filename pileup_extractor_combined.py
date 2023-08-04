@@ -73,8 +73,8 @@ class FeatureExtractor:
     """
 
 
-    input_path : str
-    output_path : str
+    input_paths : List[str]
+    output_paths : List[str]
     ref_path : str
     ref_sequences : Dict[str, str]
     filter_num_reads: int
@@ -88,27 +88,24 @@ class FeatureExtractor:
     window_size: int
     neighbour_error_threshold: float
 
-    def __init__(self, ref_path: str,
-                 in_path: str = None,
-                 out_path: str = None, 
-                 num_reads: int = None, 
-                 perc_mismatch: float = None,
-                 perc_deletion: float = None,
-                 mean_quality: float = None,
-                 genomic_region: str = None,
-                 num_processes: int = None,
-                 use_alt_coverage: bool = False,
-                 no_neighbour_search: bool = False,
-                 window_size: int = None,
-                 neighbour_error_threshold: float = None) -> None:
-        
-        self.ref_path = self.check_get_ref_path(ref_path)
-        self.input_path = self.check_get_in_path(in_path) if in_path else None
-        self.output_path = self.check_get_out_path(out_path, in_path) if out_path else None
-    
-        self.ref_sequences = self.get_references(ref_path)
+    def __init__(self, 
+                 in_paths: str,
+                 out_paths: str, 
+                 ref_path: str,
+                 num_reads: int, 
+                 perc_mismatch: float | None,
+                 perc_deletion: float | None,
+                 mean_quality: float | None,
+                 genomic_region: str | None,
+                 num_processes: int | None,
+                 use_alt_coverage: bool,
+                 no_neighbour_search: bool,
+                 window_size: int | None,
+                 neighbour_error_threshold: float | None) -> None:
 
-        # if no argument is given (e.g. num_reads=None) the minimum number of reads is set to the value that includes all pos.
+        self.process_paths(ref_path, in_paths, out_paths)    
+
+        # if one of the following arguments was not provided (i.e. arg=None), set variable to a value so nothing gets filtered out
         self.filter_num_reads = num_reads if num_reads is not None else 1
         self.filter_perc_mismatch = perc_mismatch if perc_mismatch else 0
         self.filter_perc_deletion = perc_deletion if perc_deletion else 0
@@ -126,135 +123,129 @@ class FeatureExtractor:
         self.tmp_data = []
 
     def __str__(self) -> str:
-        o = f"FeatureExtractor instance information:\n\n"
-        o += f" - input pileup file: {self.input_path}\n"
-        o += f" - writing output file to {self.output_path}\n"
-        o += f" - {len(self.ref_sequences)} reference sequence(s) found in file {self.ref_path}\n"
-        o += f" - ignoring positions with  <{self.filter_num_reads} reads\n"
-        o += f" - ignoring positions with  <{self.filter_perc_mismatch*100}% read errors\n" if self.filter_perc_mismatch>0 else " - no filtering by error percentage\n"
-        o += f" - ignoring positions with mean read qualities  <{self.filter_mean_quality}\n" if self.filter_mean_quality>0 else " - no filtering by mean read quality\n"
-        o += f" - extracting positions only on chromosome '{self.filter_genomic_region[0]}' from position {self.filter_genomic_region[1]} to {self.filter_genomic_region[2]}\n" if self.filter_genomic_region else " - extracting all genomic positions\n"
-        o += f" - extracting number of reads from pileup file" if not self.use_alt_coverage else f" - calculating number of reads from matched & mismatched reads only"
-        return o
+        return ""
 
 
     #################################################################################################################
     #                                   Functions called during initialization                                      #
     #################################################################################################################
 
-    def check_get_in_path(self, in_path: str, 
-                          exp_extensions: List[str] = [".msf", ".pup", ".pileup"],
-                          warn_expected_text: str = "Expected .pileup file or similar.") -> str:
+    def process_paths(self, ref_path: str, in_paths: str, out_paths: str) -> None:
         """
-        Check if the given input path is valid and of the expected file type.
+        Process input and output file paths for the data processing.
 
-        Parameters
-        ----------
-        in_path : str
-            Path to the input file given by the user.
-        exp_extensions : List[str]
-            File extensions of the given input format
-        warn_expected_text : str
-            Text to be displayed in the warning if another format is given
-        Returns
-        -------
-        str
-            Valid input file path.
+        This method processes the file paths provided for reference sequence, input data,
+        and output data. It checks the validity of the paths and stores the processed
+        information in the respective instance variables.
 
-        Raises
-        ------
-        FileNotFoundError
-            If the input file does not exist.
+        Parameters:
+            ref_path (str): The file path to the reference fasta file.
+            in_paths (str): Comma-separated list of input file paths. Use "-" to indicate no input files.
+            out_paths (str): Output file path or directory path. Use "-" to indicate no output files.
 
-        Warns
-        -----
-        UserWarning
-            If the input file is not of the expected file type (.msf, .pup, .pileup).
-            Warns the user to ensure it is a pileup file as produced by Samtools' mpileup function.
+        Returns:
+            None
+
+        Raises:
+            FileNotFoundError: If the reference file or any of the input files do not exist.
+            Warning: If the file extension of any input file is not among the expected extensions.
+
+        Note:
+            - The reference fasta file should have one or more sequence entries in the format:
+            >chromosome_name description(optional)
+            sequence
+            - The input files are expected to have specific extensions (e.g., '.msf', '.pup', '.pileup').
+            - The output files will be generated with the '.tsv' extension.
         """
-        if not os.path.exists(in_path): # does file exist?
-            raise FileNotFoundError(f"Input file not found. File '{in_path}' does not exist.")
-        file_type = os.path.splitext(in_path)[1]
-        if not file_type in exp_extensions: # is file likely in pileup format?
-            warnings.warn(f"Input file of type {file_type}. {warn_expected_text}", Warning)
-        
-        return in_path
+        # process path to reference fasta
+        self.check_path(ref_path, [".fasta", ".fna", ".ffn", ".faa", ".frn", ".fa"])
+        self.ref_sequences = self.get_references(ref_path)
 
-    def check_get_out_path(self, out_path: str, in_path: str, suffix: str = "_extracted.tsv") -> str:
-        """
-        Check if the given out_put path is valid. Can be either a filename or directory.
-        If a directory is given, output path will be '[DIR-path]/[INPUT-FILE-BASENAME]_extracted.tsv'.
-
-        Parameters
-        ----------
-        out_path : str
-            Output path given by the user. Either path to a (non-existing) file or a directory
-        in_path : str
-            Path to input file given by the user
-
-        Returns
-        -------
-        str
-            Valid path to output file 
-
-        Raises
-        ------
-        FileNotFoundError
-            If the output directory or path to the output file does not exist.
-        """
-        if os.path.isdir(out_path):
-            if not os.path.exists(out_path):
-                raise FileNotFoundError(f"Output directory not found. '{out_path}' does not exist.")
-
-            in_basename = os.path.splitext(os.path.basename(in_path))[0]
-            if not out_path.endswith("/"):
-                out_path += "/"
-
-            return os.path.join(out_path, in_basename + suffix)
-        
+        # process input path(s)
+        if in_paths == "-":
+            self.input_paths = None
         else:
-            dirname = os.path.dirname(out_path)
-            if not os.path.exists(dirname):
-                raise FileNotFoundError(f"Path to output file not found. '{dirname}' does not exist.")
+            in_paths = in_paths.split(",")
+            for path in in_paths: self.check_path(path, [".msf", ".pup", ".pileup"])
+            self.input_paths = in_paths
 
-            file_extension = os.path.splitext(out_path)[1]
-            if file_extension != ".tsv":
-                warnings.warn(f"Given output file has extension '{file_extension}'. Note that the output file will be of type '.tsv'.")
+        # process output path(s)
+        if out_paths == "-":
+            self.output_paths = None
+        else:
+            self.output_paths = self.process_outpaths(out_paths)
 
-            return out_path
-
-    def check_get_ref_path(self, in_path: str) -> str:
+    def check_path(self, path: str, extensions: List[str]) -> None:
         """
-        Check if the given path to reference file is valid 
-        and of the expected file type.
+        Check if the specified file path exists and has the expected file extension.
 
-        Parameters
-        ----------
-        in_path : str
-            Path to the reference file given by the user.
+        This function verifies whether the file specified by the given path exists and has a valid extension.
+        If the file does not exist, it raises a FileNotFoundError with a detailed error message.
+        If the file extension does not match any of the expected extensions, it raises a Warning.
 
-        Returns
-        -------
-        str
-            Valid input file path.
+        Parameters:
+            path (str): The file path to be checked.
+            extensions (List[str]): A list of expected file extensions (e.g., ['.txt', '.csv']).
 
-        Raises
-        ------
-        FileNotFoundError
-            If the input file does not exist.
-
-        Warns
-        -----
-        UserWarning
-            If the input file is not of the expected file type (.fa, .fasta).
-            Warns the user to ensure it is a fasta file.
+        Raises:
+            FileNotFoundError: If the specified file path does not exist.
+            Warning: If the file extension is not among the expected extensions.
         """
-        if not os.path.exists(in_path): # does file exist?
-            raise FileNotFoundError(f"Input file not found. File '{in_path}' does not exist.")
-        file_type = os.path.splitext(in_path)[1]
-        if not file_type in [".fa", ".fasta"]: # is file likely in pileup format?
-            warnings.warn(f"Reference file of type {file_type}. Make sure that this is a fasta file", Warning)
-        return in_path
+        if not os.path.exists(path): # does file exist?
+            raise FileNotFoundError(f"Input file not found. File '{path}' does not exist.")
+        file_type = os.path.splitext(path)[1]
+        if not file_type in extensions:
+            warnings.warn(f"Found file extension {file_type}. Expected file extension to be one of: {extensions}. If this is deliberate, ignore warning.", Warning)
+
+    def process_outpaths(self, out: str) -> List[str] | None:
+        """
+        Process the output file paths based on the input `out` argument.
+
+        Args:
+            out (str): The output file path or directory path. If set to "-", no output file paths
+                    will be generated, and the function will return `None`. If `out` is a
+                    directory path, output file paths will be generated using the input file
+                    names with the `.tsv` extension appended. If `out` is a comma-separated list
+                    of filenames, the function will verify if the specified files exist and if
+                    their extensions are `.tsv`.
+
+        Returns:
+            List[str] | None: A list of output file paths if `out` is a directory path or a
+                            comma-separated list of filenames. If `out` is set to "-", the
+                            function returns `None`.
+
+        Raises:
+            FileNotFoundError: If `out` is a directory path, and the directory does not exist.
+                            If `out` is a list of filenames, and the directory of any file
+                            does not exist.
+            UserWarning: If any filename in the list has an extension other than `.tsv`, a
+                        user warning will be issued to inform the user that the output file
+                        will be of type `.tsv`.
+        """
+        if out == "-": # check if outpaths is "-"
+            return None
+
+        elif os.path.isdir(out): # check if outpaths is directory, if the directory exists and create output file path(s) according to input file name(s)
+            if not os.path.exists(out):
+                raise FileNotFoundError(f"Directory not found. Output directory '{out}' does not exist.")
+            if not out.endswith("/"):
+                out += "/"
+            out_paths = []
+            for in_path in self.input_paths:
+                basename = os.path.splitext(os.path.basename(in_path))[0]
+                out_paths.append(f"{out}{basename}_extracted.tsv")
+            return out_paths
+
+        else: # check if outpaths is a list of filename(s), if the basedirectory exists and if the given file extension(s) is .tsv
+            out = out.split(",")
+            for path in out:
+                dirname = os.path.dirname(path)
+                if not os.path.exists(dirname):
+                    raise FileNotFoundError(f"Path to output file not found. '{dirname}' does not exist.")
+                file_extension = os.path.splitext(out_path)[1]
+                if file_extension != ".tsv":
+                    warnings.warn(f"Given output file has extension '{file_extension}'. Note that the output file will be of type '.tsv'.")
+            return out
 
     def get_references(self, path: str) -> Dict[str, str]:
         """
@@ -278,7 +269,8 @@ class FeatureExtractor:
             for i in range(len(lines)):
                 line = lines[i]
                 if line.startswith(">"):
-                    refs[line[1:].strip()] = lines[i+1].strip()
+                    chr_name = line[1:].strip().split(" ")[0]
+                    refs[chr_name] = lines[i+1].strip()
         
         return refs
     
@@ -342,28 +334,41 @@ class FeatureExtractor:
     #################################################################################################################
     #                                  Functions called during feature extraction                                   #
     #################################################################################################################
-
-    def process_file(self) -> None:
+    def process_files(self) -> None:
         """
-        Reads .pileup file and processes it, writing the results to a new file
-        using multiprocessing.
+        Process multiple pairs of input and output files. Reads .pileup files and processes them in parallel using multiprocessing.
+
+        Returns:
+            None
+        """
+        # if either input or output comes from / goes to stin/stdout only one file is processed 
+        if (not self.input_paths) | (not self.output_paths): 
+            from_stdin = False if self.input_paths else True
+            to_stdout = False if self.output_paths else True
+            self.process_file(self.input_paths, self.output_paths, from_stdin, to_stdout)
+
+        for in_file, out_file in zip(self.input_paths, self.output_paths):
+            self.process_file(in_file, out_file, from_stdin=False, to_stdout=False)
+
+    def process_file(self, in_file: str, out_file: str, from_stdin: bool, to_stdout: bool) -> None:
+        """
+        Reads a .pileup file, processes it, and writes the results to a new file using multiprocessing.
 
         Parameters
         ----------
-        infile : str
-            path to the input .pileup file
-        outfile : str
-            path to the output tsv file
-        ref : str
-            path to the reference fasta
-            
+        in_file : str
+            Path to the input .pileup file.
+        out_file : str
+            Path to the output tsv file.
+        from_stdin : bool
+            If True, the input is read from stdin.
+        to_stdout : bool
+            If True, the output is written to stdout.
+
         Returns
         -------
         None
-        """
-        from_stdin = False if self.input_path else True
-        to_stdout = False if self.output_path else True
-
+        """        
         def store_output_line(line: str, output: io.TextIOWrapper = None) -> None:
             """
             Stores the output line based on the neighbour search settings.
@@ -375,13 +380,10 @@ class FeatureExtractor:
             Returns:
                 None
 
-            Raises:
-                None
-
             Notes:
-                If 'no_neighbour_search' is True and 'output' is provided, the line is written to the output file.
-                If 'no_neighbour_search' is True and 'output' is not provided, the line is printed to the standard output.
-                If 'no_neighbour_search' is False, the line is appended to the 'tmp_data' list.
+                If 'self.no_neighbour_search' is True and 'output' is provided, the line is written to the output file.
+                If 'self.no_neighbour_search' is True and 'output' is not provided, the line is printed to the standard output.
+                If 'self.no_neighbour_search' is False, the line is appended to the 'tmp_data' list.
             """
             if (self.no_neighbour_search) & (output is not None):
                 output.write(line)
@@ -391,12 +393,21 @@ class FeatureExtractor:
                 self.tmp_data.append(line)
             
         def write(file_input):
+            """
+            Processes the input pileup data in parallel using multiprocessing.
+
+            Args:
+                file_input: The input data to process.
+
+            Returns:
+                None
+            """
             with Pool(processes=self.num_processes) as pool:
-                o = None if (to_stdout | self.no_neighbour_search) else open(self.output_path, "w")
+                o = None if (to_stdout | self.no_neighbour_search) else open(out_file, "w")
 
                 if not to_stdout:
                     desc = "Processing pileup rows"
-                    progress_bar = tqdm(desc=desc) if from_stdin else tqdm(desc=desc, total=get_num_lines(self.input_path))
+                    progress_bar = tqdm(desc=desc) if from_stdin else tqdm(desc=desc, total=get_num_lines(in_file))
 
                 header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tperc_mismatch\tmotif\tq_mean\tq_std\n"
                 store_output_line(header, o)
@@ -420,32 +431,26 @@ class FeatureExtractor:
         if not to_stdout:
             f = Figlet(font="slant")
             print(f.renderText("Neet - pileup extractor"))
-            # print(str(self))
 
         if from_stdin:
             write(sys.stdin)
         else:
-            with open(self.input_path, "r") as i:
-                write(i)
+            with open(in_file, "r") as i: write(i)
 
         # start neighbourhood search
         if not self.no_neighbour_search:
-            self.read_lines_sliding_window()
+            self.tmp_data = []
+            self.read_lines_sliding_window(out_file, to_stdout)
 
     def process_position(self, line: List[str]) -> str:
         """
-        Takes a line from a pileup file and processes it.
+        Processes a single position from the pileup data.
 
-        Parameters
-        ----------
-        line : list[str]
-            list containing each element from the pileup line.
+        Parameters:
+            pileup_data (List[str]): A list containing data for a single position from the pileup file.
 
-        Returns
-        -------
-        str
-            New line derived from the initial one. Can be written to a new file in consequent
-            steps.
+        Returns:
+            str: The processed line as a string.
         """
         # extract elements from list
         chr, site, ref_base, read_bases, read_qualities = line[0], int(line[1]), line[2], line[4], line[5]
@@ -733,15 +738,19 @@ class FeatureExtractor:
     #                                  Functions called during neighbour search                                     #
     #################################################################################################################
 
-    def read_lines_sliding_window(self) -> None:
+    def read_lines_sliding_window(self, out_file: str, to_stdout: bool) -> None:
         """
         Reads lines from temporary data using a sliding window approach and performs processing on the lines.
         Writes the processed output to the specified output file or stdout.
 
+        Parameters:
+            out_file (str): The path to the output file to write the processed data. If to_stdout is True, this will be ignored.
+            to_stdout (bool): If True, the processed data will be written to stdout instead of a file.
+
         Returns:
             None
-        """
-        def output_line(line, output: io.TextIOWrapper = None) -> None:
+        """        
+        def output_line(line, output: io.TextIOWrapper | None = None) -> None:
             """
             Writes a line to the specified output file or stdout.
 
@@ -757,7 +766,7 @@ class FeatureExtractor:
             else:
                 sys.stdout.write(line)
 
-        def write_edge_lines(neighbourhood: List[str], outfile: io.TextIOWrapper, start: bool = True):
+        def write_edge_lines(neighbourhood: List[str], outfile: io.TextIOWrapper | None, start: bool = True):
             """
             Writes the neighbourhood information for the first or last rows as returned by the process_edge method.
 
@@ -775,13 +784,11 @@ class FeatureExtractor:
                 outline = self.process_edge(current_pos, neighbourhood, start)
                 output_line(outline, outfile)
 
-        to_stdout = False if self.output_path else True
-
         window_size_full = 1 + 2 * self.window_size
         lines = []
         first = True
 
-        o = None if to_stdout else open(self.output_path, "w")
+        o = None if to_stdout else open(out_file, "w")
 
         n_lines = len(self.tmp_data)
         header = self.tmp_data.pop(0)
@@ -830,17 +837,16 @@ class FeatureExtractor:
 
     def process_small(self, current_pos: int, neighbourhood: List[str], n_lines: int) -> str:
         """
-        Process a small neighbourhood in case the full window size is smaller than the number
-        of lines.
+        Process a small neighbourhood in case the full window size is smaller than the number of lines.
 
-        Args:
-            current_pos: The current position within the neighbourhood.
-            neighbourhood: A list of lines representing the neighbourhood.
-            n_lines: The total number of lines in the input.
+        Parameters:
+            current_pos (int): The current position within the neighbourhood.
+            neighbourhood (List[str]): A list of lines representing the neighbourhood.
+            n_lines (int): The total number of lines in the input.
 
         Returns:
-            The processed line as a string.
-        """
+            str: The processed line as a string.
+        """        
         ref_str = neighbourhood[current_pos].strip("\n")
         nb = neighbourhood.copy()
         ref = nb[current_pos].strip("\n").split("\t")
@@ -854,15 +860,14 @@ class FeatureExtractor:
         """
         Process a neighbourhood at the beginning or the end of the input.
 
-        Args:
-            current_pos: The current position within the neighbourhood.
-            neighbourhood: A list of lines representing the neighbourhood.
-            start: A boolean indicating if it's the start or end of the neighbourhood.
+        Parameters:
+            current_pos (int): The current position within the neighbourhood.
+            neighbourhood (List[str]): A list of lines representing the neighbourhood.
+            start (bool, optional): A boolean indicating if it's the start or end of the neighbourhood. Defaults to True.
 
         Returns:
-            The processed line as a string.
+            str: The processed line as a string.
         """
-
         k = self.window_size
         ref_str = neighbourhood[current_pos].strip("\n")
         nb = neighbourhood.copy()
@@ -881,25 +886,17 @@ class FeatureExtractor:
 
     def process_neighbourhood(self, neighbourhood: List[str]) -> str:
         """
-        Get 2*window_size+1 rows ([row i-k, ..., row i, ..., row i+k]) that 
-        are next to each other in the tsv file and compare the row i to all 
-        remaining ones. Check if the other rows are on the same chromosome 
-        and if the relative distance btw them is smaller or equal to k.
-        Create summary string that indicates the error position relative to 
-        the center position.
-        Add new information to row and return
+        Get 2*window_size+1 rows ([row i-k, ..., row i, ..., row i+k]) that are next to each other in the tsv file and compare the row i to all 
+        remaining ones. Check if the other rows are on the same chromosome and if the relative distance between them is smaller or equal to k.
+        Create a summary string that indicates the error position relative to the center position.
+        Add new information to the row and return.
 
-        Parameters
-        ----------
-        neighbourhood : List[str]
-            List of k number of rows extracted from a tsv file
+        Parameters:
+            neighbourhood (List[str]): List of k number of rows extracted from a tsv file.
 
-        Returns
-        -------
-        str
-            New line containing the neighbourhood information for a given
-            center position
-        """
+        Returns:
+            str: New line containing the neighbourhood information for a given center position.
+        """        
         k = self.window_size
 
         ref_str = neighbourhood[k].strip("\n")
@@ -914,24 +911,18 @@ class FeatureExtractor:
 
     def get_neighbour_info(self, ref: List[str], neighbourhood: List[str]) -> Tuple[bool, str]:
         """
-        From a range of neighbouring lines in a file (neighbourhood), check if positions in these
-        lines are neighbours on the reference genome (based on chromosome and site) and if close
-        genomic positions can be regarded as errors based on the given error threshold.
+        From a range of neighbouring lines in a file (neighbourhood), check if positions in these lines are neighbours on the reference genome 
+        (based on chromosome and site) and if close genomic positions can be regarded as errors based on the given error threshold.
 
-        Parameters
-        ----------
-        ref : List[str]
-            line of the central position for which neighbours are searched
-        neighbourhood : List[str]
-            list containing the lines surrounding the central position
+        Parameters:
+            ref (List[str]): Line of the central position for which neighbours are searched.
+            neighbourhood (List[str]): List containing the lines surrounding the central position.
 
-        Returns
-        -------
-        Tuple[bool, str]
-            - boolean indicating if any neighbouring error was found
-            - string giving the relative distance to all neighbouring errors to the central position,
-              if any were found 
-        """
+        Returns:
+            Tuple[bool, str]: A tuple containing:
+                - boolean indicating if any neighbouring error was found.
+                - string giving the relative distance to all neighbouring errors to the central position, if any were found.
+        """        
         k = self.window_size
         ref_chr = ref[0]
         ref_site = int(ref[1])
@@ -960,12 +951,18 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="Pileup feature extractor",
                                         description="Extracs different characteristics from a\
                                         given pileup file.")
-    parser.add_argument('-r', '--reference', type=str, required=True,
-                        help='Path to the reference file')
-    parser.add_argument('-i', '--input', type=str, required=False,
-                        help='Path to the input file. If not specified, read from stdin')
-    parser.add_argument('-o', '--output', type=str, required=False,
-                        help='Path to the output file. If not specified, write to stdout')
+    parser.add_argument('-i', '--input', type=str, required=True, default="-",
+                        help="""
+                            Path to the input file(s). If replicates are available, specify paths comma-separated (<repl.1>,<repl.2>,...). 
+                            To read from stdin, give "-" for input.
+                            """)
+    parser.add_argument('-o', '--output', type=str, required=True, default="-",
+                        help="""
+                            Path to output file(s) (comma-separated if multiple) or directory. If filename(s) are given the order corresponds to the input files. 
+                            If a directory is given, the output files are created using the basename from an input file with the suffix "_extracted.tsv".
+                            To write to stdout, give "-" for output.
+                            """)
+    parser.add_argument('-r', '--reference', type=str, required=True, help='Path to the reference file')
     parser.add_argument('-n', '--num_reads', type=positive_int, required=False,
                         help='Filter by minimum number of reads at a position')
     parser.add_argument('-p', '--perc_mismatched', type=float_between_zero_and_one, required=False,
@@ -994,7 +991,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     
-    feature_extractor = FeatureExtractor(args.reference, args.input, args.output, 
+    feature_extractor = FeatureExtractor(args.input, args.output, args.reference,
                                          num_reads=args.num_reads, 
                                          perc_mismatch=args.perc_mismatched,
                                          perc_deletion=args.perc_deletion,
@@ -1006,4 +1003,4 @@ if __name__ == "__main__":
                                          window_size=args.window_size,
                                          neighbour_error_threshold=args.neighbour_thresh)
     
-    feature_extractor.process_file()
+    feature_extractor.process_files()

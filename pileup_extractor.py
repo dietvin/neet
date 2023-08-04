@@ -86,8 +86,8 @@ class FeatureExtractor:
     use_alt_coverage: bool
 
     def __init__(self, ref_path: str,
-                 in_path: str = None,
-                 out_path: str = None, 
+                 in_paths: str = None,
+                 out_paths: str = None, 
                  num_reads: int = None, 
                  perc_mismatch: float = None,
                  perc_deletion: float = None,
@@ -96,6 +96,8 @@ class FeatureExtractor:
                  num_processes: int = None,
                  use_alt_coverage: bool = False) -> None:
         
+        self.process_paths(ref_path, in_paths, out_paths)
+
         self.ref_path = self.check_get_ref_path(ref_path)
         self.input_path = self.check_get_in_path(in_path) if in_path else None
         self.output_path = self.check_get_out_path(out_path, in_path) if out_path else None
@@ -114,21 +116,44 @@ class FeatureExtractor:
         self.use_alt_coverage = use_alt_coverage
 
     def __str__(self) -> str:
-        o = f"FeatureExtractor instance information:\n\n"
-        o += f" - input pileup file: {self.input_path}\n"
-        o += f" - writing output file to {self.output_path}\n"
-        o += f" - {len(self.ref_sequences)} reference sequence(s) found in file {self.ref_path}\n"
-        o += f" - ignoring positions with  <{self.filter_num_reads} reads\n"
-        o += f" - ignoring positions with  <{self.filter_perc_mismatch*100}% read errors\n" if self.filter_perc_mismatch>0 else " - no filtering by error percentage\n"
-        o += f" - ignoring positions with mean read qualities  <{self.filter_mean_quality}\n" if self.filter_mean_quality>0 else " - no filtering by mean read quality\n"
-        o += f" - extracting positions only on chromosome '{self.filter_genomic_region[0]}' from position {self.filter_genomic_region[1]} to {self.filter_genomic_region[2]}\n" if self.filter_genomic_region else " - extracting all genomic positions\n"
-        o += f" - extracting number of reads from pileup file" if not self.use_alt_coverage else f" - calculating number of reads from matched & mismatched reads only"
-        return o
-
+        return "Pileup extractor"
 
     #################################################################################################################
     #                                   Functions called during initialization                                      #
     #################################################################################################################
+
+    def process_paths(self, ref_path: str, in_paths: str, out_paths: str) -> None:
+        # process path to reference fasta
+        self.check_path(ref_path, ["fasta", "fna", "ffn", "faa", "frn", "fa"])
+
+        # process input path(s)
+        in_paths = in_paths.split(",")
+        for path in in_paths: self.check_path(path, ["msf", "pup", "pileup"]) 
+        # process output path(s)  
+
+    def check_path(self, path: str, extensions: List[str]) -> None:
+        """
+        Check if the specified file path exists and has the expected file extension.
+
+        This function verifies whether the file specified by the given path exists and has a valid extension.
+        If the file does not exist, it raises a FileNotFoundError with a detailed error message.
+        If the file extension does not match any of the expected extensions, it raises a Warning.
+
+        Parameters:
+            path (str): The file path to be checked.
+            extensions (List[str]): A list of expected file extensions (e.g., ['txt', 'csv']).
+
+        Raises:
+            FileNotFoundError: If the specified file path does not exist.
+            Warning: If the file extension is not among the expected extensions.
+        """
+        if not os.path.exists(path): # does file exist?
+            raise FileNotFoundError(f"Input file not found. File '{path}' does not exist.")
+        file_type = os.path.splitext(path)[1]
+        if not file_type in extensions:
+            warnings.warn(f"Found file extension {file_type}. Expected file extension to be one of: {extensions}. If this is deliberate, ignore warning.", Warning)
+        
+
 
     def check_get_in_path(self, in_path: str, 
                           exp_extensions: List[str] = [".msf", ".pup", ".pileup"],
@@ -718,10 +743,17 @@ if __name__ == "__main__":
                                         given pileup file.")
     parser.add_argument('-r', '--reference', type=str, required=True,
                         help='Path to the reference file')
-    parser.add_argument('-i', '--input', type=str, required=False,
-                        help='Path to the input file. If not specified, read from stdin')
-    parser.add_argument('-o', '--output', type=str, required=False,
-                        help='Path to the output file. If not specified, write to stdout')
+    parser.add_argument('-i', '--input', type=str, required=True, default="-",
+                        help="""
+                            Path to the input file(s). If replicates are available, specify paths comma-separated (<repl.1>,<repl.2>,...). 
+                            To read from stdin, give "-" for input.
+                            """)
+    parser.add_argument('-o', '--output', type=str, required=True, default="-",
+                        help="""
+                            Path to output file(s) (comma-separated if multiple) or directory. If filename(s) are given the order corresponds to the input files. 
+                            If a directory is given, the output files are created using the basename from an input file with the suffix "_extracted.tsv".
+                            To write to stdout, give "-" for output.
+                            """)
     parser.add_argument('-n', '--num_reads', type=positive_int, required=False,
                         help='Filter by minimum number of reads at a position')
     parser.add_argument('-p', '--perc_mismatched', type=float_between_zero_and_one, required=False,
@@ -735,9 +767,11 @@ if __name__ == "__main__":
     parser.add_argument('-t', '--num_processes', type=int, required=False,
                         help='Number of threads to use for processing.')
     parser.add_argument('--coverage_alt', action="store_true", 
-                        help='Specify which approach should be used to calculate the number of reads a given position. \
-                            Default: use coverage as calculated by samtools mpileup (i.e. #A+#C+#G+#T+#del).\
-                            Alternative: calculates coverage considering only matched and mismatched reads, not considering deletions')
+                        help="""
+                            Specify which approach should be used to calculate the number of reads a given position. Default: use coverage as calculated 
+                            by samtools mpileup (i.e. #A+#C+#G+#T+#del). Alternative: calculates coverage considering only matched and mismatched reads, 
+                            not considering deletions.
+                            """)
 
     args = parser.parse_args()
     
