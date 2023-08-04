@@ -38,6 +38,9 @@ class FeatureExtractor:
                  window_size: int | None,
                  neighbour_error_threshold: float | None) -> None:
 
+        if out_paths != "-":
+            print(Figlet(font="slant").renderText("Neet - pileup extractor"))
+
         self.process_paths(ref_path, in_paths, out_paths)    
 
         # if one of the following arguments was not provided (i.e. arg=None), set variable to a value so nothing gets filtered out
@@ -292,9 +295,10 @@ class FeatureExtractor:
             from_stdin = False if self.input_paths else True
             to_stdout = False if self.output_paths else True
             self.process_file(self.input_paths, self.output_paths, from_stdin, to_stdout)
-
-        for in_file, out_file in zip(self.input_paths, self.output_paths):
-            self.process_file(in_file, out_file, from_stdin=False, to_stdout=False)
+        else:
+            for in_file, out_file in zip(self.input_paths, self.output_paths):
+                print(f"Processing file '{in_file}'... Writing to '{out_file}'")
+                self.process_file(in_file, out_file, from_stdin=False, to_stdout=False)
 
     def process_file(self, in_file: str, out_file: str, from_stdin: bool, to_stdout: bool) -> None:
         """
@@ -349,7 +353,7 @@ class FeatureExtractor:
                 None
             """
             with Pool(processes=self.num_processes) as pool:
-                o = None if (to_stdout | self.no_neighbour_search) else open(out_file, "w")
+                o = None if to_stdout else open(out_file, "w")
 
                 if not to_stdout:
                     desc = "Processing pileup rows"
@@ -374,10 +378,6 @@ class FeatureExtractor:
                     o.close()
                     progress_bar.close()
 
-        if not to_stdout:
-            f = Figlet(font="slant")
-            print(f.renderText("Neet - pileup extractor"))
-
         if from_stdin:
             write(sys.stdin)
         else:
@@ -385,8 +385,8 @@ class FeatureExtractor:
 
         # start neighbourhood search
         if not self.no_neighbour_search:
-            self.tmp_data = []
             self.read_lines_sliding_window(out_file, to_stdout)
+            self.tmp_data = []
 
     def process_position(self, line: List[str]) -> str:
         """
