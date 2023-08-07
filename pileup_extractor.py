@@ -229,7 +229,7 @@ class FeatureExtractor:
             for line in ref:
                 if line.startswith(">"):
                     refs[chr_name] = seq
-                    chr_name = line[1:].split(" ")[0]
+                    chr_name = line[1:].strip().split(" ")[0]
                     seq = ""
 
                     chr_found += 1
@@ -335,12 +335,6 @@ class FeatureExtractor:
         -------
         None
         """  
-        def call_back(outline):
-            if len(outline) > 0:
-                store_output_line(outline, o)
-            if not self.to_stdout:
-                progress_bar.update()
-
         def store_output_line(line: str, output: io.TextIOWrapper = None) -> None:
             """
             Stores the output line based on the neighbour search settings.
@@ -374,35 +368,25 @@ class FeatureExtractor:
             Returns:
                 None
             """
-            with Pool(processes=self.num_processes) as pool:
-                o = None if self.to_stdout else open(out_file, "w")
+            o = None if self.to_stdout else open(out_file, "w")
 
+            if not self.to_stdout:
+                desc = "Processing pileup rows"
+                progress_bar = tqdm(desc=desc) #if self.from_stdin else tqdm(desc=desc, total=get_num_lines(in_file))
+
+            header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tperc_mismatch\tmotif\tq_mean\tq_std\n"
+            store_output_line(header, o)
+
+            for line in file_input:
+                outline = self.process_position(line)
+                if len(outline) > 0:
+                    store_output_line(outline, o)
                 if not self.to_stdout:
-                    desc = "Processing pileup rows"
-                    progress_bar = tqdm(desc=desc) #if self.from_stdin else tqdm(desc=desc, total=get_num_lines(in_file))
+                    progress_bar.update()
 
-                header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tperc_mismatch\tmotif\tq_mean\tq_std\n"
-                store_output_line(header, o)
-
-                for line in file_input:
-                    outline = self.process_position(line)
-                    if len(outline) > 0:
-                        store_output_line(outline, o)
-                    if not self.to_stdout:
-                        progress_bar.update()
-
-                # results = pool.imap_unordered(self.process_position, file_input, 100)
-                # for outline in results:
-                #     if len(outline) > 0:
-                #         store_output_line(outline, o)
-                #     if not self.to_stdout:
-                #         progress_bar.update()
-                
-                # pool.map_async(self.process_position, file_input, callback=call_back)
-
-                if not self.to_stdout:
-                    o.close()
-                    progress_bar.close()
+            if not self.to_stdout:
+                o.close()
+                progress_bar.close()
 
         if self.from_stdin:
             write(sys.stdin)
@@ -1029,7 +1013,7 @@ if __name__ == "__main__":
     parser.add_argument('-q', '--mean_quality', type=positive_float, required=False,
                         help='Filter by mean read quality scores')
     parser.add_argument('-g', '--genomic_region', type=str, required=False,
-                        help='Genomic region in "CHR:START-END" format. Specify to only extract information from a specific region.')
+                        help='Genomic region in "CHR:START-END" format or "CHR" for whole chromosome. Specify to only extract information from a specific region.')
     parser.add_argument('-t', '--num_processes', type=int, required=False,
                         help='Number of threads to use for processing.')
     parser.add_argument('--coverage_alt', action="store_true", 
