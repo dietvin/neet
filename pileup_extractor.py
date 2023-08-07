@@ -297,7 +297,7 @@ class FeatureExtractor:
             None
         """ 
         for in_file, out_file in zip(self.input_paths, self.output_paths):
-            print(f"Processing file '{in_file}'... Writing to '{out_file}'")
+            print(f"Processing file '{in_file}'. Writing to '{out_file}'...")
             self.process_file(in_file, out_file)
 
     def process_file(self, in_file: str, out_file: str) -> None:
@@ -338,7 +338,7 @@ class FeatureExtractor:
             else:
                 self.tmp_data.append(line)
 
-        def write(file_input):
+        def write(file_input, file_output):
             """
             Processes the input pileup data in parallel using multiprocessing.
 
@@ -348,24 +348,21 @@ class FeatureExtractor:
             Returns:
                 None
             """
-            o = open(out_file, "w")
-
             desc = "Processing pileup rows"
-            progress_bar = tqdm(desc=desc) #if self.from_stdin else tqdm(desc=desc, total=get_num_lines(in_file))
+            progress_bar = tqdm(desc=desc, ) #if self.from_stdin else tqdm(desc=desc, total=get_num_lines(in_file))
 
             header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tperc_mismatch\tmotif\tq_mean\tq_std\n"
-            store_output_line(header, o)
+            store_output_line(header, file_output)
             
             for line in file_input:
                 outline = self.process_position(line)
                 if len(outline) > 0:
-                    store_output_line(outline, o)
+                    store_output_line(outline, file_output)
                 progress_bar.update()
 
-            o.close()
             progress_bar.close()
 
-        with open(in_file, "r") as i: write(i)
+        with open(in_file, "r") as i, open(out_file, "w") as o: write(i, o)
 
         # start neighbourhood search
         if not self.no_neighbour_search:
