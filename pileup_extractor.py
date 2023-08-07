@@ -201,18 +201,14 @@ class FeatureExtractor:
             Dictionary where the key is the chromosome name and the value is the sequence
         """
         with open(path, "r") as ref:
-            lines = ref.readlines()
-            i = 0
             refs = {}
-
-            if not lines[0].startswith(">"):
+            line = next(ref)
+            if not line.startswith(">"):
                 raise Exception(f"Fasta format error. The first line of fasta file '{path}' does not contain a header (starting with '>').")
 
-            chr_name = lines[0][1:].strip().split(" ")[0]
+            chr_name = line[1:].strip().split(" ")[0]
             seq = ""
-            for i in range(1, len(lines)):
-                line = lines[i]
-
+            for line in ref:
                 if line.startswith(">"):
                     refs[chr_name] = seq
                     chr_name = line[1:].split(" ")[0]
@@ -352,7 +348,7 @@ class FeatureExtractor:
             Returns:
                 None
             """
-            with Pool(processes=self.num_processes) as pool:
+            with Pool(processes=self.num_processes, maxtasksperchild=1) as pool:
                 o = None if to_stdout else open(out_file, "w")
 
                 if not to_stdout:
