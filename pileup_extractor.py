@@ -15,7 +15,7 @@ class FeatureExtractor:
     filter_num_reads: int
     filter_perc_mismatch: float
     filter_mean_quality: float
-    filter_genomic_region: Tuple[str, int, int]
+    filter_genomic_region: Tuple[str, int, int] | None
     num_processes: int
     use_alt_coverage: bool
     tmp_data: List[str]
@@ -32,11 +32,11 @@ class FeatureExtractor:
                  perc_deletion: float | None,
                  mean_quality: float | None,
                  genomic_region: str | None,
-                 num_processes: int | None,
+                 num_processes: int,
                  use_alt_coverage: bool,
                  no_neighbour_search: bool,
-                 window_size: int | None,
-                 neighbour_error_threshold: float | None) -> None:
+                 window_size: int,
+                 neighbour_error_threshold: float) -> None:
 
         print(Figlet(font="slant").renderText("Neet - pileup extractor"))
 
@@ -67,7 +67,7 @@ class FeatureExtractor:
     #                                   Functions called during initialization                                      #
     #################################################################################################################
 
-    def process_paths(self, ref_path: str, in_paths: str, out_paths: str) -> None:
+    def process_paths(self, ref_path: str, in_paths_str: str, out_paths: str) -> None:
         """
         Process input and output file paths for the data processing.
 
@@ -95,7 +95,7 @@ class FeatureExtractor:
             - The output files will be generated with the '.tsv' extension.
         """
         # process input path(s)
-        in_paths = in_paths.split(",")
+        in_paths = in_paths_str.split(",")
         for path in in_paths: self.check_path(path, [".msf", ".pup", ".pileup"])
         self.input_paths = in_paths
 
@@ -129,7 +129,7 @@ class FeatureExtractor:
         if not file_type in extensions:
             warnings.warn(f"Found file extension {file_type}. Expected file extension to be one of: {extensions}. If this is deliberate, ignore warning.", Warning)
 
-    def process_outpaths(self, out: str) -> List[str] | None:
+    def process_outpaths(self, out: str) -> List[str]:
         """
         Process the output file paths based on the input `out` argument.
 
@@ -154,10 +154,7 @@ class FeatureExtractor:
                         user warning will be issued to inform the user that the output file
                         will be of type `.tsv`.
         """
-        if out == "-": # check if outpaths is "-"
-            return None
-
-        elif os.path.isdir(out): # check if outpaths is directory, if the directory exists and create output file path(s) according to input file name(s)
+        if os.path.isdir(out): # check if outpaths is directory, if the directory exists and create output file path(s) according to input file name(s)
             if not os.path.exists(out):
                 raise FileNotFoundError(f"Directory not found. Output directory '{out}' does not exist.")
             if not out.endswith("/"):
@@ -169,15 +166,15 @@ class FeatureExtractor:
             return out_paths
 
         else: # check if outpaths is a list of filename(s), if the basedirectory exists and if the given file extension(s) is .tsv
-            out = out.split(",")
-            for path in out:
+            out_paths = out.split(",")
+            for path in out_paths:
                 dirname = os.path.dirname(path)
                 if not os.path.exists(dirname):
                     raise FileNotFoundError(f"Path to output file not found. '{dirname}' does not exist.")
-                file_extension = os.path.splitext(out_path)[1]
+                file_extension = os.path.splitext(path)[1]
                 if file_extension != ".tsv":
                     warnings.warn(f"Given output file has extension '{file_extension}'. Note that the output file will be of type '.tsv'.")
-            return out
+            return out_paths
 
     def get_references(self, path: str) -> Dict[str, str]:
         """
@@ -228,7 +225,7 @@ class FeatureExtractor:
             sys.stdout.write("\n")
         return refs
     
-    def extract_positional_info(self, data_string: str) -> Tuple[str, int, int]:
+    def extract_positional_info(self, data_string: str) -> Tuple[str, int, int] | None:
         """
         Extracts the chromosome name, start value, and end value from a string in the format "chromosome_name:start-end".
 
@@ -385,7 +382,7 @@ class FeatureExtractor:
             progress_bar.update()
             progress_bar.close()
 
-    def process_position(self, line: str) -> str:
+    def process_position(self, line_str: str) -> str:
         """
         Processes a single position from the pileup data.
 
@@ -395,7 +392,7 @@ class FeatureExtractor:
         Returns:
             str: The processed line as a string.
         """
-        line = line.split("\t")
+        line = line_str.split("\t")
         # extract elements from list
         chr, site, ref_base, read_bases, read_qualities = line[0], int(line[1]), line[2], line[4], line[5]
         
@@ -406,6 +403,7 @@ class FeatureExtractor:
                 return ""
 
         # extract coverage and filter by number of reads if the standard coverage option is used 
+        n_reads = 0 # only to make pylance happy... not really needed
         if not self.use_alt_coverage:
             n_reads = int(line[3])
             if n_reads < self.filter_num_reads: return ""
@@ -430,13 +428,13 @@ class FeatureExtractor:
             if n_reads < self.filter_num_reads: return ""
 
         # get relative number of A, C, G and T counts
-        count = self.get_relative_count(count, n_reads)
+        count_rel = self.get_relative_count(count, n_reads)
 
         # filter by percentage of deletions
-        if count["del_rel"] < self.filter_perc_deletion: return ""
+        if count_rel["del"] < self.filter_perc_deletion: return ""
 
         # get allele fraction
-        perc_mismatch = self.get_mismatch_perc(count, ref_base)
+        perc_mismatch = self.get_mismatch_perc(count_rel, ref_base)
 
         # filter by perc_mismatch
         if perc_mismatch < self.filter_perc_mismatch:
@@ -448,14 +446,14 @@ class FeatureExtractor:
         # get 11b motif
         motif = self.get_motif(chr, site, ref, k=5)
 
-        out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["t"]}\t{count["del"]}\t{count["ins"]}\t{count["a_rel"]}\t{count["c_rel"]}\t{count["g_rel"]}\t{count["t_rel"]}\t{count["del_rel"]}\t{count["ins_rel"]}\t{perc_mismatch}\t{motif}\t{quality_mean}\t{quality_std}\n'
+        out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["t"]}\t{count["del"]}\t{count["ins"]}\t{count_rel["a"]}\t{count_rel["c"]}\t{count_rel["g"]}\t{count_rel["t"]}\t{count_rel["del"]}\t{count_rel["ins"]}\t{perc_mismatch}\t{motif}\t{quality_mean}\t{quality_std}\n'
         return out
 
     def remove_indels(self, pileup_string: str) -> str:
         """
         Takes a pileup string and removes all occurences of the following patterns:
-        '\+[0-9]+' for insertions
-        '\-[0-9]+' for deletions
+        '\\+[0-9]+' for insertions
+        '\\-[0-9]+' for deletions
         In addition to the pattern itself, remove the following n characters,
         where n is the number specified after + or -.
 
@@ -469,7 +467,7 @@ class FeatureExtractor:
         str
             Pileup strings with all occurences of the patterns above removed
         """
-        pattern = "(\+|\-)[0-9]+"
+        pattern = "(\\+|\\-)[0-9]+"
         
         # get the start and end indices of all found patterns 
         coords = []
@@ -485,7 +483,7 @@ class FeatureExtractor:
 
         return pileup_string
 
-    def parse_pileup_string(self, pileup_string: str, ref_base: str) -> Dict[str, Union[str, int]]:
+    def parse_pileup_string(self, pileup_string: str, ref_base: str) -> Dict[str, int]:
         """
         Extracts the number of each base called at a given position, as well as the number
         of insertions and deletions. Information is extracted from a pileup string (fifth
@@ -533,7 +531,7 @@ class FeatureExtractor:
 
         return count_dict
 
-    def get_relative_count(self, count_dict: Dict[str, Union[str, int]], n_reads: int) -> Dict[str, Union[str, int, float]]:
+    def get_relative_count(self, count_dict: Dict[str, int], n_reads: int) -> Dict[str, float]:
         """
         Gets a dictionary containing the absolute counts for A, C, G and T 
         and calculates the relative proportions
@@ -551,25 +549,25 @@ class FeatureExtractor:
             Dictionary containing the relative counts for A, C, G and T
         """
         #n_reads = sum([count_dict["a"], count_dict["c"], count_dict["g"], count_dict["t"]])
+        rel_dict = {}
         try:
-            count_dict["a_rel"] = count_dict["a"] / n_reads
-            count_dict["c_rel"] = count_dict["c"] / n_reads
-            count_dict["g_rel"] = count_dict["g"] / n_reads
-            count_dict["t_rel"] = count_dict["t"] / n_reads
-            count_dict["del_rel"] = count_dict["del"] / n_reads
-            count_dict["ins_rel"] = count_dict["ins"] / n_reads
-
+            rel_dict["a"] = count_dict["a"] / n_reads
+            rel_dict["c"] = count_dict["c"] / n_reads 
+            rel_dict["g"] = count_dict["g"] / n_reads
+            rel_dict["t"] = count_dict["t"] / n_reads
+            rel_dict["del"] = count_dict["del"] / n_reads
+            rel_dict["ins"] = count_dict["ins"] / n_reads
         except ZeroDivisionError:
-            count_dict["a_rel"] = 0
-            count_dict["c_rel"] = 0
-            count_dict["g_rel"] = 0
-            count_dict["t_rel"] = 0
-            count_dict["del_rel"] = 0
-            count_dict["ins_rel"] = 0
+            rel_dict["a"] = 0
+            rel_dict["c"] = 0
+            rel_dict["g"] = 0
+            rel_dict["t"] = 0
+            rel_dict["del"] = 0
+            rel_dict["ins"] = 0
 
-        return count_dict
+        return rel_dict
 
-    def get_majority_base(self, count_dict: Dict[str, Union[str, int, float]]) -> str:
+    def get_majority_base(self, count_dict: Dict[str, int]) -> str:
         """
         Gets a dictionary containing the absolute counts for A, C, G and T and returns the
         key of the one with the highest count.
@@ -585,7 +583,8 @@ class FeatureExtractor:
             Key from the dictionary corresponding to the largest value
         """
         dict_subset = dict((k, count_dict[k]) for k in ("a", "c", "g", "t"))
-        return max(dict_subset, key = dict_subset.get).upper()
+
+        return max(dict_subset, key = lambda k: dict_subset[k]).upper()
 
     def get_motif(self, chr: str, site: int, ref: str, k: int) -> str:
         """
@@ -630,8 +629,9 @@ class FeatureExtractor:
                 motif = ref[idx_l:idx_r]
 
             return motif
+        return ""
         
-    def get_mismatch_perc(self, count_dict: Dict[str, Union[str, int, float]], ref_base: str) -> int:
+    def get_mismatch_perc(self, count_dict_rel: Dict[str, float], ref_base: str) -> float:
         """
         Calculates the number of reads containing a mismatch, insertion or deletion 
         at a given position.
@@ -651,7 +651,7 @@ class FeatureExtractor:
         mismatch_perc_sum = 0
         for b in ["a", "c", "g", "t"]:
             if b != ref_base.lower():
-                mismatch_perc_sum += count_dict[b+"_rel"]
+                mismatch_perc_sum += count_dict_rel[b]
 
         return mismatch_perc_sum
 
@@ -674,7 +674,7 @@ class FeatureExtractor:
         vals = [code - 33 for code in read_qualities.encode("ascii")]
 
         mean = sum(vals)/len(vals)
-        std = np.std(vals)
+        std = np.std(vals).astype(float)
 
         return mean, std 
     
@@ -817,7 +817,7 @@ if __name__ == "__main__":
                         help='Filter by mean read quality scores')
     parser.add_argument('-g', '--genomic_region', type=str, required=False,
                         help='Genomic region in "CHR:START-END" format or "CHR" for whole chromosome. Specify to only extract information from a specific region.')
-    parser.add_argument('-t', '--num_processes', type=int, required=False,
+    parser.add_argument('-t', '--num_processes', type=int, required=False, default=1,
                         help='Number of threads to use for processing.')
     parser.add_argument('--coverage_alt', action="store_true", 
                         help='Specify which approach should be used to calculate the number of reads a given position. \
