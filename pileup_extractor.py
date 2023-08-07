@@ -730,8 +730,8 @@ class FeatureExtractor:
         ref = nb[current_pos].strip("\n").split("\t")
         del(nb[current_pos])
 
-        has_nb, nb_info = self.get_neighbour_info(ref, nb)
-        ref_str += f"\t{has_nb}\t{nb_info}\n"
+        nb_info = self.get_neighbour_info(ref, nb)
+        ref_str += f"\t{nb_info}\n"
         return ref_str
 
     def process_edge(self, current_pos: int, neighbourhood: List[str], start: bool = True) -> str:
@@ -758,8 +758,8 @@ class FeatureExtractor:
             del(nb[current_pos])
             nb = nb[current_pos-k:]
 
-        has_nb, nb_info = self.get_neighbour_info(ref, nb)
-        ref_str += f"\t{has_nb}\t{nb_info}\n"
+        nb_info = self.get_neighbour_info(ref, nb)
+        ref_str += f"\t{nb_info}\n"
         return ref_str
 
     def process_neighbourhood(self, neighbourhood: List[str]) -> str:
