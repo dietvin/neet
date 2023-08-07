@@ -22,6 +22,8 @@ class FeatureExtractor:
     no_neighbour_search: bool
     window_size: int
     neighbour_error_threshold: float
+    from_stdin: bool
+    to_stdout: bool
 
     def __init__(self, 
                  in_paths: str,
@@ -102,16 +104,20 @@ class FeatureExtractor:
         # process input path(s)
         if in_paths == "-":
             self.input_paths = None
+            self.from_stdin = True
         else:
             in_paths = in_paths.split(",")
             for path in in_paths: self.check_path(path, [".msf", ".pup", ".pileup"])
             self.input_paths = in_paths
+            self.from_stdin = False
 
         # process output path(s)
         if out_paths == "-":
             self.output_paths = None
+            self.to_stdout = True
         else:
             self.output_paths = self.process_outpaths(out_paths)
+            self.to_stdout = False
 
     def check_path(self, path: str, extensions: List[str]) -> None:
         """
@@ -200,19 +206,34 @@ class FeatureExtractor:
         dict[str]
             Dictionary where the key is the chromosome name and the value is the sequence
         """
+
+        def stdout_progress(n: int):
+            if 
+            sys.stdout.write(f"\rSequences found: {n}")
+            sys.stdout.flush()
+
+        print(f"Processing reference genome from file '{path}'...")
         with open(path, "r") as ref:
             refs = {}
             line = next(ref)
             if not line.startswith(">"):
                 raise Exception(f"Fasta format error. The first line of fasta file '{path}' does not contain a header (starting with '>').")
-
+            
             chr_name = line[1:].strip().split(" ")[0]
             seq = ""
+
+            chr_found = 1
+            stdout_progress(chr_found)
+
             for line in ref:
                 if line.startswith(">"):
                     refs[chr_name] = seq
                     chr_name = line[1:].split(" ")[0]
                     seq = ""
+
+                    chr_found += 1
+                    stdout_progress(chr_found)
+
                 else:
                     seq += line.strip()
                     
@@ -285,18 +306,19 @@ class FeatureExtractor:
 
         Returns:
             None
-        """
-        # if either input or output comes from / goes to stin/stdout only one file is processed 
-        if (not self.input_paths) | (not self.output_paths): 
-            from_stdin = False if self.input_paths else True
-            to_stdout = False if self.output_paths else True
-            self.process_file(self.input_paths, self.output_paths, from_stdin, to_stdout)
+        """ 
+        if self.from_stdin & self.to_stdout: 
+            self.process_file("", "") # both self.input_paths & self.output_paths is None
+        elif self.from_stdin & (not self.to_stdout):
+            self.process_file("", self.output_paths[0]) # only self.input_paths is None
+        elif (not self.from_stdin) & self.to_stdout:
+            self.process_file(self.input_paths[0], "") # only self.ouput_paths is None
         else:
             for in_file, out_file in zip(self.input_paths, self.output_paths):
                 print(f"Processing file '{in_file}'... Writing to '{out_file}'")
-                self.process_file(in_file, out_file, from_stdin=False, to_stdout=False)
+                self.process_file(in_file, out_file)
 
-    def process_file(self, in_file: str, out_file: str, from_stdin: bool, to_stdout: bool) -> None:
+    def process_file(self, in_file: str, out_file: str) -> None:
         """
         Reads a .pileup file, processes it, and writes the results to a new file using multiprocessing.
 
@@ -306,10 +328,6 @@ class FeatureExtractor:
             Path to the input .pileup file.
         out_file : str
             Path to the output tsv file.
-        from_stdin : bool
-            If True, the input is read from stdin.
-        to_stdout : bool
-            If True, the output is written to stdout.
 
         Returns
         -------
@@ -349,11 +367,11 @@ class FeatureExtractor:
                 None
             """
             with Pool(processes=self.num_processes, maxtasksperchild=1) as pool:
-                o = None if to_stdout else open(out_file, "w")
+                o = None if self.to_stdout else open(out_file, "w")
 
-                if not to_stdout:
+                if not self.to_stdout:
                     desc = "Processing pileup rows"
-                    progress_bar = tqdm(desc=desc) if from_stdin else tqdm(desc=desc, total=get_num_lines(in_file))
+                    progress_bar = tqdm(desc=desc) if self.from_stdin else tqdm(desc=desc, total=get_num_lines(in_file))
 
                 header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tperc_mismatch\tmotif\tq_mean\tq_std\n"
                 store_output_line(header, o)
@@ -367,21 +385,21 @@ class FeatureExtractor:
                     outline = result.get()
                     if len(outline) > 0:
                         store_output_line(outline, o)
-                    if not to_stdout:
+                    if not self.to_stdout:
                         progress_bar.update()
 
-                if not to_stdout:
+                if not self.to_stdout:
                     o.close()
                     progress_bar.close()
 
-        if from_stdin:
+        if self.from_stdin:
             write(sys.stdin)
         else:
             with open(in_file, "r") as i: write(i)
 
         # start neighbourhood search
         if not self.no_neighbour_search:
-            self.read_lines_sliding_window(out_file, to_stdout)
+            self.read_lines_sliding_window(out_file)
             self.tmp_data = []
 
     def process_position(self, line: List[str]) -> str:
@@ -680,14 +698,13 @@ class FeatureExtractor:
     #                                  Functions called during neighbour search                                     #
     #################################################################################################################
 
-    def read_lines_sliding_window(self, out_file: str, to_stdout: bool) -> None:
+    def read_lines_sliding_window(self, out_file: str) -> None:
         """
         Reads lines from temporary data using a sliding window approach and performs processing on the lines.
         Writes the processed output to the specified output file or stdout.
 
         Parameters:
             out_file (str): The path to the output file to write the processed data. If to_stdout is True, this will be ignored.
-            to_stdout (bool): If True, the processed data will be written to stdout instead of a file.
 
         Returns:
             None
@@ -730,14 +747,14 @@ class FeatureExtractor:
         lines = []
         first = True
 
-        o = None if to_stdout else open(out_file, "w")
+        o = None if self.to_stdout else open(out_file, "w")
 
         n_lines = len(self.tmp_data)
         header = self.tmp_data.pop(0)
         header = header.strip("\n")+"\thas_neighbour_error\tneighbour_error_pos\n" 
         output_line(header, o)
 
-        if not to_stdout:
+        if not self.to_stdout:
             desc = "Searching for nearby errors"
             progress_bar = tqdm(desc=desc, total=n_lines)
 
@@ -748,7 +765,7 @@ class FeatureExtractor:
             for current_pos in range(n_lines):
                 outline = self.process_small(current_pos, lines, n_lines)
                 output_line(outline, o)
-                if not to_stdout:
+                if not self.to_stdout:
                     progress_bar.update()
         else:
             for line in self.tmp_data:
@@ -766,13 +783,13 @@ class FeatureExtractor:
                     outline = self.process_neighbourhood(lines)
                     output_line(outline, o)
 
-                if not to_stdout:
+                if not self.to_stdout:
                     progress_bar.update()
 
             # after the last center line was added to lines, process the last k lines
             write_edge_lines(lines, o, start=False)
 
-        if not to_stdout:
+        if not self.to_stdout:
             o.close()
             progress_bar.update()
             progress_bar.close()
