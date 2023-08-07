@@ -239,10 +239,15 @@ class FeatureExtractor:
         tuple
             A tuple containing the chromosome name (str), start value (int), and end value (int).
         """
-        chromosome, positions = data_string.split(':')
-        start_str, end_str = positions.split('-')
-        start = int(start_str.replace(',', ''))
-        end = int(end_str.replace(',', ''))
+        if (":" in data_string) & ("-" in data_string): 
+            chromosome, positions = data_string.split(':')
+            start_str, end_str = positions.split('-')
+            start = int(start_str.replace(',', ''))
+            end = int(end_str.replace(',', ''))
+        else:
+            chromosome = data_string
+            start = 1
+            end = len(self.ref_sequences[chromosome])
 
         if self.region_is_valid(chromosome, start, end):
             return chromosome, start, end
@@ -349,7 +354,7 @@ class FeatureExtractor:
             desc = "Processing pileup rows"
             progress_bar = tqdm(desc=desc) #if self.from_stdin else tqdm(desc=desc, total=get_num_lines(in_file))
 
-            header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tperc_mismatch\tmotif\tq_mean\tq_std\thas_neighbour_error\tneighbour_error_pos\n"
+            header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_ref_skip\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tn_ref_skip_rel\tperc_mismatch\tmotif\tq_mean\tq_std\thas_neighbour_error\tneighbour_error_pos\n"
             o.write(header)
             
             nb_size_full = 1 + 2 * self.window_size
@@ -361,14 +366,14 @@ class FeatureExtractor:
                 if len(outline) > 0: 
                     nb_lines.append(outline)
 
-                if len(nb_lines) > nb_size_full:  
-                    nb_lines.pop(0)
+                    if len(nb_lines) > nb_size_full:  
+                        nb_lines.pop(0)
 
-                if len(nb_lines) == nb_size_full:
-                    if nb_first:
-                        nb_first = False
-                        write_edge_lines(nb_lines, o, start=True)
-                    write_center_line(nb_lines, o)
+                    if len(nb_lines) == nb_size_full:
+                        if nb_first:
+                            nb_first = False
+                            write_edge_lines(nb_lines, o, start=True)
+                        write_center_line(nb_lines, o)
                     
                 progress_bar.update()
 
@@ -394,8 +399,11 @@ class FeatureExtractor:
         """
         line = line_str.split("\t")
         # extract elements from list
-        chr, site, ref_base, read_bases, read_qualities = line[0], int(line[1]), line[2], line[4], line[5]
-        
+        try:
+            chr, site, ref_base, read_bases, read_qualities = line[0], int(line[1]), line[2], line[4], line[5]
+        except:
+            return ""
+            
         # filter by genomic region
         region = self.filter_genomic_region
         if region is not None:
@@ -408,16 +416,15 @@ class FeatureExtractor:
             n_reads = int(line[3])
             if n_reads < self.filter_num_reads: return ""
 
-        # get qualitiy measures
-        quality_mean, quality_std = self.get_read_quality(read_qualities)
-
-        # filter by mean read quality
-        if quality_mean < self.filter_mean_quality: return ""
-
         # get reference sequence 
         ref = self.ref_sequences[chr]
         # get absolute number of A, C, G, T, ins, del
-        count = self.parse_pileup_string(read_bases, ref_base)
+        count, ref_skip_positions = self.parse_pileup_string(read_bases, ref_base)
+
+        # get qualitiy measures
+        quality_mean, quality_std = self.get_read_quality(read_qualities, ref_skip_positions)
+        # filter by mean read quality
+        if quality_mean < self.filter_mean_quality: return ""
 
         # in case the alternative way of calculating the coverage is specified
         # could use if else statement and get the other case down here, but then 
@@ -446,7 +453,7 @@ class FeatureExtractor:
         # get 11b motif
         motif = self.get_motif(chr, site, ref, k=5)
 
-        out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["t"]}\t{count["del"]}\t{count["ins"]}\t{count_rel["a"]}\t{count_rel["c"]}\t{count_rel["g"]}\t{count_rel["t"]}\t{count_rel["del"]}\t{count_rel["ins"]}\t{perc_mismatch}\t{motif}\t{quality_mean}\t{quality_std}\n'
+        out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["t"]}\t{count["del"]}\t{count["ins"]}\t{count["ref_skip"]}\t{count_rel["a"]}\t{count_rel["c"]}\t{count_rel["g"]}\t{count_rel["t"]}\t{count_rel["del"]}\t{count_rel["ins"]}\t{count_rel["ref_skip"]}\t{perc_mismatch}\t{motif}\t{quality_mean}\t{quality_std}\n'
         return out
 
     def remove_indels(self, pileup_string: str) -> str:
@@ -483,7 +490,7 @@ class FeatureExtractor:
 
         return pileup_string
 
-    def parse_pileup_string(self, pileup_string: str, ref_base: str) -> Dict[str, int]:
+    def parse_pileup_string(self, pileup_string: str, ref_base: str) -> Tuple[Dict[str, int], List[int]]:
         """
         Extracts the number of each base called at a given position, as well as the number
         of insertions and deletions. Information is extracted from a pileup string (fifth
@@ -527,9 +534,17 @@ class FeatureExtractor:
         n_matches = pileup_string.count('.') + pileup_string.count(',')
         count_dict[ref_base] = n_matches
 
-        # for now removing the count of insertions, as the pileup format cannot provide the information
+        # get number of reference skips
+        n_ref_skips = pileup_string.count("<") + pileup_string.count(">")
+        count_dict["ref_skip"] = n_ref_skips
 
-        return count_dict
+        # get the indices from the > & < positions, to filter out of the quality string later on
+        # (the corresponding positions refer to the read quality, not the quality of the position on the reads)
+        pileup_string = re.sub(r'\*', "", pileup_string)
+
+        ref_skip_idc = [i for i, char in enumerate(pileup_string) if (char==">") | (char=="<")]
+
+        return count_dict, ref_skip_idc
 
     def get_relative_count(self, count_dict: Dict[str, int], n_reads: int) -> Dict[str, float]:
         """
@@ -557,6 +572,8 @@ class FeatureExtractor:
             rel_dict["t"] = count_dict["t"] / n_reads
             rel_dict["del"] = count_dict["del"] / n_reads
             rel_dict["ins"] = count_dict["ins"] / n_reads
+            rel_dict["ref_skip"] = count_dict["ref_skip"] / n_reads
+
         except ZeroDivisionError:
             rel_dict["a"] = 0
             rel_dict["c"] = 0
@@ -564,6 +581,7 @@ class FeatureExtractor:
             rel_dict["t"] = 0
             rel_dict["del"] = 0
             rel_dict["ins"] = 0
+            rel_dict["ref_skip"] = 0
 
         return rel_dict
 
@@ -655,7 +673,7 @@ class FeatureExtractor:
 
         return mismatch_perc_sum
 
-    def get_read_quality(self, read_qualities: str) -> Tuple[float, float]:
+    def get_read_quality(self, read_qualities: str, ref_skip_positions: List[int]) -> Tuple[float, float]:
         """
         Calculates the mean and std from the read qualities given in the sixth row
         of a pileup file.
@@ -670,11 +688,25 @@ class FeatureExtractor:
         tuple[float, float]
             Mean and standard deviation of read qualities
         """
-        # transform string to list of corresponding phred numeric values
-        vals = [code - 33 for code in read_qualities.encode("ascii")]
+        # remove quality values corresponding to reference skips
+        read_qualities_len = len(read_qualities)
+        read_qualities_list = list(read_qualities)
+        ref_skip_positions.reverse()
+        
+        for i in ref_skip_positions:
+            if i < read_qualities_len: # when >/< comes at the end, the quality values don't seem to be added to the string
+                read_qualities_list.pop(i)
+        read_qualities = "".join(read_qualities_list)
 
-        mean = sum(vals)/len(vals)
-        std = np.std(vals).astype(float)
+        if len(read_qualities) > 0:
+            # transform string to list of corresponding phred numeric values
+            vals = [code - 33 for code in read_qualities.encode("ascii")]
+            
+            mean = np.mean(vals).astype(float)
+            std = np.std(vals).astype(float)
+        else:
+            mean = -1
+            std = -1
 
         return mean, std 
     
@@ -780,7 +812,7 @@ class FeatureExtractor:
         for pos in neighbourhood:
             pos = pos.strip("\n").split("\t")
             chr = pos[0]
-            perc_error = float(pos[17])
+            perc_error = float(pos[19])
 
             if (chr == ref_chr) & (perc_error >= self.neighbour_error_threshold): # check if same chromosome & if pos is error
                 site = int(pos[1])
