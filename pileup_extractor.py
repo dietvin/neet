@@ -97,10 +97,6 @@ class FeatureExtractor:
             - The input files are expected to have specific extensions (e.g., '.msf', '.pup', '.pileup').
             - The output files will be generated with the '.tsv' extension.
         """
-        # process path to reference fasta
-        self.check_path(ref_path, [".fasta", ".fna", ".ffn", ".faa", ".frn", ".fa"])
-        self.ref_sequences = self.get_references(ref_path)
-
         # process input path(s)
         if in_paths == "-":
             self.input_paths = None
@@ -118,6 +114,11 @@ class FeatureExtractor:
         else:
             self.output_paths = self.process_outpaths(out_paths)
             self.to_stdout = False
+
+        # process path to reference fasta
+        self.check_path(ref_path, [".fasta", ".fna", ".ffn", ".faa", ".frn", ".fa"])
+        self.ref_sequences = self.get_references(ref_path)
+
 
     def check_path(self, path: str, extensions: List[str]) -> None:
         """
@@ -208,9 +209,9 @@ class FeatureExtractor:
         """
 
         def stdout_progress(n: int):
-            if 
-            sys.stdout.write(f"\rSequences found: {n}")
-            sys.stdout.flush()
+            if not self.to_stdout:
+                sys.stdout.write(f"\rSequences found: {n}")
+                sys.stdout.flush()
 
         print(f"Processing reference genome from file '{path}'...")
         with open(path, "r") as ref:
@@ -238,6 +239,7 @@ class FeatureExtractor:
                     seq += line.strip()
                     
             refs[chr_name] = seq # add the last dict entry
+            sys.stdout.write("\n")
         return refs
     
     def extract_positional_info(self, data_string: str) -> Tuple[str, int, int]:
@@ -332,7 +334,13 @@ class FeatureExtractor:
         Returns
         -------
         None
-        """        
+        """  
+        def call_back(outline):
+            if len(outline) > 0:
+                store_output_line(outline, o)
+            if not self.to_stdout:
+                progress_bar.update()
+
         def store_output_line(line: str, output: io.TextIOWrapper = None) -> None:
             """
             Stores the output line based on the neighbour search settings.
@@ -355,7 +363,7 @@ class FeatureExtractor:
                 sys.stdout.write(line)
             else:
                 self.tmp_data.append(line)
-            
+
         def write(file_input):
             """
             Processes the input pileup data in parallel using multiprocessing.
@@ -366,27 +374,31 @@ class FeatureExtractor:
             Returns:
                 None
             """
-            with Pool(processes=self.num_processes, maxtasksperchild=1) as pool:
+            with Pool(processes=self.num_processes) as pool:
                 o = None if self.to_stdout else open(out_file, "w")
 
                 if not self.to_stdout:
                     desc = "Processing pileup rows"
-                    progress_bar = tqdm(desc=desc) if self.from_stdin else tqdm(desc=desc, total=get_num_lines(in_file))
+                    progress_bar = tqdm(desc=desc) #if self.from_stdin else tqdm(desc=desc, total=get_num_lines(in_file))
 
                 header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tperc_mismatch\tmotif\tq_mean\tq_std\n"
                 store_output_line(header, o)
-                results = []
 
                 for line in file_input:
-                    result = pool.apply_async(self.process_position, args=(line.split("\t"),))
-                    results.append((line, result))
-
-                for line, result in results:
-                    outline = result.get()
+                    outline = self.process_position(line)
                     if len(outline) > 0:
                         store_output_line(outline, o)
                     if not self.to_stdout:
                         progress_bar.update()
+
+                # results = pool.imap_unordered(self.process_position, file_input, 100)
+                # for outline in results:
+                #     if len(outline) > 0:
+                #         store_output_line(outline, o)
+                #     if not self.to_stdout:
+                #         progress_bar.update()
+                
+                # pool.map_async(self.process_position, file_input, callback=call_back)
 
                 if not self.to_stdout:
                     o.close()
@@ -402,7 +414,92 @@ class FeatureExtractor:
             self.read_lines_sliding_window(out_file)
             self.tmp_data = []
 
-    def process_position(self, line: List[str]) -> str:
+
+    # def process_file(self, in_file: str, out_file: str) -> None:
+    #     """
+    #     Reads a .pileup file, processes it, and writes the results to a new file using multiprocessing.
+
+    #     Parameters
+    #     ----------
+    #     in_file : str
+    #         Path to the input .pileup file.
+    #     out_file : str
+    #         Path to the output tsv file.
+
+    #     Returns
+    #     -------
+    #     None
+    #     """        
+    #     def store_output_line(line: str, output: io.TextIOWrapper = None) -> None:
+    #         """
+    #         Stores the output line based on the neighbour search settings.
+
+    #         Args:
+    #             line (str): The line to be stored.
+    #             output (io.TextIOWrapper, optional): Output file. If not provided, the line is printed to the standard output. Default is None.
+
+    #         Returns:
+    #             None
+
+    #         Notes:
+    #             If 'self.no_neighbour_search' is True and 'output' is provided, the line is written to the output file.
+    #             If 'self.no_neighbour_search' is True and 'output' is not provided, the line is printed to the standard output.
+    #             If 'self.no_neighbour_search' is False, the line is appended to the 'tmp_data' list.
+    #         """
+    #         if (self.no_neighbour_search) & (output is not None):
+    #             output.write(line)
+    #         elif self.no_neighbour_search:
+    #             sys.stdout.write(line)
+    #         else:
+    #             self.tmp_data.append(line)
+            
+    #     def write(file_input):
+    #         """
+    #         Processes the input pileup data in parallel using multiprocessing.
+
+    #         Args:
+    #             file_input: The input data to process.
+
+    #         Returns:
+    #             None
+    #         """
+    #         with Pool(processes=self.num_processes, maxtasksperchild=1) as pool:
+    #             o = None if self.to_stdout else open(out_file, "w")
+
+    #             if not self.to_stdout:
+    #                 desc = "Processing pileup rows"
+    #                 progress_bar = tqdm(desc=desc) if self.from_stdin else tqdm(desc=desc, total=get_num_lines(in_file))
+
+    #             header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tperc_mismatch\tmotif\tq_mean\tq_std\n"
+    #             store_output_line(header, o)
+    #             results = []
+
+    #             for line in file_input:
+    #                 result = pool.apply_async(self.process_position, args=(line.split("\t"),))
+    #                 results.append((line, result))
+
+    #             for line, result in results:
+    #                 outline = result.get()
+    #                 if len(outline) > 0:
+    #                     store_output_line(outline, o)
+    #                 if not self.to_stdout:
+    #                     progress_bar.update()
+
+    #             if not self.to_stdout:
+    #                 o.close()
+    #                 progress_bar.close()
+
+    #     if self.from_stdin:
+    #         write(sys.stdin)
+    #     else:
+    #         with open(in_file, "r") as i: write(i)
+
+    #     # start neighbourhood search
+    #     if not self.no_neighbour_search:
+    #         self.read_lines_sliding_window(out_file)
+    #         self.tmp_data = []
+
+    def process_position(self, line: List[str], idx=None) -> str:
         """
         Processes a single position from the pileup data.
 
@@ -412,6 +509,7 @@ class FeatureExtractor:
         Returns:
             str: The processed line as a string.
         """
+        line = line.split("\t")
         # extract elements from list
         chr, site, ref_base, read_bases, read_qualities = line[0], int(line[1]), line[2], line[4], line[5]
         
