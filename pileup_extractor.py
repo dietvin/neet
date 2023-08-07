@@ -354,7 +354,7 @@ class FeatureExtractor:
             desc = "Processing pileup rows"
             progress_bar = tqdm(desc=desc) #if self.from_stdin else tqdm(desc=desc, total=get_num_lines(in_file))
 
-            header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_ref_skip\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tn_ref_skip_rel\tperc_mismatch\tmotif\tq_mean\tq_std\thas_neighbour_error\tneighbour_error_pos\n"
+            header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_ref_skip\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tn_ref_skip_rel\tperc_mismatch\tmotif\tq_mean\tq_std\tneighbour_error_pos\n"
             o.write(header)
             
             nb_size_full = 1 + 2 * self.window_size
@@ -783,11 +783,11 @@ class FeatureExtractor:
         ref = nb[k].strip("\n").split("\t")
         del nb[k]
 
-        has_nb, nb_info = self.get_neighbour_info(ref, nb)
-        ref_str += f"\t{has_nb}\t{nb_info}\n"
+        nb_info = self.get_neighbour_info(ref, nb)
+        ref_str += f"\t{nb_info}\n"
         return ref_str
 
-    def get_neighbour_info(self, ref: List[str], neighbourhood: List[str]) -> Tuple[bool, str]:
+    def get_neighbour_info(self, ref: List[str], neighbourhood: List[str]) -> str:
         """
         From a range of neighbouring lines in a file (neighbourhood), check if positions in these lines are neighbours on the reference genome 
         (based on chromosome and site) and if close genomic positions can be regarded as errors based on the given error threshold.
@@ -797,15 +797,12 @@ class FeatureExtractor:
             neighbourhood (List[str]): List containing the lines surrounding the central position.
 
         Returns:
-            Tuple[bool, str]: A tuple containing:
-                - boolean indicating if any neighbouring error was found.
-                - string giving the relative distance to all neighbouring errors to the central position, if any were found.
+            str: A string giving the relative distance to all neighbouring errors to the central position, if any were found.
         """        
         k = self.window_size
         ref_chr = ref[0]
         ref_site = int(ref[1])
 
-        has_nb = False
         nb_info = ""
 
         # for each neighbour check if they are 1.on the same chr and 2.neighbours
@@ -819,9 +816,8 @@ class FeatureExtractor:
                 relative_pos = site - ref_site
 
                 if (abs(relative_pos) <= k): # check if pos are close to each other
-                    has_nb = True
                     nb_info += str(relative_pos)+","
-        return has_nb, nb_info
+        return nb_info
 
 
 
