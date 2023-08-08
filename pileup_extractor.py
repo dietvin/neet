@@ -378,7 +378,6 @@ class FeatureExtractor:
                                     write_edge_lines(nb_lines, o, start=True)
                                 write_center_line(nb_lines, o)
                         progress_bar.update()
-
             else:
                 for line in i:
                     outline = self.process_position(line) # extracting the features themselves
@@ -393,7 +392,6 @@ class FeatureExtractor:
                                 nb_first = False
                                 write_edge_lines(nb_lines, o, start=True)
                             write_center_line(nb_lines, o)
-
                     progress_bar.update()
 
             if len(nb_lines) < nb_size_full:
@@ -841,9 +839,7 @@ class FeatureExtractor:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog="Pileup feature extractor",
-                                        description="Extracs different characteristics from a\
-                                        given pileup file.")
+    parser = argparse.ArgumentParser(prog="Pileup feature extractor", description="Extract different characteristics from given pileup file(s).")
     parser.add_argument('-i', '--input', type=str, required=True, default="-",
                         help="""
                             Path to the input file(s). If replicates are available, specify paths comma-separated (<repl.1>,<repl.2>,...).
@@ -869,21 +865,27 @@ if __name__ == "__main__":
                             Specify whether to use multiprocessing for processing. Recommended for shorter, deeply sequenced data.
                             For low coverage, whole genome data set to false for faster runtime.
                             """)
-    parser.add_argument('-t', '--num_processes', type=int, required=False, default=1,
+    parser.add_argument('-t', '--num_processes', type=int, required=False, default=4,
                         help='Number of threads to use for processing.')
     parser.add_argument('--coverage_alt', action="store_true", 
-                        help='Specify which approach should be used to calculate the number of reads a given position. \
-                            Default: use coverage as calculated by samtools mpileup (i.e. #A+#C+#G+#T+#del).\
-                            Alternative: calculates coverage considering only matched and mismatched reads, not considering deletions')
+                        help="""
+                            Specify which approach should be used to calculate the number of reads a given position.
+                            Default: use coverage as calculated by samtools mpileup (i.e. #A+#C+#G+#T+#del).
+                            Alternative: calculates coverage considering only matched and mismatched reads, not considering deletions
+                            """)
     parser.add_argument("--no_neighbour_search", action="store_true",
-                        help="Specifies that the neighbourhood search should not be performed. If not specified, \
-                            checks for each position, if and where errors appear in the genomic surroundings. \
-                            When specified, make sure to add -nw and -nt flag.")
+                        help="""
+                            Specifies that the neighbourhood search should not be performed. If not specified,
+                            checks for each position, if and where errors appear in the genomic surroundings.
+                            When specified, make sure to add -nw and -nt flag.
+                            """)
     parser.add_argument('-nw', '--window_size', type=int, required=False, default=2,
                         help='Size of the sliding window = 2*w+1. Required when -s flag is set')
     parser.add_argument("-nt", "--neighbour_thresh", type=float_between_zero_and_one, required=False, default=0.5,
-                        help="Threshold of error percentage (--perc_mismatched / --perc_deletion), from which a neighbouring position \
-                            should be considered as an error.")
+                        help="""
+                            Threshold of error percentage (--perc_mismatched / --perc_deletion), from which a neighbouring position
+                            should be considered as an error.
+                            """)
 
     args = parser.parse_args()
     
