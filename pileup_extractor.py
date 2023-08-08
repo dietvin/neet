@@ -19,7 +19,6 @@ class FeatureExtractor:
     num_processes: int
     use_alt_coverage: bool
     tmp_data: List[str]
-    no_neighbour_search: bool
     window_size: int
     neighbour_error_threshold: float
 
@@ -35,7 +34,6 @@ class FeatureExtractor:
                  use_multiprocessing: bool,
                  num_processes: int,
                  use_alt_coverage: bool,
-                 no_neighbour_search: bool,
                  window_size: int,
                  neighbour_error_threshold: float) -> None:
 
@@ -55,7 +53,6 @@ class FeatureExtractor:
 
         self.use_alt_coverage = use_alt_coverage
 
-        self.no_neighbour_search = no_neighbour_search
         self.window_size = window_size
         self.neighbour_error_threshold = neighbour_error_threshold
 
@@ -873,12 +870,6 @@ if __name__ == "__main__":
                             Default: use coverage as calculated by samtools mpileup (i.e. #A+#C+#G+#T+#del).
                             Alternative: calculates coverage considering only matched and mismatched reads, not considering deletions
                             """)
-    parser.add_argument("--no_neighbour_search", action="store_true",
-                        help="""
-                            Specifies that the neighbourhood search should not be performed. If not specified,
-                            checks for each position, if and where errors appear in the genomic surroundings.
-                            When specified, make sure to add -nw and -nt flag.
-                            """)
     parser.add_argument('-nw', '--window_size', type=int, required=False, default=2,
                         help='Size of the sliding window = 2*w+1. Required when -s flag is set')
     parser.add_argument("-nt", "--neighbour_thresh", type=float_between_zero_and_one, required=False, default=0.5,
@@ -898,7 +889,6 @@ if __name__ == "__main__":
                                          use_multiprocessing=args.use_multiprocessing,
                                          num_processes=args.num_processes,
                                          use_alt_coverage=args.coverage_alt,
-                                         no_neighbour_search=args.no_neighbour_search,
                                          window_size=args.window_size,
                                          neighbour_error_threshold=args.neighbour_thresh)
     
@@ -913,7 +903,6 @@ if __name__ == "__main__":
     #                                      genomic_region=args.genomic_region,
     #                                      num_processes=args.num_processes,
     #                                      use_alt_coverage=args.coverage_alt,
-    #                                      no_neighbour_search=args.no_neighbour_search,
     #                                      window_size=args.window_size,
     #                                      neighbour_error_threshold=args.neighbour_thresh)
     
