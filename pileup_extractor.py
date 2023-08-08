@@ -32,6 +32,7 @@ class FeatureExtractor:
                  perc_deletion: float | None,
                  mean_quality: float | None,
                  genomic_region: str | None,
+                 use_multiprocessing: bool,
                  num_processes: int,
                  use_alt_coverage: bool,
                  no_neighbour_search: bool,
@@ -49,6 +50,7 @@ class FeatureExtractor:
         self.filter_mean_quality = mean_quality if mean_quality else 0
         self.filter_genomic_region = self.extract_positional_info(genomic_region) if genomic_region else None
 
+        self.use_multiprocessing = use_multiprocessing
         self.num_processes = num_processes
 
         self.use_alt_coverage = use_alt_coverage
@@ -361,21 +363,38 @@ class FeatureExtractor:
             nb_lines = []
             nb_first = True
 
-            for line in i:
-                outline = self.process_position(line) # extracting the features themselves
-                if len(outline) > 0: 
-                    nb_lines.append(outline)
+            if self.use_multiprocessing:
+                with Pool(processes=12) as pool:
+                    for outline in pool.imap(self.process_position, i, 100):
+                        if len(outline) > 0: 
+                            nb_lines.append(outline)
 
-                    if len(nb_lines) > nb_size_full:  
-                        nb_lines.pop(0)
+                            if len(nb_lines) > nb_size_full:  
+                                nb_lines.pop(0)
 
-                    if len(nb_lines) == nb_size_full:
-                        if nb_first:
-                            nb_first = False
-                            write_edge_lines(nb_lines, o, start=True)
-                        write_center_line(nb_lines, o)
-                    
-                progress_bar.update()
+                            if len(nb_lines) == nb_size_full:
+                                if nb_first:
+                                    nb_first = False
+                                    write_edge_lines(nb_lines, o, start=True)
+                                write_center_line(nb_lines, o)
+                        progress_bar.update()
+
+            else:
+                for line in i:
+                    outline = self.process_position(line) # extracting the features themselves
+                    if len(outline) > 0: 
+                        nb_lines.append(outline)
+
+                        if len(nb_lines) > nb_size_full:  
+                            nb_lines.pop(0)
+
+                        if len(nb_lines) == nb_size_full:
+                            if nb_first:
+                                nb_first = False
+                                write_edge_lines(nb_lines, o, start=True)
+                            write_center_line(nb_lines, o)
+
+                    progress_bar.update()
 
             if len(nb_lines) < nb_size_full:
                 for current_pos in range(len(nb_lines)):
@@ -845,6 +864,11 @@ if __name__ == "__main__":
                         help='Filter by mean read quality scores')
     parser.add_argument('-g', '--genomic_region', type=str, required=False,
                         help='Genomic region in "CHR:START-END" format or "CHR" for whole chromosome. Specify to only extract information from a specific region.')
+    parser.add_argument('--use_multiprocessing', action="store_true", 
+                        help="""
+                            Specify whether to use multiprocessing for processing. Recommended for shorter, deeply sequenced data.
+                            For low coverage, whole genome data set to false for faster runtime.
+                            """)
     parser.add_argument('-t', '--num_processes', type=int, required=False, default=1,
                         help='Number of threads to use for processing.')
     parser.add_argument('--coverage_alt', action="store_true", 
@@ -869,6 +893,7 @@ if __name__ == "__main__":
                                          perc_deletion=args.perc_deletion,
                                          mean_quality=args.mean_quality,
                                          genomic_region=args.genomic_region,
+                                         use_multiprocessing=args.use_multiprocessing,
                                          num_processes=args.num_processes,
                                          use_alt_coverage=args.coverage_alt,
                                          no_neighbour_search=args.no_neighbour_search,
