@@ -598,6 +598,7 @@ class SummaryCreator:
                 and writes it to the specified output path.
         """
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        data_point_descr = f"Each data point corresponds to the average value along all positions in one of {self.n_bins} bins" if self.n_bins else "Each data point corresponds to one extracted position"
         template = f"""
                     <!DOCTYPE html>
                     <html lang="en">
@@ -772,6 +773,7 @@ class SummaryCreator:
                                 This summary file was created from the extracted features in file <b>{self.input_path}</b>. 
                                 Data was averaged into <b>{self.n_bins}</b> bins to allow for better performance.
                                 In total <b>{n_positions}</b> positions were extracted along <b>{n_chr}</b> sequences. 
+                                Plots are interactive and allow for further information on hovering, zooming and panning.
                             </p>
                         </section>
 
@@ -783,9 +785,9 @@ class SummaryCreator:
                                 {plots[0]}
                             </div>
                             <p>
-                                Distribution of the coverage (left) and mean quality (right) of those positions. Each data point corresponds to 
-                                one extracted position. The mean quality at a given position x is calculated from the quality scores from all mapped reads
-                                at this position.
+                                Distribution of the coverage (<b>left</b>) and mean quality (<b>right</b>) of those positions.  
+                                The mean quality at a given position x is calculated from the quality scores from all mapped reads
+                                at this position. {data_point_descr}.
                             </p>
 
                             <h3>Split by each chromosome</h3>        
@@ -793,11 +795,10 @@ class SummaryCreator:
                                 {plots[1]}
                             </div>
                             <p>
-                                <b>Top</b>: Number of positions that were extracted on each chromosome. <b>Middle</b>: Distribution of the number of reads at a given position
-                                on a chromosome. Each data point corresponds to one position. <b>Bottom</b>: Distribution of the quality scores averaged over all reads mapped
-                                at a given position 
+                                <b>Top</b>: Number of positions that were extracted on each chromosome. <b>Middle</b>: Distribution of the number of reads on a chromosome. 
+                                Each data point corresponds to one position. <b>Bottom</b>: Distribution of the quality scores averaged over all reads mapped
+                                at a given position. {data_point_descr}.
                             </p>
-
                         </section>
 
                         <section>
@@ -810,8 +811,8 @@ class SummaryCreator:
                             <p>
                                 Overview of the number of mismatches and what types of errors contribute to them. Match refers to the positions where the correct base was called. 
                                 Mismatch refers to the positions where the wrong base was called. The pie chart on the right shows the number of matched and mismatched positions
-                                along all sequences. The boxplots on the left show the distributions of the mismatch (leftmost), deletion (second left), insertion (second right)
-                                and reference skip (right) rates at matched and mismatched positions.
+                                along all chromosomes. The boxplots on the left show the distributions of the mismatch (<b>leftmost</b>), deletion (<b>second from left</b>), insertion (<b>second from right</b>)
+                                and reference skip (<b>right</b>) rates at matched and mismatched positions. {data_point_descr}.
                             </p>
 
                             <h3>Abundances of different type of mismatches</h3>
@@ -820,16 +821,26 @@ class SummaryCreator:
                             <div class="plot-container">
                                 {plots[3]}
                             </div>
+                            <p>
+                                Abundance of matches by base (diagonal) and all types of mismatches <i>from Reference base to Called base</i>. Warmer colors indicate higher counts.
+                            </p>
                         
                             <h4>As pie chart</h4>
                             <div class="plot-container">
                                 {plots[4]}
                             </div>
+                            <p>
+                                Relative abundances of mismatch types (<i>[FROM] - [TO]</i>). Section labels show absolute count. Relative count is shown on hovering.
+                            </p>
 
                             <h3>Mismatch, deletion and insertion rates by type of mismatch</h3>
                             <div class="plot-container">
                                 {plots[5]}
                             </div>
+                            <p>
+                                Distribtions of Mismatch, Deletion, Insertion and Refernce skip rates for each observed mismatch type (<i>[FROM] - [TO]</i>). 
+                                Each data point corresponds to one position.
+                            </p>
                         </section>
                         
                         <section>
@@ -839,6 +850,11 @@ class SummaryCreator:
                             <div class="plot-container">
                                 {plots[6]}
                             </div>
+                            <p>
+                                Distributions of Mismatch, deletion and insertion rates for different three base motifs with center A (<b>top left</b>), C (<b>top right</b>),
+                                G (<b>bottom left</b>) and T (<b>bottom right</b>). {data_point_descr}.
+                            </p>
+
                         </section>
                     </body>
                     <footer></footer>
