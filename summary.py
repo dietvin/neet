@@ -508,10 +508,6 @@ class SummaryCreator:
             data = data.loc[(data.ref_base == center_base) & (~data.motif_3b.isin(["AAA", "AAC", "AAG", "AAT", "CAA", "GAA", "TAA", "CCC", "CCA", "CCG", "CCT", "ACC", "GCC", "TCC", "GGG", "GGA", "GGC", "GGT", "AGG", "CGG", "TGG", "TTT", "TTA", "TTC", "TTG", "ATT", "CTT", "GTT"]))]
             data = data.melt(value_vars=["perc_mismatch", "n_del_rel", "n_ins_rel"], var_name="Error type", id_vars=["ref_base","motif_3b"])
 
-            d_m = pd.DataFrame()
-            d_d = pd.DataFrame()
-            d_i = pd.DataFrame()
-            #d_m = []
             d = []
             for motif in data["motif_3b"].unique():
                 if self.n_bins:
@@ -777,7 +773,7 @@ class SummaryCreator:
                                 This summary file was created from the extracted features in file <b>{self.input_path}</b>. 
                                 {f"Data was averaged into <b>{self.n_bins}</b> bins to allow for better performance." if self.n_bins else ""}
                                 In total <b>{n_positions}</b> positions were extracted along <b>{n_chr}</b> {"sequences" if n_chr > 1 else "sequence"}. 
-                                Plots are interactive and allow for further information on hovering, zooming and panning.
+                                The plots are interactive and allow further information by hovering, zooming and panning.
                             </p>
                         </section>
 
