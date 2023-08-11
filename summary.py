@@ -209,7 +209,6 @@ class SummaryCreator:
         
         # Split the array into segments with adjusted lengths
         segments = np.split(data, [segment_length * i + min(i, remainder) for i in range(1, num_segments)])
-        
         # Calculate the mean value of each segment using numpy.mean()
         segment_means = np.array([segment.mean() for segment in segments])
         
@@ -512,28 +511,33 @@ class SummaryCreator:
             d_m = pd.DataFrame()
             d_d = pd.DataFrame()
             d_i = pd.DataFrame()
+            #d_m = []
+            d = []
             for motif in data["motif_3b"].unique():
                 if self.n_bins:
-                    d_m[motif] = self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="perc_mismatch"), "value"], num_segments=self.n_bins)
-                    d_d[motif] = self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_del_rel"), "value"], num_segments=self.n_bins)
-                    d_i[motif] = self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_ins_rel"), "value"], num_segments=self.n_bins)
+                    d_m_tmp = pd.DataFrame({"value": self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="perc_mismatch"), "value"], num_segments=self.n_bins),
+                                            "motif": motif,
+                                            "Error type": "Mismatch"})
+                    d_d_tmp = pd.DataFrame({"value": self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_del_rel"), "value"], num_segments=self.n_bins),
+                                            "motif": motif,
+                                            "Error type": "Deletion"}) 
+                    d_i_tmp = pd.DataFrame({"value": self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_ins_rel"), "value"], num_segments=self.n_bins),
+                                            "motif": motif,
+                                            "Error type": "Insertion"}) 
                 else:
-                    d_m[motif] = data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="perc_mismatch"), "value"]
-                    d_d[motif] = data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_del_rel"), "value"]
-                    d_i[motif] = data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_ins_rel"), "value"]
+                    d_m_tmp = pd.DataFrame({"value": data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="perc_mismatch"), "value"],
+                                            "motif": motif,
+                                            "Error type": "Mismatch"})
+                    d_d_tmp = pd.DataFrame({"value": data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_del_rel"), "value"],
+                                            "motif": motif,
+                                            "Error type": "Deletion"}) 
+                    d_i_tmp = pd.DataFrame({"value": data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_ins_rel"), "value"],
+                                            "motif": motif,
+                                            "Error type": "Insertion"}) 
+                d += [d_m_tmp, d_d_tmp, d_i_tmp]
 
+            d = pd.concat(d)
 
-            d_m = d_m.melt(var_name="motif")
-            d_m["Error type"] = "Mismatch"
-
-            d_d = d_d.melt(var_name="motif")
-            d_d["Error type"] = "Deletion"
-
-            d_i = d_i.melt(var_name="motif")
-            d_i["Error type"] = "Insertion"
-
-            d = pd.concat([d_m, d_d, d_i])
-            
             traces = []
             fillcolors = ["#55a868", "#c44e52", "#8172b3", "#937860"]
             for i, er_type in enumerate(d["Error type"].unique()):
@@ -864,5 +868,5 @@ class SummaryCreator:
             o.write(template)
 
 if __name__=="__main__":
-    sc = SummaryCreator("/home/vincent/masterthesis/data/actinomycin_d/cytoplasm0_all_chr_extracted.tsv", "/home/vincent/masterthesis/data/actinomycin_d")
+    sc = SummaryCreator("/home/vincent/masterthesis/data/45s_rrna/processed/45s_cytoplasm_extracted.tsv", "/home/vincent/masterthesis/data/45s_rrna/processed/", None)
     sc.create_summary()

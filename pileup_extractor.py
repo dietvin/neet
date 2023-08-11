@@ -5,7 +5,7 @@ from pyfiglet import Figlet
 import numpy as np
 from multiprocessing import Pool
 from helper_functions import positive_int, positive_float, float_between_zero_and_one, get_num_lines
-
+from summary import SummaryCreator
 class FeatureExtractor:
 
     input_paths : List[str]
@@ -18,9 +18,9 @@ class FeatureExtractor:
     filter_genomic_region: Tuple[str, int, int] | None
     num_processes: int
     use_alt_coverage: bool
-    tmp_data: List[str]
     window_size: int
     neighbour_error_threshold: float
+    n_bins_summary: int|None
 
     def __init__(self, 
                  in_paths: str,
@@ -35,7 +35,8 @@ class FeatureExtractor:
                  num_processes: int,
                  use_alt_coverage: bool,
                  window_size: int,
-                 neighbour_error_threshold: float) -> None:
+                 neighbour_error_threshold: float,
+                 n_bins_summary: int) -> None:
 
         print(Figlet(font="slant").renderText("Neet - pileup extractor"))
 
@@ -56,7 +57,7 @@ class FeatureExtractor:
         self.window_size = window_size
         self.neighbour_error_threshold = neighbour_error_threshold
 
-        self.tmp_data = []
+        self.n_bins_summary = n_bins_summary if n_bins_summary > 0 else None 
 
     def __str__(self) -> str:
         return ""
@@ -299,6 +300,7 @@ class FeatureExtractor:
         for in_file, out_file in zip(self.input_paths, self.output_paths):
             print(f"Processing file '{in_file}'. Writing to '{out_file}'...")
             self.process_file(in_file, out_file)
+            self.create_summary_file(out_file)
 
     def process_file(self, in_file: str, out_file: str) -> None:
         """
@@ -400,6 +402,20 @@ class FeatureExtractor:
 
             progress_bar.update()
             progress_bar.close()
+
+    def create_summary_file(self, file_path: str) -> None:
+        """
+        Create a summary file from the newly created tsv file.
+
+        Parameters:
+            file_path (str): Path to the newly created tsv output.
+
+        Returns:
+            None
+        """
+        out_path = os.path.splitext(file_path)[0]+"_summary.html"
+        summary_creator = SummaryCreator(file_path, out_path, n_bins=self.n_bins_summary)
+        summary_creator.create_summary()
 
     def process_position(self, line_str: str) -> str:
         """
@@ -877,6 +893,11 @@ if __name__ == "__main__":
                             Threshold of error percentage (--perc_mismatched / --perc_deletion), from which a neighbouring position
                             should be considered as an error.
                             """)
+    parser.add_argument('-b', '--n_bins', type=int, required=False, default=5000,
+                        help="""Number of bins to split the data into when creating the summary plots. This does not affect the extracted data.
+                            Used only to improve performance and clarity of the created plots. Note that setting the value to a low number 
+                            can lead to misleading results. Set to '-1' to disable binning. Default: 5000
+                            """)
 
     args = parser.parse_args()
     
@@ -890,7 +911,8 @@ if __name__ == "__main__":
                                          num_processes=args.num_processes,
                                          use_alt_coverage=args.coverage_alt,
                                          window_size=args.window_size,
-                                         neighbour_error_threshold=args.neighbour_thresh)
+                                         neighbour_error_threshold=args.neighbour_thresh,
+                                         n_bins_summary = args.n_bins)
     
     feature_extractor.process_files()
 
