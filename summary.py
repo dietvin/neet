@@ -5,7 +5,7 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 from plotly.io import to_html
 
-import os, warnings
+import os, warnings, sys, datetime
 from typing import List, Tuple, Dict
 
 class SummaryCreator:
@@ -35,7 +35,7 @@ class SummaryCreator:
     n_bins: int|None
     data: pd.DataFrame
 
-    def __init__(self, in_path: str, out_path: str, n_bins: int|None) -> None:
+    def __init__(self, in_path: str, out_path: str, n_bins: int|None = 5000) -> None:
         """
         Initializes a SummaryCreator object.
 
@@ -46,7 +46,6 @@ class SummaryCreator:
         """
         self.process_paths(in_path, out_path)
         self.n_bins = n_bins
-        self.load_data()
 
     #################################################################################################################
     #                                   Functions called during initialization                                      #
@@ -136,17 +135,27 @@ class SummaryCreator:
             None: The method generates and writes an HTML report containing summary plots and statistics
                 to the specified output path.
         """
+        print(f"Starting creation of summary from file '{self.input_path}'.")
+        sys.stdout.write("1 - loading data... ")
+        self.load_data()
+        sys.stdout.write("Done\n2 - creating general summary... ")
+
         n_positions = self.data.shape[0]
         n_chromosomes = len(self.data["chr"].unique())
-
         plots = []
+        
         plots.append(self.create_general_plot())
+        sys.stdout.write("Done\n3 - creating chromosome-wise summary... ")
         plots.append(self.create_chr_plot())
+        sys.stdout.write("Done\n4 - creating general mismatch summary... ")
         plots.append(self.create_mism_general_plot())
+        sys.stdout.write("Done\n5 - creating specific mismatch type summary... ")
         plots += self.create_mism_types_plots()
+        sys.stdout.write("Done\n6 - creating motif summary... ")
         plots.append(self.create_motif_plot())
-
+        sys.stdout.write(f"Done\n7 - creating HTML summary file at {self.output_path}\n")
         self.write_to_html(n_positions, n_chromosomes, plots)
+        print("Finished.")
     
 
     ################################################################################################################
@@ -328,7 +337,7 @@ class SummaryCreator:
         """
         data = self.data[["ref_base", "motif", "perc_mismatch", "n_del_rel", "n_ins_rel", "n_ref_skip_rel"]]
         motif_center_idx = len(data.motif[0]) //2
-        data["motif_3b"] = data["motif"].map(lambda x: x[motif_center_idx-1:motif_center_idx+2])
+        data.loc[:, "motif_3b"] = data["motif"].map(lambda x: x[motif_center_idx-1:motif_center_idx+2])
         return data
 
     ##############################################################################################################
@@ -354,7 +363,7 @@ class SummaryCreator:
 
         fig.update_traces(line=dict(color="black"), 
                         marker=dict(outliercolor="black"), 
-                        fillcolor="grey")
+                        fillcolor="lightgrey")
         fig.update_layout(showlegend=False)
         fig.update_xaxes(showticklabels=False, ticks=None)
         fig.update_yaxes(title_text="Coverage", row=1, col=1)
@@ -446,7 +455,6 @@ class SummaryCreator:
         fig.update_yaxes(showticklabels=False, ticks=None, row=1, col=2)
         fig.update_yaxes(showticklabels=False, ticks=None, row=1, col=3)
         fig.update_yaxes(showticklabels=False, ticks=None, row=1, col=4)
-        fig.show()
 
         return to_html(fig, include_plotlyjs=False)
 
@@ -464,7 +472,6 @@ class SummaryCreator:
         fig.update_traces(text=matrix_labels, texttemplate="%{text}")
         fig.update_xaxes(fixedrange=True)
         fig.update_yaxes(fixedrange=True)
-        fig.show()
         matrix = to_html(fig, include_plotlyjs=False)
 
         fig = go.Figure(go.Pie(labels=pie_labels, values=pie_data, 
@@ -472,7 +479,6 @@ class SummaryCreator:
                     marker=dict(line=dict(color='#000000', width=2))))
         fig = self.update_plot(fig, width=800)
         fig.update_layout(legend=dict(bgcolor='#f5f5f5', bordercolor='#000000', borderwidth=2))
-        fig.show()
         pie = to_html(fig, include_plotlyjs=False)
 
         fig = go.Figure()
@@ -488,7 +494,6 @@ class SummaryCreator:
 
         fig.update_layout(boxmode="group", legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1.0, bgcolor='#f5f5f5', bordercolor='#000000', borderwidth=2))
         fig.update_xaxes(categoryorder='array', categoryarray=pie_labels)
-        fig.show()
         box = to_html(fig, include_plotlyjs=False)
 
         return [matrix, pie, box]
@@ -572,8 +577,6 @@ class SummaryCreator:
         fig.update_yaxes(title = "Error rate", row=1, col=1)
         fig.update_yaxes(title = "Error rate", row=2, col=1)
 
-        fig.show()
-
         return to_html(fig, include_plotlyjs=False)
 
 
@@ -594,6 +597,7 @@ class SummaryCreator:
             None: The method generates an HTML file based on the provided template and plots,
                 and writes it to the specified output path.
         """
+        time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         template = f"""
                     <!DOCTYPE html>
                     <html lang="en">
@@ -634,6 +638,17 @@ class SummaryCreator:
                                 font-size: 1.2em;
                                 opacity: 0.8;
                             }}
+
+
+                            footer {{
+                                background-color: #333;
+                                color: white;
+                                padding: 1em 0;
+                                text-align: center;
+                                width: 100%; /* Make the header span the full width */
+                                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                            }}
+
 
                             /* Center the content */
                             body {{
@@ -729,9 +744,18 @@ class SummaryCreator:
                                 margin-top: 2em;
                                 margin-left: 2em;
                                 margin-right: 2em;
-                                margin-bottom: 0.5em
+                                margin-bottom: 0.5em;
                                 padding: 1em;
                             }}
+
+                            .intro-text {{
+                                font-size: 1.4rem;
+                                margin-top: 1.5em;
+                                margin-bottom: 1.5em;
+                                margin-left: 1.5em;
+                                margin-right: 1.5em;
+                            }}
+
                         </style>
                     </head>
 
@@ -740,13 +764,16 @@ class SummaryCreator:
 
                         <header>
                             <h1>Pileup extractor summary</h1>
-                            <p><a href="https://github.com/dietvin/neet">Produced by Neet</a></p>
+                            <p>Produced by <a href="https://github.com/dietvin/neet">Neet</a> on <b>{time}</b></p>
                         </header>
                     
-                        <p>
-                            This document contains summary plots created from file "/this/is/a/path_extracted.tsv" 
-                            produced using the Neet pileup extractor.
-                        </p>
+                        <section>
+                            <p class="intro-text">
+                                This summary file was created from the extracted features in file <b>{self.input_path}</b>. 
+                                Data was averaged into <b>{self.n_bins}</b> bins to allow for better performance.
+                                In total <b>{n_positions}</b> positions were extracted along <b>{n_chr}</b> sequences. 
+                            </p>
+                        </section>
 
                         <section>
                             <h2 class="collapsible-header">General statistics</h2>
@@ -756,8 +783,7 @@ class SummaryCreator:
                                 {plots[0]}
                             </div>
                             <p>
-                                In total <b>{n_positions}</b> positions were extracted along <b>{n_chr}</b> sequences. The plots below show
-                                the distribution of the coverage (left) and mean quality (right) of those positions. Each data point corresponds to 
+                                Distribution of the coverage (left) and mean quality (right) of those positions. Each data point corresponds to 
                                 one extracted position. The mean quality at a given position x is calculated from the quality scores from all mapped reads
                                 at this position.
                             </p>
@@ -815,10 +841,12 @@ class SummaryCreator:
                             </div>
                         </section>
                     </body>
+                    <footer></footer>
                     </html> 
                     """
         with open(self.output_path, "w") as o:
             o.write(template)
 
 if __name__=="__main__":
-    pass
+    sc = SummaryCreator("/home/vincent/masterthesis/data/actinomycin_d/cytoplasm0_all_chr_extracted.tsv", "/home/vincent/masterthesis/data/actinomycin_d")
+    sc.create_summary()
