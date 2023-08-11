@@ -775,8 +775,8 @@ class SummaryCreator:
                         <section>
                             <p class="intro-text">
                                 This summary file was created from the extracted features in file <b>{self.input_path}</b>. 
-                                Data was averaged into <b>{self.n_bins}</b> bins to allow for better performance.
-                                In total <b>{n_positions}</b> positions were extracted along <b>{n_chr}</b> sequences. 
+                                {f"Data was averaged into <b>{self.n_bins}</b> bins to allow for better performance." if self.n_bins else ""}
+                                In total <b>{n_positions}</b> positions were extracted along <b>{n_chr}</b> {"sequences" if n_chr > 1 else "sequence"}. 
                                 Plots are interactive and allow for further information on hovering, zooming and panning.
                             </p>
                         </section>
