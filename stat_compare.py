@@ -456,11 +456,15 @@ class StatComparer:
         """
         sys.stdout.write("Searching for shared positions... ")
         self.find_common_pos()
-        sys.stdout.write(f"Found {self.stats['n_common']} shared positions.\nPerforming statistical tests...")
+        sys.stdout.write(f"Found {self.stats['n_common']} shared positions.\nPerforming statistical tests... ")
         self.stat_comp()
         if self.write_tsv:
+            sys.stdout.write(f"Done.\nWriting results to TSV... ")
             self.write_results()
+        sys.stdout.write(f"Done.\nWriting results to HTML... ")
         self.write_html()
+        sys.stdout.write(f"Done.\nFinished.")
+
 
 if __name__=="__main__":
     comparer = StatComparer("/home/vincent/masterthesis/data/epinano_data/processed/curlcake_m6a_extracted.tsv",
