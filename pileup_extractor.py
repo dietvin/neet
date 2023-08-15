@@ -447,7 +447,10 @@ class FeatureExtractor:
             if n_reads < self.filter_num_reads: return ""
 
         # get reference sequence 
-        ref = self.ref_sequences[chr]
+        try:
+            ref = self.ref_sequences[chr]
+        except:
+            return ""
         # get absolute number of A, C, G, T, ins, del
         count, ref_skip_positions = self.parse_pileup_string(read_bases, ref_base)
 
