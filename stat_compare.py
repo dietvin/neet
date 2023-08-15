@@ -404,6 +404,9 @@ class StatComparer:
             </header>
 
             <section>
+                <h2>
+                    {os.path.basename(self.path_1)}<br>vs.<br>{os.path.basename(self.path_2)}
+                </h2>
                 <p class="intro-text">
                     Below are the results of the statistical comparisons of different features between <b>{self.path_1}</b> 
                     and <b>{self.path_2}</b>. <b>{self.stats['n_common']}</b> positions that were present in both samples were 
