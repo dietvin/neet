@@ -1,6 +1,13 @@
 from typing import Any, List
 import argparse, os, warnings
 from itertools import takewhile, repeat
+import datetime
+
+
+def print_update(message: str) -> None:
+    time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    print(f"{time}  |  {message}")
+
 
 def get_num_lines(path: str) -> int:
     """
@@ -20,6 +27,29 @@ def get_num_lines(path: str) -> int:
     f = open(path, 'rb')
     bufgen = takewhile(lambda x: x, (f.raw.read(1024*1024) for _ in repeat(None)))
     return sum( buf.count(b'\n') for buf in bufgen )
+
+
+def check_path(path: str, extensions: List[str]) -> None:
+    """
+    Check if the specified file path exists and has the expected file extension.
+
+    This function verifies whether the file specified by the given path exists and has a valid extension.
+    If the file does not exist, it raises a FileNotFoundError with a detailed error message.
+    If the file extension does not match any of the expected extensions, it raises a Warning.
+
+    Parameters:
+        path (str): The file path to be checked.
+        extensions (List[str]): A list of expected file extensions (e.g., ['.txt', '.csv']).
+
+    Raises:
+        FileNotFoundError: If the specified file path does not exist.
+        Warning: If the file extension is not among the expected extensions.
+    """
+    if not os.path.exists(path): # does file exist?
+        raise FileNotFoundError(f"Input file not found. File '{path}' does not exist.")
+    file_type = os.path.splitext(path)[1]
+    if not file_type in extensions:
+        warnings.warn(f"Found file extension {file_type}. Expected file extension to be one of: {extensions}. If this is deliberate, ignore warning.", Warning)
 
 
 def check_get_in_path(in_path: str, 
