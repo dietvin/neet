@@ -858,7 +858,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="Pileup feature extractor", description="Extract different characteristics from given pileup file(s).")
     parser.add_argument('-i', '--input', type=str, required=True, default="-",
                         help="""
-                            Path to the input file(s). If replicates are available, specify paths comma-separated (<repl.1>,<repl.2>,...).
+                            Path to the input file(s). If multiple are available, specify paths comma-separated (<pileup1>,<pileup2>,...).
                             """)
     parser.add_argument('-o', '--output', type=str, required=True, default="-",
                         help="""
