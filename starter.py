@@ -14,6 +14,7 @@ class Processor:
     out_path: str
     ref_path: str
     optional_args: Dict[str, int|float|bool|None]
+    stat_comp_args: Dict[str, float|bool]
 
     def __init__(self, in_path1, basename1, out_path, ref_path, in_path2, basename2,
                  num_reads,
@@ -26,24 +27,27 @@ class Processor:
                  coverage_alt,
                  window_size,
                  neighbour_thresh,
-                 n_bins) -> None:
+                 n_bins,
+                 alpha,
+                 no_tsv) -> None:
         hs.print_update("Start initialization.")
         self.process_paths(in_path1, in_path2, out_path, ref_path)
         self.basename1 = basename1
         self.basename2 = basename2
 
         self.optional_args = {"num_reads": num_reads,
-                              "perc_mismatched": perc_mismatched,
+                              "perc_mismatch": perc_mismatched,
                               "perc_deletion": perc_deletion,
                               "mean_quality": mean_quality,
                               "genomic_region": genomic_region,
                               "use_multiprocessing": use_multiprocessing,
                               "num_processes": num_processes,
-                              "coverage_alt": coverage_alt,
+                              "use_alt_coverage": coverage_alt,
                               "window_size": window_size,
-                              "neighbour_thresh": neighbour_thresh,
-                              "n_bins": n_bins}
-        
+                              "neighbour_error_threshold": neighbour_thresh,
+                              "n_bins_summary": n_bins}
+        self.stat_comp_args = {"alpha": alpha, "write_tsv": (not no_tsv)}
+
         if self.two_samples:
             message = f"Found {len(self.in_path1)} bam files for the first sample and {len(self.in_path2)} for the second sample."
         else:
@@ -130,27 +134,18 @@ class Processor:
         extractor = FeatureExtractor(in_paths = pileup_path, 
                                      out_paths = out_path, 
                                      ref_path = self.ref_path,
-                                     num_reads = args["num_reads"], 
-                                     perc_mismatch = args["perc_mismatched"], 
-                                     perc_deletion = args["perc_deletion"], 
-                                     mean_quality = args["mean_quality"], 
-                                     genomic_region = args["genomic_region"], 
-                                     use_multiprocessing = args["use_multiprocessing"], 
-                                     num_processes = args["num_processes"], 
-                                     use_alt_coverage = args["coverage_alt"], 
-                                     window_size = args["window_size"], 
-                                     neighbour_error_threshold = args["neighbour_thresh"], 
-                                     n_bins_summary = args["n_bins"])
+                                     **args)
         extractor.process_files()
 
     def run_stat_comparer(self, sample1: str, sample2: str) -> None:
         out = f"{self.out_path}{self.basename1}_{self.basename2}_comp.tsv" 
         hs.print_update(f"Starting statistical comparison of files {sample1} and {sample2}. Writing to {out}")
-        stat_comp = StatComparer(sample1, sample2, out)
+        stat_comp = StatComparer(sample1, sample2, out, **self.stat_comp_args)
         stat_comp.main()
 
 def setup_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="Pileup feature extractor", description="Extract different characteristics from given pileup file(s).")
+    parser = argparse.ArgumentParser(prog="Neet", description="Extract different characteristics from given bam file(s).")
+    ### Input / output arguments ###
     parser.add_argument('-i', '--sample1', type=str, required=True,
                         help="""
                             Path to the input file(s). If replicates are available, specify paths comma-separated (<repl.1>,<repl.2>,...).
@@ -160,7 +155,6 @@ def setup_parser() -> argparse.ArgumentParser:
                     help="""
                         Basename of the given sample. Used to create the pileup and extracted features files. Default: 'sample1'
                         """)
-
     parser.add_argument('-i2', '--sample2', type=str, required=False,
                         help="""
                             Path to the input file(s) from a second sample. If replicates are available, specify paths comma-separated (<repl.1>,<repl.2>,...).
@@ -170,12 +164,13 @@ def setup_parser() -> argparse.ArgumentParser:
                     help="""
                         Basename of the second sample. Used to create the pileup and extracted features files. Default: 'sample2'
                         """)
-
     parser.add_argument('-o', '--output', type=str, required=True,
                         help="""
                             Path to output a output directory, in which all output files will be stored.
                             """)
     parser.add_argument('-r', '--reference', type=str, required=True, help='Path to the reference file')
+
+    ### Pileup extractor filters ###
     parser.add_argument('-n', '--num_reads', type=hs.positive_int, required=False,
                         help='Filter by minimum number of reads at a position')
     parser.add_argument('-p', '--perc_mismatched', type=hs.float_between_zero_and_one, required=False, default=0,
@@ -199,6 +194,8 @@ def setup_parser() -> argparse.ArgumentParser:
                             Default: use coverage as calculated by samtools mpileup (i.e. #A+#C+#G+#T+#del).
                             Alternative: calculates coverage considering only matched and mismatched reads, not considering deletions
                             """)
+    
+    ### Neighbour search arguments ###
     parser.add_argument('-nw', '--window_size', type=int, required=False, default=2,
                         help='Size of the sliding window = 2*w+1. Required when -s flag is set')
     parser.add_argument("-nt", "--neighbour_thresh", type=hs.float_between_zero_and_one, required=False, default=0.5,
@@ -211,6 +208,17 @@ def setup_parser() -> argparse.ArgumentParser:
                             Used only to improve performance and clarity of the created plots. Note that setting the value to a low number 
                             can lead to misleading results. Set to '-1' to disable binning. Default: 5000
                             """)
+    
+    ### Statistical comparison arguments ###
+    parser.add_argument('-a', '--alpha', type=float, required=False, default=0.01,
+                        help="""
+                            Significane level used as a threshold for classifying significant results during the statistical comparison.
+                            """)
+    parser.add_argument('--no_tsv', action="store_true", 
+                        help="""
+                            When stated does not store the calculated p-values from the statistical comparison in a TSV file and only as HTML.
+                            """)
+
     return parser
 
 if __name__=="__main__":
@@ -234,6 +242,8 @@ if __name__=="__main__":
                           coverage_alt=args.coverage_alt,
                           window_size=args.window_size,
                           neighbour_thresh=args.neighbour_thresh,
-                          n_bins = args.n_bins)
+                          n_bins = args.n_bins,
+                          alpha = args.alpha,
+                          no_tsv = args.no_tsv)
     
     processor.main()
