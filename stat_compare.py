@@ -1,6 +1,6 @@
 from typing import Dict, List, Tuple
 import warnings, sys, os, datetime
-
+import helper_functions as hs
 import pandas as pd
 import matplotlib as plt
 import matplotlib.colors as mcolors
@@ -457,16 +457,17 @@ class StatComparer:
         """
         Main method to orchestrate the comparison and statistical testing process.
         """
-        sys.stdout.write("Searching for shared positions... ")
+        hs.print_update("Searching for shared positions.", line_break=False)
         self.find_common_pos()
-        sys.stdout.write(f"Found {self.stats['n_common']} shared positions.\nPerforming statistical tests... ")
+        hs.print_update(f"Found {self.stats['n_common']} shared positions.")
+        hs.print_update("Performing statistical tests.")
         self.stat_comp()
         if self.write_tsv:
-            sys.stdout.write(f"Done.\nWriting results to TSV... ")
+            hs.print_update(f"Writing results to TSV.")
             self.write_results()
-        sys.stdout.write(f"Done.\nWriting results to HTML... ")
+        hs.print_update(f"Writing results to HTML.")
         self.write_html()
-        sys.stdout.write(f"Done.\nFinished.")
+        hs.print_update(f"Finished statistical comparison.")
 
 
 if __name__=="__main__":

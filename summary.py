@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 from plotly.io import to_html
+import helper_functions as hs
 
 import os, warnings, sys, datetime
 from typing import List, Tuple, Dict
@@ -135,27 +136,27 @@ class SummaryCreator:
             None: The method generates and writes an HTML report containing summary plots and statistics
                 to the specified output path.
         """
-        print(f"Starting creation of summary from file '{self.input_path}'.")
-        sys.stdout.write("1 - loading data... ")
+        hs.print_update(f"Starting creation of summary from file '{self.input_path}'.")
+        hs.print_update("1 - loading data")
         self.load_data()
-        sys.stdout.write("Done\n2 - creating general summary... ")
+        hs.print_update("2 - creating general summary")
 
         n_positions = self.data.shape[0]
         n_chromosomes = len(self.data["chr"].unique())
         plots = []
         
         plots.append(self.create_general_plot())
-        sys.stdout.write("Done\n3 - creating chromosome-wise summary... ")
+        hs.print_update("3 - creating chromosome-wise summary")
         plots.append(self.create_chr_plot())
-        sys.stdout.write("Done\n4 - creating general mismatch summary... ")
+        hs.print_update("4 - creating general mismatch summary")
         plots.append(self.create_mism_general_plot())
-        sys.stdout.write("Done\n5 - creating specific mismatch type summary... ")
+        hs.print_update("5 - creating specific mismatch type summary")
         plots += self.create_mism_types_plots()
-        sys.stdout.write("Done\n6 - creating motif summary... ")
+        hs.print_update("6 - creating motif summary")
         plots.append(self.create_motif_plot())
-        sys.stdout.write(f"Done\n7 - creating HTML summary file at {self.output_path}\n")
+        hs.print_update(f"7 - creating HTML summary file at {self.output_path}")
         self.write_to_html(n_positions, n_chromosomes, plots)
-        print("Finished.")
+        hs.print_update("Finished.")
     
 
     ################################################################################################################

@@ -1,12 +1,14 @@
 from typing import Any, List
-import argparse, os, warnings
+import argparse, os, warnings, sys
 from itertools import takewhile, repeat
 import datetime
 
 
-def print_update(message: str) -> None:
+def print_update(message: str, line_break: bool = True) -> None:
     time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    print(f"{time}  |  {message}")
+    if line_break:
+        message += "\n"
+    sys.stdout.write(f"{time}  |  {message}")
 
 
 def get_num_lines(path: str) -> int:

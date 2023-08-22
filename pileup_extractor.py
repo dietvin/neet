@@ -5,6 +5,7 @@ from pyfiglet import Figlet
 import numpy as np
 from multiprocessing import Pool
 from helper_functions import positive_int, positive_float, float_between_zero_and_one, get_num_lines
+import helper_functions as hs
 from summary import SummaryCreator
 class FeatureExtractor:
 
@@ -196,7 +197,7 @@ class FeatureExtractor:
             sys.stdout.write(f"\rSequences found: {n}")
             sys.stdout.flush()
 
-        print(f"Processing reference genome from file '{path}'...")
+        hs.print_update(f"Processing reference genome from file '{path}'.")
         with open(path, "r") as ref:
             refs = {}
             line = next(ref)
@@ -298,7 +299,7 @@ class FeatureExtractor:
             None
         """ 
         for in_file, out_file in zip(self.input_paths, self.output_paths):
-            print(f"Processing file '{in_file}'. Writing to '{out_file}'...")
+            hs.print_update(f"Processing file '{in_file}'. Writing to '{out_file}'.")
             self.process_file(in_file, out_file)
             self.create_summary_file(out_file)
 
