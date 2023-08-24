@@ -354,7 +354,8 @@ class FeatureExtractor:
 
         with open(in_file, "r") as i, open(out_file, "w") as o:
             desc = "Processing pileup rows"
-            progress_bar = tqdm(desc=desc) #if self.from_stdin else tqdm(desc=desc, total=get_num_lines(in_file))
+            hs.print_update("Counting number of lines to process.")
+            progress_bar = tqdm(desc=desc, total=hs.get_num_lines(in_file))
 
             header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_ref_skip\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tn_ref_skip_rel\tperc_mismatch\tmotif\tq_mean\tq_std\tneighbour_error_pos\n"
             o.write(header)

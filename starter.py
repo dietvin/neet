@@ -16,6 +16,8 @@ class Processor:
     optional_args: Dict[str, int|float|bool|None]
     stat_comp_args: Dict[str, float|bool]
 
+    skip_pileup: bool
+
     def __init__(self, in_path1, basename1, out_path, ref_path, in_path2, basename2,
                  num_reads,
                  perc_mismatched,
@@ -72,8 +74,20 @@ class Processor:
 
     def process_in(self, in_paths: str) -> List[str]:
         in_list = in_paths.split(",")
+        extensions = []
         for path in in_list:
-            self.check_path(path)            
+            ext = os.path.splitext(path)[1]
+            extensions.append(ext)
+            if ext == ".bam":
+                self.check_path(path, extension=".bam")
+            else:
+                self.check_path(path, extension=".pileup")
+
+        if len(set(extensions)) > 1:
+            raise Exception("Input files of different kind. All files must be .bam or .pileup, not mixed.")
+        
+        self.skip_pileup = True if extensions[0] == ".pileup" else False
+
         return in_list
 
     def check_out(self, out: str): 
@@ -84,7 +98,7 @@ class Processor:
             except:
                 raise Exception(f"Directory '{out}' was not found and could not be created.")
 
-    def check_path(self, path: str) -> None:
+    def check_path(self, path: str, extension: str = ".bam") -> None:
         """
         Check if the specified file path exists and has the expected file extension.
 
@@ -102,20 +116,26 @@ class Processor:
         if not os.path.exists(path): # does file exist?
             raise FileNotFoundError(f"Input file not found. File '{path}' does not exist.")
         file_type = os.path.splitext(path)[1]
-        if file_type != ".bam":
-            raise Exception(f"Found file extension {file_type}. File extension to must be .bam.")
+        if file_type != extension:
+            raise Exception(f"Found file extension {file_type}. File extension to must be {extension}.")
 
 
     def main(self):
-        pileup_path = self.out_path + self.basename1 + ".pileup"
         feature_extract_path = self.out_path + self.basename1 + "_extracted.tsv"
-        
-        self.create_pileup(self.in_path1, pileup_path)
-        if self.two_samples:
-            pileup_path2 = self.out_path + self.basename2 + ".pileup"
-            self.create_pileup(self.in_path2, pileup_path2)
+        if not self.skip_pileup:
+            pileup_path = self.out_path + self.basename1 + ".pileup"
+            self.create_pileup(self.in_path1, pileup_path)
+        else:
+            pileup_path = self.in_path1[0]
 
-            pileup_path += ","+pileup_path2 
+        if self.two_samples:
+            if not self.skip_pileup:
+                pileup_path2 = self.out_path + self.basename2 + ".pileup"
+                self.create_pileup(self.in_path2, pileup_path2)
+                pileup_path += ","+pileup_path2 
+            else:
+                pileup_path += self.in_path2[0]
+
             feature_extract_path += ","+ self.out_path + self.basename2 + "_extracted.tsv"
         
         self.run_feature_extractor(pileup_path, feature_extract_path)
@@ -148,8 +168,9 @@ def setup_parser() -> argparse.ArgumentParser:
     ### Input / output arguments ###
     parser.add_argument('-i', '--sample1', type=str, required=True,
                         help="""
-                            Path to the input file(s). If replicates are available, specify paths comma-separated (<repl.1>,<repl.2>,...).
-                            Can be of type .bam or .pileup. If bam files are given, samtools mpileup is executed first.
+                            Path to the input file(s). If replicates are available, specify paths comma-separated (<repl1.bam>,<repl2.bam>,...).
+                            Can be of type .bam or .pileup. If bam files are given, samtools mpileup is executed first. For pileup file only one can be given
+                            per sample.
                             """)
     parser.add_argument('-bn', '--basename', type=str, required=False, default="sample1",
                     help="""
@@ -158,7 +179,8 @@ def setup_parser() -> argparse.ArgumentParser:
     parser.add_argument('-i2', '--sample2', type=str, required=False,
                         help="""
                             Path to the input file(s) from a second sample. If replicates are available, specify paths comma-separated (<repl.1>,<repl.2>,...).
-                            Can be of type .bam or .pileup. If provided the extracted features will be statistically compared to the ones from the first sample. 
+                            Can be of type .bam or .pileup. If provided the extracted features will be statistically compared to the ones from the first sample.
+                            For pileup file only one can be given per sample. 
                             """)
     parser.add_argument('-bn2', '--basename2', type=str, required=False, default="sample2",
                     help="""
