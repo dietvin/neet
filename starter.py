@@ -15,7 +15,6 @@ class Processor:
     ref_path: str
     optional_args: Dict[str, int|float|bool|None]
     stat_comp_args: Dict[str, float|bool]
-
     skip_pileup: bool
 
     def __init__(self, in_path1, basename1, out_path, ref_path, in_path2, basename2,
@@ -27,10 +26,10 @@ class Processor:
                  genomic_region,
                  use_multiprocessing,
                  num_processes,
-                 coverage_alt,
                  window_size,
                  neighbour_thresh,
                  n_bins,
+                 use_alt_plot,
                  alpha,
                  no_tsv) -> None:
         hs.print_update("Start initialization.")
@@ -46,10 +45,10 @@ class Processor:
                               "genomic_region": genomic_region,
                               "use_multiprocessing": use_multiprocessing,
                               "num_processes": num_processes,
-                              "use_alt_coverage": coverage_alt,
                               "window_size": window_size,
                               "neighbour_error_threshold": neighbour_thresh,
-                              "n_bins_summary": n_bins}
+                              "n_bins_summary": n_bins,
+                              "use_alt_summary": use_alt_plot}
         self.stat_comp_args = {"alpha": alpha, "write_tsv": (not no_tsv)}
 
         if self.two_samples:
@@ -218,6 +217,7 @@ def setup_parser() -> argparse.ArgumentParser:
     parser.add_argument('-t', '--num_processes', type=int, required=False, default=4,
                         help='Number of threads to use for processing.')
     
+
     ### Neighbour search arguments ###
     parser.add_argument('-nw', '--window_size', type=int, required=False, default=2,
                         help='Size of the sliding window = 2*w+1. Required when -s flag is set')
@@ -226,11 +226,18 @@ def setup_parser() -> argparse.ArgumentParser:
                             Threshold of error percentage (--perc_mismatched / --perc_deletion), from which a neighbouring position
                             should be considered as an error.
                             """)
+    
+    ### Summary creation arguments ###
     parser.add_argument('-b', '--n_bins', type=int, required=False, default=5000,
                         help="""Number of bins to split the data into when creating the summary plots. This does not affect the extracted data.
                             Used only to improve performance and clarity of the created plots. Note that setting the value to a low number 
                             can lead to misleading results. Set to '-1' to disable binning. Default: 5000
                             """)
+    parser.add_argument('--plot_alt', action="store_true", 
+                        help="""
+                            Specify whether to use the perc_mismatch or perc_mismatch_alt values for plot creation.
+                            """)
+
     
     ### Statistical comparison arguments ###
     parser.add_argument('-a', '--alpha', type=float, required=False, default=0.01,
@@ -266,6 +273,7 @@ if __name__=="__main__":
                           window_size=args.window_size,
                           neighbour_thresh=args.neighbour_thresh,
                           n_bins = args.n_bins,
+                          use_alt_plot=args.plot_alt,
                           alpha = args.alpha,
                           no_tsv = args.no_tsv)
     

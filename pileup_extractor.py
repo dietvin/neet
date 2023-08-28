@@ -19,10 +19,10 @@ class FeatureExtractor:
     filter_mean_quality: float
     filter_genomic_region: Tuple[str, int, int] | None
     num_processes: int
-    use_alt_coverage: bool
     window_size: int
     neighbour_error_threshold: float
     n_bins_summary: int|None
+    use_alt_summary: bool
 
     def __init__(self, 
                  in_paths: str,
@@ -36,10 +36,10 @@ class FeatureExtractor:
                  genomic_region: str | None,
                  use_multiprocessing: bool,
                  num_processes: int,
-                 use_alt_coverage: bool,
                  window_size: int,
                  neighbour_error_threshold: float,
-                 n_bins_summary: int) -> None:
+                 n_bins_summary: int,
+                 use_alt_summary: bool) -> None:
 
         print(Figlet(font="slant").renderText("Neet - pileup extractor"))
 
@@ -56,12 +56,11 @@ class FeatureExtractor:
         self.use_multiprocessing = use_multiprocessing
         self.num_processes = num_processes
 
-        self.use_alt_coverage = use_alt_coverage
-
         self.window_size = window_size
         self.neighbour_error_threshold = neighbour_error_threshold
 
         self.n_bins_summary = n_bins_summary if n_bins_summary > 0 else None 
+        self.use_alt_summary = use_alt_summary
 
     def __str__(self) -> str:
         return ""
@@ -419,7 +418,7 @@ class FeatureExtractor:
             None
         """
         out_path = os.path.splitext(file_path)[0]+"_summary.html"
-        summary_creator = SummaryCreator(file_path, out_path, n_bins=self.n_bins_summary)
+        summary_creator = SummaryCreator(file_path, out_path, n_bins=self.n_bins_summary, use_perc_mismatch_alt=self.use_alt_summary)
         summary_creator.create_summary()
 
     def process_position(self, line_str: str) -> str:
@@ -912,6 +911,11 @@ if __name__ == "__main__":
                             Used only to improve performance and clarity of the created plots. Note that setting the value to a low number 
                             can lead to misleading results. Set to '-1' to disable binning. Default: 5000
                             """)
+    parser.add_argument('--plot_alt', action="store_true", 
+                        help="""
+                            Specify whether to use the perc_mismatch or perc_mismatch_alt values for plot creation.
+                            """)
+
 
     args = parser.parse_args()
     
@@ -924,10 +928,10 @@ if __name__ == "__main__":
                                          genomic_region=args.genomic_region,
                                          use_multiprocessing=args.use_multiprocessing,
                                          num_processes=args.num_processes,
-                                         use_alt_coverage=args.coverage_alt,
                                          window_size=args.window_size,
                                          neighbour_error_threshold=args.neighbour_thresh,
-                                         n_bins_summary = args.n_bins)
+                                         n_bins_summary = args.n_bins,
+                                         use_alt_summary=args.plot_alt)
     
     feature_extractor.process_files()
 
@@ -939,7 +943,6 @@ if __name__ == "__main__":
     #                                      mean_quality=args.mean_quality,
     #                                      genomic_region=args.genomic_region,
     #                                      num_processes=args.num_processes,
-    #                                      use_alt_coverage=args.coverage_alt,
     #                                      window_size=args.window_size,
     #                                      neighbour_error_threshold=args.neighbour_thresh)
     

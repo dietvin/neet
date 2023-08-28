@@ -448,8 +448,9 @@ class SummaryCreator:
                     hoverinfo='label+percent', 
                     textinfo='value', 
                     textfont_size=20, 
-                    marker=dict(line=dict(color='#000000', width=2)), 
-                    showlegend=False)
+                    marker=dict(colors=['#4c72b0', '#dd8452'], line=dict(color='#000000', width=2)), 
+                    showlegend=False,
+                    sort=False)
         fig.add_trace(pie, row=1, col=5)
 
         fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, bgcolor='#f5f5f5', bordercolor='#000000', borderwidth=2))
