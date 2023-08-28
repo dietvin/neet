@@ -21,6 +21,7 @@ class Processor:
     def __init__(self, in_path1, basename1, out_path, ref_path, in_path2, basename2,
                  num_reads,
                  perc_mismatched,
+                 perc_mismatched_alt,
                  perc_deletion,
                  mean_quality,
                  genomic_region,
@@ -39,6 +40,7 @@ class Processor:
 
         self.optional_args = {"num_reads": num_reads,
                               "perc_mismatch": perc_mismatched,
+                              "perc_mismatch_alt": perc_mismatched_alt,
                               "perc_deletion": perc_deletion,
                               "mean_quality": mean_quality,
                               "genomic_region": genomic_region,
@@ -196,7 +198,12 @@ def setup_parser() -> argparse.ArgumentParser:
     parser.add_argument('-n', '--num_reads', type=hs.positive_int, required=False,
                         help='Filter by minimum number of reads at a position')
     parser.add_argument('-p', '--perc_mismatched', type=hs.float_between_zero_and_one, required=False, default=0,
-                        help='Filter by minimum fraction of mismatched/deleted/inserted bases')
+                        help='Filter by minimum fraction of mismatched reads.')
+    parser.add_argument('-pa', '--perc_mismatched_alt', type=hs.float_between_zero_and_one, required=False,
+                        help="""
+                            Filter by minimum fraction of mismatched. Relative values measured on only the number of matched/mismatched reads without
+                            deletion and reference skip rate.
+                            """)
     parser.add_argument('-d', '--perc_deletion', type=hs.float_between_zero_and_one, required=False,
                         help='Filter by minimum percentage of deleted bases')
     parser.add_argument('-q', '--mean_quality', type=hs.positive_float, required=False,
@@ -210,12 +217,6 @@ def setup_parser() -> argparse.ArgumentParser:
                             """)
     parser.add_argument('-t', '--num_processes', type=int, required=False, default=4,
                         help='Number of threads to use for processing.')
-    parser.add_argument('--coverage_alt', action="store_true", 
-                        help="""
-                            Specify which approach should be used to calculate the number of reads a given position.
-                            Default: use coverage as calculated by samtools mpileup (i.e. #A+#C+#G+#T+#del).
-                            Alternative: calculates coverage considering only matched and mismatched reads, not considering deletions
-                            """)
     
     ### Neighbour search arguments ###
     parser.add_argument('-nw', '--window_size', type=int, required=False, default=2,
@@ -256,12 +257,12 @@ if __name__=="__main__":
                           args.basename2,
                           num_reads=args.num_reads, 
                           perc_mismatched=args.perc_mismatched,
+                          perc_mismatched_alt=args.perc_mismatched_alt,
                           perc_deletion=args.perc_deletion,
                           mean_quality=args.mean_quality,
                           genomic_region=args.genomic_region,
                           use_multiprocessing=args.use_multiprocessing,
                           num_processes=args.num_processes,
-                          coverage_alt=args.coverage_alt,
                           window_size=args.window_size,
                           neighbour_thresh=args.neighbour_thresh,
                           n_bins = args.n_bins,
