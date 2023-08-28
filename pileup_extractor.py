@@ -15,6 +15,7 @@ class FeatureExtractor:
     ref_sequences : Dict[str, str]
     filter_num_reads: int
     filter_perc_mismatch: float
+    filter_perc_mismatch_alt: float
     filter_mean_quality: float
     filter_genomic_region: Tuple[str, int, int] | None
     num_processes: int
@@ -29,6 +30,7 @@ class FeatureExtractor:
                  ref_path: str,
                  num_reads: int, 
                  perc_mismatch: float | None,
+                 perc_mismatch_alt: float | None,
                  perc_deletion: float | None,
                  mean_quality: float | None,
                  genomic_region: str | None,
@@ -46,6 +48,7 @@ class FeatureExtractor:
         # if one of the following arguments was not provided (i.e. arg=None), set variable to a value so nothing gets filtered out
         self.filter_num_reads = num_reads if num_reads is not None else 1
         self.filter_perc_mismatch = perc_mismatch if perc_mismatch else 0
+        self.filter_perc_mismatch_alt = perc_mismatch_alt if perc_mismatch_alt else 0
         self.filter_perc_deletion = perc_deletion if perc_deletion else 0
         self.filter_mean_quality = mean_quality if mean_quality else 0
         self.filter_genomic_region = self.extract_positional_info(genomic_region) if genomic_region else None
@@ -357,7 +360,7 @@ class FeatureExtractor:
             hs.print_update("Counting number of lines to process.")
             progress_bar = tqdm(desc=desc, total=hs.get_num_lines(in_file))
 
-            header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_ref_skip\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tn_ref_skip_rel\tperc_mismatch\tmotif\tq_mean\tq_std\tneighbour_error_pos\n"
+            header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_ref_skip\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tn_ref_skip_rel\tperc_mismatch\tperc_mismatch_alt\tmotif\tq_mean\tq_std\tneighbour_error_pos\n"
             o.write(header)
             
             nb_size_full = 1 + 2 * self.window_size
@@ -443,10 +446,8 @@ class FeatureExtractor:
                 return ""
 
         # extract coverage and filter by number of reads if the standard coverage option is used 
-        n_reads = 0 # only to make pylance happy... not really needed
-        if not self.use_alt_coverage:
-            n_reads = int(line[3])
-            if n_reads < self.filter_num_reads: return ""
+        n_reads = int(line[3])
+        if n_reads < self.filter_num_reads: return ""
 
         # get reference sequence 
         try:
@@ -465,22 +466,25 @@ class FeatureExtractor:
         # could use if else statement and get the other case down here, but then 
         # the count will be calculated each time, potentially wasting time in case the 
         # filter_num_reads is used
-        if self.use_alt_coverage:
-            n_reads = count["a"]+count["c"]+count["g"]+count["t"]
-            if n_reads < self.filter_num_reads: return ""
+        n_reads_alt = count["a"]+count["c"]+count["g"]+count["t"]
 
         # get relative number of A, C, G and T counts
         count_rel = self.get_relative_count(count, n_reads)
+        count_rel_alt = self.get_relative_count(count, n_reads_alt)
 
         # filter by percentage of deletions
         if count_rel["del"] < self.filter_perc_deletion: return ""
 
         # get allele fraction
         perc_mismatch = self.get_mismatch_perc(count_rel, ref_base)
+        perc_mismatch_alt = self.get_mismatch_perc(count_rel_alt, ref_base)
 
         # filter by perc_mismatch
         if perc_mismatch < self.filter_perc_mismatch:
             return ""
+        if perc_mismatch_alt < self.filter_perc_mismatch_alt:
+            return ""
+
 
         # get majority base
         majority_base = self.get_majority_base(count)
@@ -488,7 +492,7 @@ class FeatureExtractor:
         # get 11b motif
         motif = self.get_motif(chr, site, ref, k=5)
 
-        out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["t"]}\t{count["del"]}\t{count["ins"]}\t{count["ref_skip"]}\t{count_rel["a"]}\t{count_rel["c"]}\t{count_rel["g"]}\t{count_rel["t"]}\t{count_rel["del"]}\t{count_rel["ins"]}\t{count_rel["ref_skip"]}\t{perc_mismatch}\t{motif}\t{quality_mean}\t{quality_std}\n'
+        out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["t"]}\t{count["del"]}\t{count["ins"]}\t{count["ref_skip"]}\t{count_rel["a"]}\t{count_rel["c"]}\t{count_rel["g"]}\t{count_rel["t"]}\t{count_rel["del"]}\t{count_rel["ins"]}\t{count_rel["ref_skip"]}\t{perc_mismatch}\t{perc_mismatch_alt}\t{motif}\t{quality_mean}\t{quality_std}\n'
         return out
 
     def remove_indels(self, pileup_string: str) -> str:
@@ -871,7 +875,12 @@ if __name__ == "__main__":
     parser.add_argument('-n', '--num_reads', type=positive_int, required=False,
                         help='Filter by minimum number of reads at a position')
     parser.add_argument('-p', '--perc_mismatched', type=float_between_zero_and_one, required=False,
-                        help='Filter by minimum fraction of mismatched/deleted/inserted bases')
+                        help='Filter by minimum fraction of mismatched reads.')
+    parser.add_argument('-pa', '--perc_mismatched_alt', type=float_between_zero_and_one, required=False,
+                        help="""
+                            Filter by minimum fraction of mismatched. Relative values measured on only the number of matched/mismatched reads without
+                            deletion and reference skip rate.
+                            """)
     parser.add_argument('-d', '--perc_deletion', type=float_between_zero_and_one, required=False,
                         help='Filter by minimum percentage of deleted bases')
     parser.add_argument('-q', '--mean_quality', type=positive_float, required=False,
@@ -909,6 +918,7 @@ if __name__ == "__main__":
     feature_extractor = FeatureExtractor(args.input, args.output, args.reference,
                                          num_reads=args.num_reads, 
                                          perc_mismatch=args.perc_mismatched,
+                                         perc_mismatch_alt=args.perc_mismatched_alt,
                                          perc_deletion=args.perc_deletion,
                                          mean_quality=args.mean_quality,
                                          genomic_region=args.genomic_region,
