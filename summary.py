@@ -34,9 +34,10 @@ class SummaryCreator:
     input_path: str
     output_path: str
     n_bins: int|None
+    perc_mis_col: str
     data: pd.DataFrame
 
-    def __init__(self, in_path: str, out_path: str, n_bins: int|None = 5000) -> None:
+    def __init__(self, in_path: str, out_path: str, n_bins: int|None = 5000, use_perc_mismatch_alt: bool = False) -> None:
         """
         Initializes a SummaryCreator object.
 
@@ -47,7 +48,8 @@ class SummaryCreator:
         """
         self.process_paths(in_path, out_path)
         self.n_bins = n_bins
-
+        self.perc_mis_col = "perc_mismatch_alt" if use_perc_mismatch_alt else "perc_mismatch"
+        
     #################################################################################################################
     #                                   Functions called during initialization                                      #
     #################################################################################################################
@@ -286,14 +288,14 @@ class SummaryCreator:
         Returns:
             Dict[str, Tuple[np.ndarray, np.ndarray]]: Processed data for mismatch summary.
         """
-        data = self.data[["ref_base", "majority_base", "perc_mismatch", "n_del_rel", "n_ins_rel", "n_ref_skip_rel"]]
+        data = self.data[["ref_base", "majority_base", self.perc_mis_col, "n_del_rel", "n_ins_rel", "n_ref_skip_rel"]]
         data_mis = data.loc[data["ref_base"]!=data["majority_base"]]
         data_mat = data.loc[data["ref_base"]==data["majority_base"]]
         del(data)
 
         data_dict = {}
         data_dict["overall"] = (data_mat.shape[0], data_mis.shape[0])
-        for i, j in zip(["mis_rate", "del_rate", "ins_rate", "ref_skip_rate"], ["perc_mismatch", "n_del_rel", "n_ins_rel", "n_ref_skip_rel"]):
+        for i, j in zip(["mis_rate", "del_rate", "ins_rate", "ref_skip_rate"], [self.perc_mis_col, "n_del_rel", "n_ins_rel", "n_ref_skip_rel"]):
             data_dict[i] = (self.bin_data(data_mat[j], self.n_bins), self.bin_data(data_mis[j], self.n_bins)) if self.n_bins else (data_mat[j].to_numpy(), data_mis[j].to_numpy())
 
         return data_dict
@@ -322,7 +324,7 @@ class SummaryCreator:
         pie_data = pie_data["count"].to_numpy()
 
         # prepare data for error type distributions boxplots
-        box_data = self.data.loc[(self.data["ref_base"] != self.data["majority_base"]) & (self.data["ref_base"] != "N")].rename(columns={"perc_mismatch": "Mismatch", "n_del_rel": "Deletion", "n_ins_rel": "Insertion", "n_ref_skip_rel": "Reference skip"})
+        box_data = self.data.loc[(self.data["ref_base"] != self.data["majority_base"]) & (self.data["ref_base"] != "N")].rename(columns={self.perc_mis_col: "Mismatch", "n_del_rel": "Deletion", "n_ins_rel": "Insertion", "n_ref_skip_rel": "Reference skip"})
         box_data = box_data.melt(value_vars=["Mismatch", "Deletion", "Insertion", "Reference skip"], var_name="Error type", id_vars=["ref_base", "majority_base"])
         box_data["mismatch_type"] = [f"{i} - {j}" for i,j in zip(box_data["ref_base"], box_data["majority_base"])]
 
@@ -335,7 +337,7 @@ class SummaryCreator:
         Returns:
             pd.DataFrame: Processed data for motif summary.
         """
-        data = self.data[["ref_base", "motif", "perc_mismatch", "n_del_rel", "n_ins_rel", "n_ref_skip_rel"]]
+        data = self.data[["ref_base", "motif", self.perc_mis_col, "n_del_rel", "n_ins_rel", "n_ref_skip_rel"]]
         motif_center_idx = len(data.motif[0]) //2
         data.loc[:, "motif_3b"] = data["motif"].map(lambda x: x[motif_center_idx-1:motif_center_idx+2])
         return data
@@ -507,12 +509,12 @@ class SummaryCreator:
         """
         def create_motif_trace(data: pd.DataFrame, center_base: str, showlegend: bool = False):
             data = data.loc[(data.ref_base == center_base) & (~data.motif_3b.isin(["AAA", "AAC", "AAG", "AAT", "CAA", "GAA", "TAA", "CCC", "CCA", "CCG", "CCT", "ACC", "GCC", "TCC", "GGG", "GGA", "GGC", "GGT", "AGG", "CGG", "TGG", "TTT", "TTA", "TTC", "TTG", "ATT", "CTT", "GTT"]))]
-            data = data.melt(value_vars=["perc_mismatch", "n_del_rel", "n_ins_rel"], var_name="Error type", id_vars=["ref_base","motif_3b"])
+            data = data.melt(value_vars=[self.perc_mis_col, "n_del_rel", "n_ins_rel"], var_name="Error type", id_vars=["ref_base","motif_3b"])
 
             d = []
             for motif in data["motif_3b"].unique():
                 if self.n_bins:
-                    d_m_tmp = pd.DataFrame({"value": self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="perc_mismatch"), "value"], num_segments=self.n_bins),
+                    d_m_tmp = pd.DataFrame({"value": self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]==self.perc_mis_col), "value"], num_segments=self.n_bins),
                                             "motif": motif,
                                             "Error type": "Mismatch"})
                     d_d_tmp = pd.DataFrame({"value": self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_del_rel"), "value"], num_segments=self.n_bins),
@@ -522,7 +524,7 @@ class SummaryCreator:
                                             "motif": motif,
                                             "Error type": "Insertion"}) 
                 else:
-                    d_m_tmp = pd.DataFrame({"value": data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="perc_mismatch"), "value"],
+                    d_m_tmp = pd.DataFrame({"value": data.loc[(data["motif_3b"]==motif) & (data["Error type"]==self.perc_mis_col), "value"],
                                             "motif": motif,
                                             "Error type": "Mismatch"})
                     d_d_tmp = pd.DataFrame({"value": data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_del_rel"), "value"],

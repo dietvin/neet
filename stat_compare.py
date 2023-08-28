@@ -51,6 +51,7 @@ class StatComparer:
                       "n_ins_rel": [],
                       "n_ref_skip_rel": [],
                       "perc_mismatch": [],
+                      "perc_mismatch_alt": [],
                       "q_mean": [],
                       "chrom": [],
                       "is_mismatch": []}
@@ -62,6 +63,7 @@ class StatComparer:
                       "n_ins_rel": [],
                       "n_ref_skip_rel": [],
                       "perc_mismatch": [],
+                      "perc_mismatch_alt": [],
                       "q_mean": [],
                       "chrom": [],
                       "is_mismatch": []}
@@ -206,7 +208,7 @@ class StatComparer:
         results = {}
         for col in ["n_a_rel", "n_c_rel", "n_g_rel", "n_t_rel", 
                     "n_del_rel", "n_ins_rel", "n_ref_skip_rel", 
-                    "perc_mismatch", "q_mean"]:
+                    "perc_mismatch", "perc_mismatch_alt", "q_mean"]:
             try:
                 results[col] = wilcoxon(set1[col], set2[col])[1]
             except ValueError as e:
@@ -450,7 +452,7 @@ class StatComparer:
             return ''
         data.rename(columns={"n_a_rel": "Fraction A", "n_c_rel": "Fraction C", "n_g_rel": "Fraction G", "n_t_rel": "Fraction T",
                              "n_del_rel": "Deletion Rate", "n_ins_rel": "Insertion Rate", "n_ref_skip_rel": "Reference skip Rate", "perc_mismatch": "Mismatch Rate",
-                             "q_mean": "Mean Q-score"}, inplace=True)
+                             "perc_mismatch_alt": "Mismatch Rate (alt.)", "q_mean": "Mean Q-score"}, inplace=True)
         return data.style.applymap(color_background_font).to_html(float_format=lambda x: '{:e}'.format(x))
 
     def main(self) -> None:
