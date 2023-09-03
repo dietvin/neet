@@ -1,5 +1,5 @@
 from typing import List, Dict, Any, Tuple
-import os, warnings, sys, datetime
+import os, warnings, sys, datetime, argparse
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -535,12 +535,45 @@ class PositionExtractor:
         self.write_bed_files()
         self.create_summary()
 
+def setup_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="Neet - position extractor", description="Identify and map positions of interest between two samples.")
+    parser.add_argument('-i', '--sample1', type=str, required=True,
+                        help="""
+                            Path to the input file(s). If replicates are available, specify paths comma-separated (<repl1.tsv>,<repl2.tsv>,...).
+                            Must be of type tsv, as returned by the PileupExtractor.
+                            """)
+    parser.add_argument('-bn', '--basename', type=str, required=False, default="sample1",
+                        help="""
+                            Basename of the given sample. Used to create the pileup and extracted features files. Default: 'sample1'
+                            """)
+    parser.add_argument('-i2', '--sample2', type=str, required=False,
+                        help="""
+                            Path to the input file(s) from a second sample. If replicates are available, specify paths comma-separated (<repl1.tsv>,<repl2.tsv>,...).
+                            Must be of type tsv, as returned by the PileupExtractor. 
+                            """)
+    parser.add_argument('-bn2', '--basename2', type=str, required=False, default="sample2",
+                        help="""
+                            Basename of the second sample. Used to create the pileup and extracted features files. Default: 'sample2'
+                            """)
+    parser.add_argument('-o', '--output', type=str, required=True,
+                        help="""
+                            Path to output a output directory, in which all output files will be stored.
+                            """)
+    parser.add_argument('-r', '--reference', type=str, required=True, help='Path to the reference file')
+    return parser
+
 
 
 if __name__ == "__main__":
-    posextr = PositionExtractor(in_paths_1="/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/cytoplasm1_extracted.tsv,/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/cytoplasm2_extracted.tsv,/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/cytoplasm3_extracted.tsv",
-                                in_paths_2="/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/nucleus1_extracted.tsv,/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/nucleus2_extracted.tsv,/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/nucleus3_extracted.tsv",
-                                out_dir="/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/extracted_pos",
-                                ref_path="/home/vincent/masterthesis/data/nuc_cyt_3rep/GRCh38_clean.genome.fa",
-                                label_1="cytoplasm", label_2="nucleus")
+    parser = setup_parser()
+    args = parser.parse_args()
+
+    posextr = PositionExtractor(in_paths_1=args.sample1, in_paths_2=args.sample2, out_dir=args.ouput, ref_path=args.reference, label_1=args.basename, label_2=args.basename2)
     posextr.main()
+    
+    # posextr = PositionExtractor(in_paths_1="/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/cytoplasm1_extracted.tsv,/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/cytoplasm2_extracted.tsv,/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/cytoplasm3_extracted.tsv",
+    #                             in_paths_2="/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/nucleus1_extracted.tsv,/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/nucleus2_extracted.tsv,/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/nucleus3_extracted.tsv",
+    #                             out_dir="/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/extracted_pos",
+    #                             ref_path="/home/vincent/masterthesis/data/nuc_cyt_3rep/GRCh38_clean.genome.fa",
+    #                             label_1="cytoplasm", label_2="nucleus")
+    # posextr.main()
