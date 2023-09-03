@@ -182,6 +182,6 @@ if __name__=="__main__":
     elif args.subcommand == "add_bed_info":
         add_bed_info(args.input, args.bed, args.output)
     elif args.subcommand == "filter_tsv":
-        filter_with_bed(args.input, args.bed, args.ouput)
+        filter_with_bed(args.input, args.bed, args.output)
     else:
         parser.print_help()
