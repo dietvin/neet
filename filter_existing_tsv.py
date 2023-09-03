@@ -1,5 +1,5 @@
 import argparse, io, sys, re
-from helper_functions import check_get_in_path, check_get_out_path, get_num_lines
+import helper_functions as hs
 from typing import List, Tuple, Callable
 from tqdm import tqdm
 
@@ -40,14 +40,14 @@ class Filter:
     output_path: str
 
     chr: str
-    site: List[int]
-    n_reads: Tuple[int, Callable[[int, int], bool]]
-    base: List[str]
+    site: List[int] | None
+    n_reads: Tuple[int, Callable[[int, int], bool]] | None
+    base: List[str] | None
     mismatched: bool
-    perc_mismatched: Tuple[float, Callable[[float, float], bool]]
-    q_score: Tuple[float, Callable[[float, float], bool]]
-    from_stdin: bool
-    to_stdout: bool
+    mismatch_types: List[Tuple[str, str]] | None
+    perc_mismatched: Tuple[float, Callable[[float, float], bool]] | None
+    perc_mismatched_alt: Tuple[float, Callable[[float, float], bool]] | None
+    q_score: Tuple[float, Callable[[float, float], bool]] | None
 
     OPERATORS = {
         "<": lambda x, y: x < y,
@@ -65,7 +65,9 @@ class Filter:
                  n_reads: str, 
                  base: str, 
                  mismatched: bool, 
+                 mismatch_types: str,
                  perc_mismatched: str, 
+                 perc_mismatched_alt: str,
                  motif: str, 
                  q_score: str) -> None:
         """
@@ -83,25 +85,22 @@ class Filter:
             motif (str): Filter by motif around position.
             q_score (str): Filter by mean quality.
         """
-        self.input_path = check_get_in_path(input_path, 
-                                            exp_extensions=[".tsv"], 
-                                            warn_expected_text="Expected .tsv file") if input_path else None
-        self.output_path = check_get_out_path(output_path, self.input_path) if output_path else None
-
-        self.from_stdin = False if input_path else True
-        self.to_stdout = False if output_path else True
+        self.input_path = hs.check_get_in_path(input_path, exp_extensions=[".tsv"], warn_expected_text="Expected .tsv file")
+        self.output_path = hs.check_get_out_path(output_path, self.input_path)
 
         self.chr = chr
         self.site = self.get_sites(site)
         self.n_reads = self.get_n_reads(n_reads)
         self.base = self.get_bases(base)
         self.mismatched = mismatched
+        self.mismatch_types = self.get_mismatch_types(mismatch_types)
         self.perc_mismatched = self.get_val_fun_float(perc_mismatched)
+        self.perc_mismatched_alt = self.get_val_fun_float(perc_mismatched_alt)
         self.motif = motif.upper() if motif else None
         self.q_score = self.get_val_fun_float(q_score)
         
 
-    def get_sites(self, site_str: str) -> List[int]:
+    def get_sites(self, site_str: str) -> List[int]|None:
         """
         Extracts site IDs from a string representation of sites.
 
@@ -133,7 +132,7 @@ class Filter:
 
         return site                
 
-    def get_n_reads(self, n_reads_str: str) -> Tuple[int, Callable[[int, int], bool]]:
+    def get_n_reads(self, n_reads_str: str) -> Tuple[int, Callable[[int, int], bool]]|None:
         """
         Extracts the number of reads and the corresponding comparison function from the given string.
 
@@ -163,7 +162,7 @@ class Filter:
                 raise Exception(f"Could not extract information from given string '{n_reads_str}'")
         return value, fun
     
-    def get_bases(self, base_str: str) -> List[str]:
+    def get_bases(self, base_str: str) -> List[str]|None:
         """
         Extracts the bases from the given string.
 
@@ -188,7 +187,35 @@ class Filter:
                                 (Allowed bases: A, C, G, T, N)")
         return bases
 
-    def get_val_fun_float(self, string: str) -> Tuple[float, Callable[[float, float], bool]]:
+    def get_mismatch_types(self, mismatch_type_str: str) -> List[Tuple[str, str]]|None:
+        """
+        Extract given mismatch type from string format [REFBASE]-[CALLEDBASE],[REFBASE]-[CALLEDBASE],... and transforms it into a tuple.
+
+        Args:
+            mismatch_type_str (str): The string representing the mismatch type.
+
+        Returns:
+            List[Tuple[str, str]]|None: A list containign tuples with all given mismatch types
+            None if given string is None
+                
+        Raises:
+            Exception: If the string does not match any of the supported formats.
+
+        """
+        if mismatch_type_str is None: 
+            return None
+        
+        types = []
+        mismatch_types = mismatch_type_str.split(",")
+        for mismatch_type in mismatch_types:
+            ref_base, called_base = mismatch_type.split("-")
+            if (len(ref_base)>1) | (len(called_base)>1):
+                raise Exception(f"Given mismatch type is invalid: {mismatch_type}. Only one character before and after '-' is allowed.")
+            types.append((ref_base.upper(), called_base.upper()))
+        return types
+            
+
+    def get_val_fun_float(self, string: str) -> Tuple[float, Callable[[float, float], bool]]|None:
         """
         Extracts the percentage of mismatched values / mean q_score and the corresponding comparison function
         from the given string.
@@ -224,44 +251,25 @@ class Filter:
         """
         Filters the TSV file based on the specified criteria.
         """
-        out = None if self.to_stdout else open(self.output_path, "w")
-        
-        if not self.to_stdout:
-            n_lines = get_num_lines(self.input_path) if self.input_path else None
+        with open(self.input_path, "r") as file, open(self.output_path, "w") as out:
+            n_lines = hs.get_num_lines(self.input_path)
             progress_bar = tqdm(desc="Filtering lines", total=n_lines-1)
-        
-        with open(self.input_path, "r") as file:
+            
             header = next(file)
-            self.output_line(header, out)
+            out.write(header)
             for row in file:
                 if self.passes_filter(row):
-                    self.output_line(row, out)
-                if not self.to_stdout:
-                    progress_bar.update()
-        
-        if not self.to_stdout:
-            out.close()
+                    out.write(row)
+                progress_bar.update()
+            
             progress_bar.close()
 
-    def output_line(self, line: str, output: io.TextIOWrapper = None) -> None:
-        """
-        Writes a line to the output file or stdout.
-
-        Args:
-            line (str): The line to be written.
-            output (io.TextIOWrapper, optional): The output file. Defaults to None.
-        """
-        if output:
-            output.write(line)
-        else:
-            sys.stdout.write(line)
-
-    def passes_filter(self, row: str) -> bool:
+    def passes_filter(self, row_str: str) -> bool:
         """
         Checks if a row passes the specified filter criteria.
 
         Args:
-            row (str): A row from the TSV file.
+            row_str (str): A row from the TSV file.
 
         Returns:
             bool: True if the row passes the filter, False otherwise.
@@ -273,15 +281,16 @@ class Filter:
 
             return fun(val, val_ref)
 
-        row = row.strip("\n").split("\t")
+        row = row_str.strip("\n").split("\t")
         chr = row[0]
         site = int(row[1])
         n_reads = int(row[2])
         ref_base = row[3]
         maj_base = row[4]
-        perc_mismatched = float(row[17])
-        motif = row[18]
-        q_score = float(row[19])
+        perc_mismatched = float(row[19])
+        perc_mismatched_alt = float(row[20])
+        motif = row[21]
+        q_score = float(row[22])
 
         if self.chr:
             if chr != self.chr: return False
@@ -293,8 +302,14 @@ class Filter:
             if ref_base not in self.base: return False
         if self.mismatched:
             if maj_base == ref_base: return False
+        if self.mismatch_types:
+            for mismatch_type in self.mismatch_types:
+                if (ref_base!=mismatch_type[0]) | (maj_base!=mismatch_type[1]):
+                    return False
         if self.perc_mismatched:
             if not check_func(perc_mismatched, self.perc_mismatched): return False
+        if self.perc_mismatched_alt:
+            if not check_func(perc_mismatched_alt, self.perc_mismatched_alt): return False
         if self.motif:
             if motif != self.motif: return False
         if self.q_score:
@@ -304,9 +319,9 @@ class Filter:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog="TSV filter",
                                      description="Filter TSV output from PileupExtractor by given values.")
-    parser.add_argument("-i", "--input", type=str, required=False,
+    parser.add_argument("-i", "--input", type=str, required=True,
                         help="Path to input TSV file. If none is given, read from stdin.")
-    parser.add_argument("-o", "--output", type=str, required=False,
+    parser.add_argument("-o", "--output", type=str, required=True,
                         help="Path to outptu TSV file. If none is given, write from stdout.")
     parser.add_argument("-c", "--chromosome", type=str, required=False,
                         help="Filter by given chromosome.")
@@ -318,8 +333,12 @@ if __name__ == "__main__":
                         help="Filter by reference base(s). To filter single base (e.g. A): 'A'; multiple bases (e.g. A, C & T): 'A,C,T'")
     parser.add_argument("-m", "--mismatched", action="store_true", required=False,
                         help="Filter mismatched positions.")
+    parser.add_argument("-mt", "--mismatch_types", type=str, required=False,
+                        help="Filter one or more specific types of mismatches. E.g: filter A-to-T mismatches --> 'A-T'; filter A-to-T and C-to-T mismatches --> 'A-T,C-T'")
     parser.add_argument("-p", "--percent_mismatched", type=str, required=False,
                         help="Filter by percent of mismatched reads. To filter perc_mismatched >= x: 'x'; perc_mismatched <= x: '<=x'")
+    parser.add_argument("-pa", "--percent_mismatched_alt", type=str, required=False,
+                        help="Filter by percent of mismatched reads using the alternative measure. To filter perc_mismatched >= x: 'x'; perc_mismatched <= x: '<=x'")
     parser.add_argument("-f", "--motif", type=str, required=False,
                         help="Filter by motif around position.")
     parser.add_argument("-q", "--q_score", type=str, required=False,
@@ -334,7 +353,9 @@ if __name__ == "__main__":
                     n_reads=args.n_reads,
                     base=args.base,
                     mismatched=args.mismatched,
+                    mismatch_types=args.mismatch_types,
                     perc_mismatched=args.percent_mismatched,
+                    perc_mismatched_alt=args.percent_mismatched_alt,
                     motif=args.motif,
                     q_score=args.q_score)
     filter.filter_tsv()
