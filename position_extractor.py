@@ -568,7 +568,7 @@ if __name__ == "__main__":
     parser = setup_parser()
     args = parser.parse_args()
 
-    posextr = PositionExtractor(in_paths_1=args.sample1, in_paths_2=args.sample2, out_dir=args.ouput, ref_path=args.reference, label_1=args.basename, label_2=args.basename2)
+    posextr = PositionExtractor(in_paths_1=args.sample1, in_paths_2=args.sample2, out_dir=args.output, ref_path=args.reference, label_1=args.basename, label_2=args.basename2)
     posextr.main()
     
     # posextr = PositionExtractor(in_paths_1="/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/cytoplasm1_extracted.tsv,/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/cytoplasm2_extracted.tsv,/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/cytoplasm3_extracted.tsv",
