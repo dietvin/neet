@@ -6,7 +6,7 @@ from plotly.subplots import make_subplots
 from plotly.io import to_html
 import helper_functions as hs
 
-import os, warnings, sys, datetime
+import os, warnings, sys, datetime, argparse
 from typing import List, Tuple, Dict
 
 class SummaryCreator:
@@ -868,5 +868,26 @@ class SummaryCreator:
             o.write(template)
 
 if __name__=="__main__":
-    sc = SummaryCreator("/home/vincent/masterthesis/data/45s_rrna/processed/45s_cytoplasm_extracted.tsv", "/home/vincent/masterthesis/data/45s_rrna/processed/", None)
+    parser = argparse.ArgumentParser(prog="Neet - summary creator", description="Create overview in HTML format containing interactive plots.")
+    parser.add_argument('-i', '--input', type=str, required=True,
+                        help="""
+                            Path to the input TSV file. 
+                            """)
+    parser.add_argument('-o', '--output', type=str, required=True,
+                        help="""
+                            Path to output a output directory, in which all output files will be stored.
+                            """)
+    parser.add_argument('-b', '--n_bins', type=int, required=False, default=5000,
+                        help="""Number of bins to split the data into when creating the summary plots. This does not affect the extracted data.
+                            Used only to improve performance and clarity of the created plots. Note that setting the value to a low number 
+                            can lead to misleading results. Set to '-1' to disable binning. Default: 5000
+                            """)
+    parser.add_argument('--plot_alt', action="store_true", 
+                        help="""
+                            Specify whether to use the perc_mismatch or perc_mismatch_alt values for plot creation.
+                            """)
+    args = parser.parse_args()
+    sc = SummaryCreator(args.input, args.output, args.n_bins, args.plot_alt)
     sc.create_summary()
+
+    # sc = SummaryCreator("/home/vincent/masterthesis/data/45s_rrna/processed/45s_cytoplasm_extracted.tsv", "/home/vincent/masterthesis/data/45s_rrna/processed/", None)
