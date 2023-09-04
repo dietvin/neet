@@ -311,7 +311,8 @@ class SummaryCreator:
         matrix_data = self.data.loc[(self.data["ref_base"] != "N") & (self.data["majority_base"] != "N"),["ref_base", "majority_base"]]
         matrix_data = pd.crosstab(matrix_data['ref_base'], matrix_data['majority_base'])
         matrix_labels = matrix_data.copy()
-        for i in range(4):
+        print(matrix_data.shape)
+        for i in range(matrix_data.shape[0]):
             matrix_labels.iloc[i,i] = None
         matrix_max_mism = matrix_labels.max().max()
         matrix_labels = np.round(matrix_labels / matrix_labels.sum().sum() * 100, 2).astype(str)
@@ -346,6 +347,21 @@ class SummaryCreator:
     #                                             Plotting functions                                             #
     ##############################################################################################################
 
+    def create_error_placeholder(self, e: Exception):
+        """
+        Creates a placeholder plot in case there is an error during creation.
+        Displays the error message.
+        """
+        fig = self.update_plot(make_subplots(rows=1, cols=1))
+        fig.add_trace(go.Scatter(x=[0], y=[0], mode='text', text=[f"An error occured: {str(e)}"]))
+        fig.update_layout(
+            dragmode=False,  # Disable panning
+            hovermode='closest',  # Maintain hover behavior
+            uirevision='true'  # Disable double-click autoscale
+        )
+        return fig
+
+
     def create_general_plot(self) -> str:
         """
         Creates and returns an HTML representation of the general summary plot.
@@ -353,23 +369,27 @@ class SummaryCreator:
         Returns:
             str: HTML representation of the plot.
         """
-        n_reads_data, quality_data = self.prepare_data_general()
+        try:
+            n_reads_data, quality_data = self.prepare_data_general()
 
-        fig = make_subplots(rows=1, cols=2, 
-                            subplot_titles=["Total coverage distribution", "Total quality distribtion"], 
-                            horizontal_spacing=0.1)
-        fig = self.update_plot(fig, width=1400)
-        fig.update_annotations(font_size=25) # subplot title sizes
+            fig = make_subplots(rows=1, cols=2, 
+                                subplot_titles=["Total coverage distribution", "Total quality distribtion"], 
+                                horizontal_spacing=0.1)
+            fig = self.update_plot(fig, width=1400)
+            fig.update_annotations(font_size=25) # subplot title sizes
 
-        fig.add_traces([go.Box(y=n_reads_data, name="Total"), go.Box(y=quality_data, name="Total")], rows=[1,1], cols=[1,2])
+            fig.add_traces([go.Box(y=n_reads_data, name="Total"), go.Box(y=quality_data, name="Total")], rows=[1,1], cols=[1,2])
 
-        fig.update_traces(line=dict(color="black"), 
-                        marker=dict(outliercolor="black"), 
-                        fillcolor="lightgrey")
-        fig.update_layout(showlegend=False)
-        fig.update_xaxes(showticklabels=False, ticks=None)
-        fig.update_yaxes(title_text="Coverage", row=1, col=1)
-        fig.update_yaxes(title_text="Mean quality", row=1, col=2)
+            fig.update_traces(line=dict(color="black"), 
+                            marker=dict(outliercolor="black"), 
+                            fillcolor="lightgrey")
+            fig.update_layout(showlegend=False)
+            fig.update_xaxes(showticklabels=False, ticks=None)
+            fig.update_yaxes(title_text="Coverage", row=1, col=1)
+            fig.update_yaxes(title_text="Mean quality", row=1, col=2)
+
+        except Exception as e:
+            fig = self.create_error_placeholder(e)
 
         return to_html(fig, include_plotlyjs=False)
     
@@ -380,33 +400,37 @@ class SummaryCreator:
         Returns:
             str: HTML representation of the plot.
         """
-        def custom_sort_key(item):
-            if item.isdigit():  # Check if the item is a digit
-                return (int(item),)  # Convert to integer and sort numerically
-            else:
-                return (float('inf'), item)  # Place non-digits at the end
+        try:
+            def custom_sort_key(item):
+                if item.isdigit():  # Check if the item is a digit
+                    return (int(item),)  # Convert to integer and sort numerically
+                else:
+                    return (float('inf'), item)  # Place non-digits at the end
 
-        n_pos_x, n_pos_y, chrom, n_reads, quality = self.prepare_data_chr()
+            n_pos_x, n_pos_y, chrom, n_reads, quality = self.prepare_data_chr()
 
-        fig = make_subplots(rows=3, cols=1, 
-                            specs=[[{"type": "bar"}], [{"type": "box"}], [{"type": "box"}]], 
-                            shared_xaxes=True, 
-                            vertical_spacing=0.05)
-        fig = self.update_plot(fig, height=1000, width=1400)
+            fig = make_subplots(rows=3, cols=1, 
+                                specs=[[{"type": "bar"}], [{"type": "box"}], [{"type": "box"}]], 
+                                shared_xaxes=True, 
+                                vertical_spacing=0.05)
+            fig = self.update_plot(fig, height=1000, width=1400)
 
-        fig.add_trace(go.Bar(x=n_pos_x, y=n_pos_y))
-        fig.add_trace(go.Box(x=chrom, y=n_reads), row=2, col=1)
-        fig.add_trace(go.Box(x=chrom, y=quality), row=3, col=1)
+            fig.add_trace(go.Bar(x=n_pos_x, y=n_pos_y))
+            fig.add_trace(go.Box(x=chrom, y=n_reads), row=2, col=1)
+            fig.add_trace(go.Box(x=chrom, y=quality), row=3, col=1)
 
-        fig.update_traces(marker=dict(color='lightgrey', line=dict(color='black', width=2)), selector=dict(type='bar'))
-        fig.update_traces(marker=dict(color="black", outliercolor="black", size=2), fillcolor="lightgrey", selector=dict(type='box'))
-        
-        fig.update_xaxes(categoryorder='array', categoryarray=sorted(n_pos_x, key=custom_sort_key))
-        fig.update_xaxes(title_text="Chromosome", row=3, col=1)
-        fig.update_yaxes(title_text="Number of positions", row=1, col=1)
-        fig.update_yaxes(title_text="Number of reads", row=2, col=1)
-        fig.update_yaxes(title_text="Mean quality", row=3, col=1)
-        fig.update_layout(showlegend=False)
+            fig.update_traces(marker=dict(color='lightgrey', line=dict(color='black', width=2)), selector=dict(type='bar'))
+            fig.update_traces(marker=dict(color="black", outliercolor="black", size=2), fillcolor="lightgrey", selector=dict(type='box'))
+            
+            fig.update_xaxes(categoryorder='array', categoryarray=sorted(n_pos_x, key=custom_sort_key))
+            fig.update_xaxes(title_text="Chromosome", row=3, col=1)
+            fig.update_yaxes(title_text="Number of positions", row=1, col=1)
+            fig.update_yaxes(title_text="Number of reads", row=2, col=1)
+            fig.update_yaxes(title_text="Mean quality", row=3, col=1)
+            fig.update_layout(showlegend=False)
+
+        except Exception as e:
+            fig = self.create_error_placeholder(e)
 
         return to_html(fig, include_plotlyjs=False)
 
@@ -417,47 +441,51 @@ class SummaryCreator:
         Returns:
             str: HTML representation of the plot.
         """
-        def boxplot(data: np.ndarray, group: str = "match", showlegend: bool = False):
-            if group == "match":
-                name = "Match"
-                fillcolor = "#4c72b0"
-                legendgroup = "match"
-            else:
-                name = "Mismatch"
-                fillcolor = "#dd8452"
-                legendgroup = "mism"
-            return go.Box(y=data, name=name, marker=dict(color="black", outliercolor="black", size=2), 
-                          fillcolor=fillcolor, showlegend=showlegend, legendgroup=legendgroup)
+        try:
+            def boxplot(data: np.ndarray, group: str = "match", showlegend: bool = False):
+                if group == "match":
+                    name = "Match"
+                    fillcolor = "#4c72b0"
+                    legendgroup = "match"
+                else:
+                    name = "Mismatch"
+                    fillcolor = "#dd8452"
+                    legendgroup = "mism"
+                return go.Box(y=data, name=name, marker=dict(color="black", outliercolor="black", size=2), 
+                            fillcolor=fillcolor, showlegend=showlegend, legendgroup=legendgroup)
 
-        data_processed = self.prepare_data_mism_general()
+            data_processed = self.prepare_data_mism_general()
 
-        fig = make_subplots(rows=1, cols=5, 
-                            specs=[[{"type": "box"}, {"type": "box"}, {"type": "box"}, {"type": "box"}, {"type": "pie"}]], 
-                            shared_yaxes=True,
-                            horizontal_spacing=0.01,
-                            column_titles=("Mismatch frequency", "Deletion frequency", "Insertion frequency", "Reference skip frequ.", None))
-        fig = self.update_plot(fig, height=600, width=1400)
+            fig = make_subplots(rows=1, cols=5, 
+                                specs=[[{"type": "box"}, {"type": "box"}, {"type": "box"}, {"type": "box"}, {"type": "pie"}]], 
+                                shared_yaxes=True,
+                                horizontal_spacing=0.01,
+                                column_titles=("Mismatch frequency", "Deletion frequency", "Insertion frequency", "Reference skip frequ.", None))
+            fig = self.update_plot(fig, height=600, width=1400)
 
-        for i, (dname, legend) in enumerate(zip(["mis_rate", "del_rate", "ins_rate", "ref_skip_rate"], [True, False, False, False]), start=1):
-            box_mat = boxplot(data_processed[dname][0], group="match", showlegend=legend)
-            box_mis = boxplot(data_processed[dname][1], group="mismatch", showlegend=legend)
-            fig.add_traces([box_mat, box_mis], rows=1, cols=i)
+            for i, (dname, legend) in enumerate(zip(["mis_rate", "del_rate", "ins_rate", "ref_skip_rate"], [True, False, False, False]), start=1):
+                box_mat = boxplot(data_processed[dname][0], group="match", showlegend=legend)
+                box_mis = boxplot(data_processed[dname][1], group="mismatch", showlegend=legend)
+                fig.add_traces([box_mat, box_mis], rows=1, cols=i)
 
-        pie = go.Pie(labels=["Match", "Mismatch"], 
-                    values=[data_processed["overall"][0], data_processed["overall"][1]], 
-                    hoverinfo='label+percent', 
-                    textinfo='value', 
-                    textfont_size=20, 
-                    marker=dict(colors=['#4c72b0', '#dd8452'], line=dict(color='#000000', width=2)), 
-                    showlegend=False,
-                    sort=False)
-        fig.add_trace(pie, row=1, col=5)
+            pie = go.Pie(labels=["Match", "Mismatch"], 
+                        values=[data_processed["overall"][0], data_processed["overall"][1]], 
+                        hoverinfo='label+percent', 
+                        textinfo='value', 
+                        textfont_size=20, 
+                        marker=dict(colors=['#4c72b0', '#dd8452'], line=dict(color='#000000', width=2)), 
+                        showlegend=False,
+                        sort=False)
+            fig.add_trace(pie, row=1, col=5)
 
-        fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, bgcolor='#f5f5f5', bordercolor='#000000', borderwidth=2))
-        fig.update_annotations(font_size=21)
-        fig.update_yaxes(showticklabels=False, ticks=None, row=1, col=2)
-        fig.update_yaxes(showticklabels=False, ticks=None, row=1, col=3)
-        fig.update_yaxes(showticklabels=False, ticks=None, row=1, col=4)
+            fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1, bgcolor='#f5f5f5', bordercolor='#000000', borderwidth=2))
+            fig.update_annotations(font_size=21)
+            fig.update_yaxes(showticklabels=False, ticks=None, row=1, col=2)
+            fig.update_yaxes(showticklabels=False, ticks=None, row=1, col=3)
+            fig.update_yaxes(showticklabels=False, ticks=None, row=1, col=4)
+    
+        except Exception as e:
+            fig = self.create_error_placeholder(e)
 
         return to_html(fig, include_plotlyjs=False)
 
@@ -468,36 +496,52 @@ class SummaryCreator:
         Returns:
             List[str]: List of HTML representations of the plots.
         """
-        matrix_data, matrix_labels, matrix_max_mism, pie_data, pie_labels, box_data = self.prepare_data_mism_types()
+        try:
+            matrix_data, matrix_labels, matrix_max_mism, pie_data, pie_labels, box_data = self.prepare_data_mism_types()
+        except Exception as e:
+            fig = self.create_error_placeholder(e)
+            fig = to_html(fig, include_plotlyjs=False)
+            return [fig, fig, fig]
 
-        fig = px.imshow(matrix_data, labels=dict(x="Called base", y="Reference base", color="Count"), zmin=0, zmax=1.2*matrix_max_mism, color_continuous_scale="portland")
-        fig = self.update_plot(fig, None, "Called base", "Reference base", width=800)
-        fig.update_traces(text=matrix_labels, texttemplate="%{text}")
-        fig.update_xaxes(fixedrange=True)
-        fig.update_yaxes(fixedrange=True)
-        matrix = to_html(fig, include_plotlyjs=False)
+        try:
+            fig = px.imshow(matrix_data, labels=dict(x="Called base", y="Reference base", color="Count"), zmin=0, zmax=1.2*matrix_max_mism, color_continuous_scale="portland")
+            fig = self.update_plot(fig, None, "Called base", "Reference base", width=800)
+            fig.update_traces(text=matrix_labels, texttemplate="%{text}")
+            fig.update_xaxes(fixedrange=True)
+            fig.update_yaxes(fixedrange=True)
+            matrix = to_html(fig, include_plotlyjs=False)
+        except Exception as e:
+            fig = self.create_error_placeholder(e)
+            matrix = to_html(fig, include_plotlyjs=False)
 
-        fig = go.Figure(go.Pie(labels=pie_labels, values=pie_data, 
-                    hoverinfo='label+percent', textinfo='value', textfont_size=20, 
-                    marker=dict(line=dict(color='#000000', width=2))))
-        fig = self.update_plot(fig, width=800)
-        fig.update_layout(legend=dict(bgcolor='#f5f5f5', bordercolor='#000000', borderwidth=2))
-        pie = to_html(fig, include_plotlyjs=False)
+        try:
+            fig = go.Figure(go.Pie(labels=pie_labels, values=pie_data, 
+                        hoverinfo='label+percent', textinfo='value', textfont_size=20, 
+                        marker=dict(line=dict(color='#000000', width=2))))
+            fig = self.update_plot(fig, width=800)
+            fig.update_layout(legend=dict(bgcolor='#f5f5f5', bordercolor='#000000', borderwidth=2))
+            pie = to_html(fig, include_plotlyjs=False)
+        except Exception as e:
+            fig = self.create_error_placeholder(e)
+            pie = to_html(fig, include_plotlyjs=False)
 
-        fig = go.Figure()
-        fig = self.update_plot(fig, ylab="Error rate", height=600, width=1400)
+        try:
+            fig = go.Figure()
+            fig = self.update_plot(fig, ylab="Error rate", height=600, width=1400)
 
+            for err_type, c in zip(["Mismatch", "Deletion", "Insertion", "Reference skip"], ["#55a868", "#c44e52", "#8172b3", "#937860"]):
+                d = box_data.loc[box_data["Error type"] == err_type]
+                fig.add_trace(go.Box(x=d["mismatch_type"], y=d["value"], name=err_type, 
+                                    line=dict(color="black"), 
+                                    marker=dict(outliercolor="black", size=2), 
+                                    fillcolor=c))
 
-        for err_type, c in zip(["Mismatch", "Deletion", "Insertion", "Reference skip"], ["#55a868", "#c44e52", "#8172b3", "#937860"]):
-            d = box_data.loc[box_data["Error type"] == err_type]
-            fig.add_trace(go.Box(x=d["mismatch_type"], y=d["value"], name=err_type, 
-                                line=dict(color="black"), 
-                                marker=dict(outliercolor="black", size=2), 
-                                fillcolor=c))
-
-        fig.update_layout(boxmode="group", legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1.0, bgcolor='#f5f5f5', bordercolor='#000000', borderwidth=2))
-        fig.update_xaxes(categoryorder='array', categoryarray=pie_labels)
-        box = to_html(fig, include_plotlyjs=False)
+            fig.update_layout(boxmode="group", legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1.0, bgcolor='#f5f5f5', bordercolor='#000000', borderwidth=2))
+            fig.update_xaxes(categoryorder='array', categoryarray=pie_labels)
+            box = to_html(fig, include_plotlyjs=False)
+        except Exception as e:
+            fig = self.create_error_placeholder(e)
+            box = to_html(fig, include_plotlyjs=False)
 
         return [matrix, pie, box]
 
@@ -508,79 +552,82 @@ class SummaryCreator:
         Returns:
             str: HTML representation of the plot.
         """
-        def create_motif_trace(data: pd.DataFrame, center_base: str, showlegend: bool = False):
-            data = data.loc[(data.ref_base == center_base) & (~data.motif_3b.isin(["AAA", "AAC", "AAG", "AAT", "CAA", "GAA", "TAA", "CCC", "CCA", "CCG", "CCT", "ACC", "GCC", "TCC", "GGG", "GGA", "GGC", "GGT", "AGG", "CGG", "TGG", "TTT", "TTA", "TTC", "TTG", "ATT", "CTT", "GTT"]))]
-            data = data.melt(value_vars=[self.perc_mis_col, "n_del_rel", "n_ins_rel"], var_name="Error type", id_vars=["ref_base","motif_3b"])
+        try:
+            def create_motif_trace(data: pd.DataFrame, center_base: str, showlegend: bool = False):
+                data = data.loc[(data.ref_base == center_base) & (~data.motif_3b.isin(["AAA", "AAC", "AAG", "AAT", "CAA", "GAA", "TAA", "CCC", "CCA", "CCG", "CCT", "ACC", "GCC", "TCC", "GGG", "GGA", "GGC", "GGT", "AGG", "CGG", "TGG", "TTT", "TTA", "TTC", "TTG", "ATT", "CTT", "GTT"]))]
+                data = data.melt(value_vars=[self.perc_mis_col, "n_del_rel", "n_ins_rel"], var_name="Error type", id_vars=["ref_base","motif_3b"])
 
-            d = []
-            for motif in data["motif_3b"].unique():
-                if self.n_bins:
-                    d_m_tmp = pd.DataFrame({"value": self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]==self.perc_mis_col), "value"], num_segments=self.n_bins),
-                                            "motif": motif,
-                                            "Error type": "Mismatch"})
-                    d_d_tmp = pd.DataFrame({"value": self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_del_rel"), "value"], num_segments=self.n_bins),
-                                            "motif": motif,
-                                            "Error type": "Deletion"}) 
-                    d_i_tmp = pd.DataFrame({"value": self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_ins_rel"), "value"], num_segments=self.n_bins),
-                                            "motif": motif,
-                                            "Error type": "Insertion"}) 
-                else:
-                    d_m_tmp = pd.DataFrame({"value": data.loc[(data["motif_3b"]==motif) & (data["Error type"]==self.perc_mis_col), "value"],
-                                            "motif": motif,
-                                            "Error type": "Mismatch"})
-                    d_d_tmp = pd.DataFrame({"value": data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_del_rel"), "value"],
-                                            "motif": motif,
-                                            "Error type": "Deletion"}) 
-                    d_i_tmp = pd.DataFrame({"value": data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_ins_rel"), "value"],
-                                            "motif": motif,
-                                            "Error type": "Insertion"}) 
-                d += [d_m_tmp, d_d_tmp, d_i_tmp]
+                d = []
+                for motif in data["motif_3b"].unique():
+                    if self.n_bins:
+                        d_m_tmp = pd.DataFrame({"value": self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]==self.perc_mis_col), "value"], num_segments=self.n_bins),
+                                                "motif": motif,
+                                                "Error type": "Mismatch"})
+                        d_d_tmp = pd.DataFrame({"value": self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_del_rel"), "value"], num_segments=self.n_bins),
+                                                "motif": motif,
+                                                "Error type": "Deletion"}) 
+                        d_i_tmp = pd.DataFrame({"value": self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_ins_rel"), "value"], num_segments=self.n_bins),
+                                                "motif": motif,
+                                                "Error type": "Insertion"}) 
+                    else:
+                        d_m_tmp = pd.DataFrame({"value": data.loc[(data["motif_3b"]==motif) & (data["Error type"]==self.perc_mis_col), "value"],
+                                                "motif": motif,
+                                                "Error type": "Mismatch"})
+                        d_d_tmp = pd.DataFrame({"value": data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_del_rel"), "value"],
+                                                "motif": motif,
+                                                "Error type": "Deletion"}) 
+                        d_i_tmp = pd.DataFrame({"value": data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_ins_rel"), "value"],
+                                                "motif": motif,
+                                                "Error type": "Insertion"}) 
+                    d += [d_m_tmp, d_d_tmp, d_i_tmp]
+                
+                d = pd.concat(d)
+                
+                traces = []
+                fillcolors = ["#55a868", "#c44e52", "#8172b3", "#937860"]
+                for i, er_type in enumerate(d["Error type"].unique()):
+                    d_err = d.loc[d["Error type"] == er_type]
+                    trace = go.Box(x=d_err["motif"], y=d_err["value"], name=er_type, 
+                                line=dict(color="black", width=1), 
+                                marker=dict(outliercolor="black", size=1), 
+                                fillcolor=fillcolors[i],
+                                legendgroup=i,
+                                showlegend=showlegend,
+                                offsetgroup=i)
+                    traces.append(trace)
 
-            d = pd.concat(d)
+                return traces
 
-            traces = []
-            fillcolors = ["#55a868", "#c44e52", "#8172b3", "#937860"]
-            for i, er_type in enumerate(d["Error type"].unique()):
-                d_err = d.loc[d["Error type"] == er_type]
-                trace = go.Box(x=d_err["motif"], y=d_err["value"], name=er_type, 
-                            line=dict(color="black", width=1), 
-                            marker=dict(outliercolor="black", size=1), 
-                            fillcolor=fillcolors[i],
-                            legendgroup=i,
-                            showlegend=showlegend,
-                            offsetgroup=i)
-                traces.append(trace)
+            data = self.prepare_data_motifs()
+            
+            x_order = {"A": ["CAC", "CAG", "CAT", "GAC", "GAG", "GAT", "TAC", "TAG", "TAT"], 
+                    "C": ["ACA", "ACG", "ACT", "GCA", "GCG", "GCT", "TCA", "TCG", "TCT"],
+                    "G": ["AGA", "AGC", "AGT", "CGA", "CGC", "CGT", "TGA", "TGC", "TGT"],
+                    "T": ["ATA", "ATC", "ATG", "CTA", "CTC", "CTG", "GTA", "GTC", "GTG"]}
 
-            return traces
+            fig = make_subplots(rows=2, cols=2, 
+                                specs=[[{"type": "box"}, {"type": "box"}], [{"type": "box"}, {"type": "box"}]], 
+                                shared_yaxes=True, 
+                                vertical_spacing=0.05, horizontal_spacing=0.05)
+            fig = self.update_plot(fig, height=900, width=1400)
 
-        data = self.prepare_data_motifs()
-        
-        x_order = {"A": ["CAC", "CAG", "CAT", "GAC", "GAG", "GAT", "TAC", "TAG", "TAT"], 
-                   "C": ["ACA", "ACG", "ACT", "GCA", "GCG", "GCT", "TCA", "TCG", "TCT"],
-                   "G": ["AGA", "AGC", "AGT", "CGA", "CGC", "CGT", "TGA", "TGC", "TGT"],
-                   "T": ["ATA", "ATC", "ATG", "CTA", "CTC", "CTG", "GTA", "GTC", "GTG"]}
+            fig.add_traces(create_motif_trace(data, "A", showlegend=True), rows=1, cols=1)
+            fig.add_traces(create_motif_trace(data, "C"), rows=1, cols=2)
+            fig.add_traces(create_motif_trace(data, "G"), rows=2, cols=1)
+            fig.add_traces(create_motif_trace(data, "T"), rows=2, cols=2)
 
-        fig = make_subplots(rows=2, cols=2, 
-                            specs=[[{"type": "box"}, {"type": "box"}], [{"type": "box"}, {"type": "box"}]], 
-                            shared_yaxes=True, 
-                            vertical_spacing=0.05, horizontal_spacing=0.05)
-        fig = self.update_plot(fig, height=900, width=1400)
+            fig.update_layout(boxmode="group", boxgroupgap=0, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='#f5f5f5', bordercolor='#000000', borderwidth=2))
 
-        fig.add_traces(create_motif_trace(data, "A", showlegend=True), rows=1, cols=1)
-        fig.add_traces(create_motif_trace(data, "C"), rows=1, cols=2)
-        fig.add_traces(create_motif_trace(data, "G"), rows=2, cols=1)
-        fig.add_traces(create_motif_trace(data, "T"), rows=2, cols=2)
+            fig.update_xaxes(categoryorder='array', categoryarray=x_order["A"], row=1, col=1)
+            fig.update_xaxes(categoryorder='array', categoryarray=x_order["C"], row=1, col=2)
+            fig.update_xaxes(title = "3bp Motif", categoryorder='array', categoryarray=x_order["G"], row=2, col=1)
+            fig.update_xaxes(title = "3bp Motif", categoryorder='array', categoryarray=x_order["T"], row=2, col=2)
 
-        fig.update_layout(boxmode="group", boxgroupgap=0, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='#f5f5f5', bordercolor='#000000', borderwidth=2))
+            fig.update_yaxes(title = "Error rate", row=1, col=1)
+            fig.update_yaxes(title = "Error rate", row=2, col=1)
 
-        fig.update_xaxes(categoryorder='array', categoryarray=x_order["A"], row=1, col=1)
-        fig.update_xaxes(categoryorder='array', categoryarray=x_order["C"], row=1, col=2)
-        fig.update_xaxes(title = "3bp Motif", categoryorder='array', categoryarray=x_order["G"], row=2, col=1)
-        fig.update_xaxes(title = "3bp Motif", categoryorder='array', categoryarray=x_order["T"], row=2, col=2)
-
-        fig.update_yaxes(title = "Error rate", row=1, col=1)
-        fig.update_yaxes(title = "Error rate", row=2, col=1)
-
+        except Exception as e:
+            fig = self.create_error_placeholder(e)            
         return to_html(fig, include_plotlyjs=False)
 
 
