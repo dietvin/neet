@@ -352,6 +352,7 @@ class SummaryCreator:
         Creates a placeholder plot in case there is an error during creation.
         Displays the error message.
         """
+        hs.print_update(f"An error occured: {str(e)}. Replacing plot with empty placeholder.")
         fig = self.update_plot(make_subplots(rows=1, cols=1))
         fig.add_trace(go.Scatter(x=[0], y=[0], mode='text', text=[f"An error occured: {str(e)}"]))
         fig.update_layout(
@@ -411,8 +412,7 @@ class SummaryCreator:
 
             fig = make_subplots(rows=3, cols=1, 
                                 specs=[[{"type": "bar"}], [{"type": "box"}], [{"type": "box"}]], 
-                                shared_xaxes=True, 
-                                vertical_spacing=0.05)
+                                shared_xaxes=True)
             fig = self.update_plot(fig, height=1000, width=1400)
 
             fig.add_trace(go.Bar(x=n_pos_x, y=n_pos_y))
