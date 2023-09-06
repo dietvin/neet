@@ -22,7 +22,7 @@ class SummaryCreator:
     Methods:
         __init__(self, in_path: str, out_path: str, n_bins: int|None) -> None:
             Initializes the SummaryCreator object.
-        process_paths(self, in_path: str, out_path: str) -> None:
+        process_path(self, in_path: str, out_path: str) -> None:
             Processes input and output paths.
         check_path(self, path: str, extensions: List[str]) -> None:
             Checks if the given path exists and has expected extensions.
@@ -46,7 +46,7 @@ class SummaryCreator:
             out_path (str): Path to the output summary file.
             n_bins (int|None): Number of bins for summarization (optional).
         """
-        self.process_paths(in_path, out_path)
+        self.process_path(in_path, out_path)
         self.n_bins = n_bins
         self.perc_mis_col = "perc_mismatch_alt" if use_perc_mismatch_alt else "perc_mismatch"
         
@@ -54,9 +54,9 @@ class SummaryCreator:
     #                                   Functions called during initialization                                      #
     #################################################################################################################
 
-    def process_paths(self, in_path: str, out_path: str) -> None:
+    def process_path(self, in_path: str, out_path: str) -> None:
         """
-        Processes input and output paths.
+        Processes input and output path.
 
         Args:
             in_path (str): Path to the input data file.
@@ -100,7 +100,7 @@ class SummaryCreator:
             FileNotFoundError: If the directory does not exist.
             Warning: If the output file extension is unexpected.
         """
-        if os.path.isdir(out): # check if outpaths is directory, if the directory exists and create output file path(s) according to input file name(s)
+        if os.path.isdir(out): # check if outpath is directory, if the directory exists and create output file path(s) according to input file name(s)
             if not os.path.exists(out):
                 raise FileNotFoundError(f"Directory not found. Output directory '{out}' does not exist.")
             if not out.endswith("/"):
@@ -109,7 +109,7 @@ class SummaryCreator:
             out_path = f"{out}{basename}_summary.html"
             return out_path
 
-        else: # check if outpaths is a list of filename(s), if the basedirectory exists and if the given file extension(s) is .tsv
+        else: # check if outpath is a list of filename(s), if the basedirectory exists and if the given file extension(s) is .tsv
             dirname = os.path.dirname(out)
             if not os.path.exists(dirname):
                 raise FileNotFoundError(f"Path to output file not found. '{dirname}' does not exist.")
@@ -311,7 +311,6 @@ class SummaryCreator:
         matrix_data = self.data.loc[(self.data["ref_base"] != "N") & (self.data["majority_base"] != "N"),["ref_base", "majority_base"]]
         matrix_data = pd.crosstab(matrix_data['ref_base'], matrix_data['majority_base'])
         matrix_labels = matrix_data.copy()
-        print(matrix_data.shape)
         for i in range(matrix_data.shape[0]):
             matrix_labels.iloc[i,i] = None
         matrix_max_mism = matrix_labels.max().max()
