@@ -34,7 +34,27 @@ class POIAnalyzer():
                  canonical_counterpart: str,
                  output_tsv: bool = True, 
                  use_perc_mismatch_alt: bool = False) -> None:
+        """
+        Initialize an instance of the GenomicDataProcessor class.
 
+        Args:
+            in_path (str): The path to the input TSV file containing genomic data.
+            out_path (str): The path to the output directory where results will be saved.
+            bed_path (str): The path to the BED file containing genomic intervals.
+            ref_path (str): The path to the reference FASTA file.
+            categories (str): A comma-separated string containing bed categories.
+            canonical_counterpart (str): A comma-separated string containing bases corresponding to bed categories.
+            output_tsv (bool, optional): Whether to output results as a TSV file. Default is True.
+            use_perc_mismatch_alt (bool, optional): Whether to use 'perc_mismatch_alt' instead of 'perc_mismatch' column. Default is False.
+
+        Returns:
+            None
+
+        Note:
+            This constructor initializes an instance of the GenomicDataProcessor class. It sets various attributes
+            based on the provided arguments and performs necessary data processing and validation steps.
+
+        """
         self.process_path(in_path, out_path, bed_path, ref_path)
         self.load_data()
         self.perc_mismatch_col = "perc_mismatch_alt" if use_perc_mismatch_alt else "perc_mismatch"
@@ -47,6 +67,25 @@ class POIAnalyzer():
     ##############################################################################################################
 
     def process_path(self, in_path: str, out_path: str, bed_path: str, ref_path: str) -> None:
+        """
+        Process and validate input and output paths for data processing.
+
+        Args:
+            in_path (str): The path to the input TSV file containing genomic data.
+            out_path (str): The path to the output directory where results will be saved.
+            bed_path (str): The path to the BED file containing genomic intervals.
+            ref_path (str): The path to the reference FASTA file.
+
+        Returns:
+            None
+
+        Note:
+            This method validates and sets the paths required for data processing. It checks the existence and
+            file extensions of the provided paths, raising exceptions or issuing warnings as appropriate. After
+            validation, it sets the 'in_path', 'bed_path', 'ref_path', and 'output_path' attributes of the class
+            for use in subsequent processing steps.
+
+        """
         self.check_path(in_path, [".tsv"])
         self.in_path = in_path
         self.check_path(bed_path, [".bed"])
@@ -56,6 +95,29 @@ class POIAnalyzer():
         self.output_path = self.process_outpath(out_path)
 
     def check_path(self, path: str, extensions: List[str]) -> None:
+        """
+        Check the existence and file extension of a specified path.
+
+        Args:
+            path (str): The path to be checked for existence and file extension.
+            extensions (List[str]): A list of valid file extensions.
+
+        Returns:
+            None
+
+        Raises:
+            FileNotFoundError: If the specified 'path' does not exist.
+            Warning: If the file extension of 'path' is not in the list of valid 'extensions'. The warning is issued
+                    if the extension does not match but execution can continue.
+
+        Note:
+            This method checks whether the specified 'path' exists. If it does not exist, a FileNotFoundError
+            is raised. It also checks the file extension of 'path' and compares it against the list of valid
+            'extensions'. If the file extension does not match any of the valid extensions, a warning is issued.
+            The warning is intended to notify the user if the file extension does not match expectations but
+            allows for continued execution if this is deliberate.
+
+        """
         if not os.path.exists(path): # does file exist?
             raise FileNotFoundError(f"Input file not found. File '{path}' does not exist.")
         file_type = os.path.splitext(path)[1]
@@ -63,6 +125,25 @@ class POIAnalyzer():
             warnings.warn(f"Found file extension {file_type}. Expected file extension to be one of: {extensions}. If this is deliberate, ignore warning.", Warning)
 
     def process_outpath(self, out: str) -> str:
+        """
+        Process the provided output path, ensuring it is a valid directory path.
+
+        Args:
+            out (str): The output path to be processed.
+
+        Returns:
+            str: The processed output path, guaranteed to be a valid directory path.
+
+        Raises:
+            Exception: If the provided path is an existing file or if there is an error creating the directory.
+
+        Note:
+            This method checks if the provided path exists as a file or directory. If it exists as a file,
+            it raises an exception, as a directory path is required. If it exists as a directory, it ensures
+            that the path ends with a forward slash ('/') for consistency. If the path doesn't exist, it
+            attempts to create the directory, raising an exception if it fails.
+
+        """
         if os.path.isfile(out):
             raise Exception(f"Provided path '{out}' is a file. Please specify a directory as output path.")
         elif os.path.isdir(out):
@@ -76,15 +157,67 @@ class POIAnalyzer():
         return out
 
     def load_data(self) -> None:
-            data = pd.read_csv(self.in_path, sep="\t", low_memory=False)
-            self.data = self.add_bed_info(data, self.bed_path)
+        """
+        Load data from a CSV file with specified data types and add BED information.
+
+        Reads a CSV file from the specified input path using pandas. The data is loaded with tab ('\t') as
+        the separator, and custom data types specified in 'dtypes' attribute are applied to columns. After
+        loading the data, it can optionally be enriched with information from a BED file specified by 'bed_path'
+        attribute.
+
+        Returns:
+            None
+
+        Note:
+            This method reads data from a CSV file located at 'in_path' attribute using pandas library.
+            It also applies custom data types from the 'dtypes' attribute to columns during data loading.
+            If 'bed_path' is provided and not None, it invokes the 'add_bed_info' method to add additional
+            information from a BED file to the loaded data. This method operates in-place and updates
+            the 'data' attribute of the class with the loaded and potentially enriched data.
+
+        """
+        data = pd.read_csv(self.in_path, sep="\t", dtype=self.dtypes)
+        self.data = self.add_bed_info(data, self.bed_path)
     
     def add_bed_info(self, data: pd.DataFrame, bed_path: str):
+        """
+        Add BED information to a DataFrame based on a BED file.
+
+        Args:
+            data (pd.DataFrame): The DataFrame containing genomic data to enrich with BED information.
+            bed_path (str): The path to the BED file containing genomic intervals and associated names.
+
+        Returns:
+            pd.DataFrame: The DataFrame with an additional 'bed_name' column containing BED information.
+
+        Note:
+            This method takes a DataFrame 'data' containing genomic data and adds an additional column 'bed_name'
+            to it. The 'bed_name' column is populated by querying a previously built IntervalTree from the
+            specified 'bed_path' for each row in the DataFrame. The method returns the enriched DataFrame.
+
+        """
         tree = self.build_interval_tree(bed_path)
         data["bed_name"] = data.apply(lambda x: self.get_name_for_position((x[0], x[1]), tree), axis=1)
         return data
 
     def get_name_for_position(self, position, interval_tree) -> str|None:
+        """
+        Retrieve the name associated with a given genomic position from an interval tree.
+
+        Args:
+            position (tuple): A tuple containing the chromosome and position to query (e.g., ('chr1', 100)).
+            interval_tree (IntervalTree): An IntervalTree data structure containing genomic intervals.
+
+        Returns:
+            str | None: The name associated with the provided position if found, or None if not found.
+
+        Note:
+            This method queries the provided 'interval_tree' for intervals that overlap with the specified
+            genomic position. It iterates through the results and checks if the chromosome matches the
+            provided chromosome in the 'position' tuple. If a matching interval is found, the associated
+            name is returned. If no matching interval is found, None is returned.
+
+        """
         results = interval_tree[position[1]:position[1]+1]  # Query the interval tree
         for interval in results:
             chromosome, name = interval.data
@@ -93,6 +226,23 @@ class POIAnalyzer():
         return None
 
     def build_interval_tree(self, bed_file):
+        """
+        Build an IntervalTree data structure from a BED file.
+
+        Args:
+            bed_file (str): The path to the BED file containing genomic intervals.
+
+        Returns:
+            IntervalTree: An IntervalTree data structure containing the genomic intervals from the BED file.
+
+        Note:
+            This method reads the specified BED file and extracts genomic intervals along with optional
+            associated names. It constructs an IntervalTree data structure to efficiently query and store
+            these intervals. The method accounts for the 0-based indexing convention in BED files by adding
+            1 to the start and end positions. If a name is provided in the BED file, it is associated with
+            the corresponding interval. The constructed IntervalTree is returned.
+
+        """
         interval_tree = IntervalTree()
         with open(bed_file, 'r') as file:
             for line in file:
@@ -106,6 +256,25 @@ class POIAnalyzer():
         return interval_tree
 
     def get_bed_categories(self, cat_str: str) -> None:
+        """
+        Extract and validate bed categories from a comma-separated string.
+
+        Args:
+            cat_str (str): A comma-separated string containing bed categories.
+
+        Returns:
+            None
+
+        Raises:
+            Exception: If any category in 'cat_str' is not found in the bed file.
+
+        Note:
+            This method parses a comma-separated string 'cat_str' containing bed categories. It ensures
+            that each category in the string exists in the 'bed_name' column of the loaded genomic data
+            ('data' attribute). If any category is not found, an exception is raised. If all categories
+            are valid, they are stored in the 'bed_categories' attribute for later use.
+
+        """
         categories = cat_str.split(",")
         unique_cat = list(self.data.bed_name.unique())
 
@@ -117,8 +286,24 @@ class POIAnalyzer():
 
     def get_corrensponding_base(self, base_str: str) -> None:
         """
-        Extracts the bases that correspond to each category given for the bed-categories.
-        """
+        Extract and validate corresponding bases for bed categories.
+
+        Args:
+            base_str (str): A comma-separated string containing bases corresponding to bed categories.
+
+        Returns:
+            None
+
+        Raises:
+            Exception: If the number of bases does not match the number of bed categories.
+
+        Note:
+            This method parses a comma-separated string 'base_str' containing bases corresponding to bed categories.
+            It validates that the number of bases matches the number of bed categories previously set in the
+            'bed_categories' attribute. If the counts do not match, an exception is raised. If the counts match,
+            the corresponding bases are stored in the 'bed_categories_canonical_bases' attribute for later use.
+
+        """        
         counterparts = base_str.split(",")
         if len(counterparts) != len(self.bed_categories):
             raise Exception(f"For the {len(self.bed_categories)} categories {len(counterparts)} corresponding bases were given. Each category must have a base it corresponds to.")
@@ -129,6 +314,26 @@ class POIAnalyzer():
     ##############################################################################################################
 
     def prepare_data_mism_types(self, data: pd.DataFrame):
+        """
+        Prepare data for mismatch types analysis.
+
+        Args:
+            data (pd.DataFrame): The DataFrame containing genomic data.
+
+        Returns:
+            Tuple[pd.DataFrame, pd.DataFrame, float]: A tuple containing:
+                - matrix_data (pd.DataFrame): A matrix representing mismatch types.
+                - matrix_labels (pd.DataFrame): Labels for the mismatch types matrix.
+                - matrix_max_mism (float): The maximum value in the mismatch types matrix.
+
+        Note:
+            This method prepares data for mismatch types analysis. It filters data to include only rows where
+            both 'ref_base' and 'majority_base' are not 'N'. It then computes a cross-tabulation matrix ('matrix_data')
+            of 'ref_base' and 'majority_base' columns. Labels for the matrix are stored in 'matrix_labels', with
+            diagonal elements set to None. The 'matrix_max_mism' value is the maximum value in the matrix.
+            The matrix values are also transformed into percentages.
+
+        """
         matrix_data = data.loc[(data["ref_base"] != "N") & (data["majority_base"] != "N"),["ref_base", "majority_base"]]
         matrix_data = pd.crosstab(matrix_data['ref_base'], matrix_data['majority_base'])
         matrix_labels = matrix_data.copy()
@@ -141,6 +346,26 @@ class POIAnalyzer():
         return matrix_data, matrix_labels, matrix_max_mism
 
     def prepare_data_composition(self, data: pd.DataFrame, mod: str, canonical: str) -> Tuple[Dict[str, List[float]], Dict[str, int]]:
+        """
+        Prepare data for composition analysis based on modification and canonical sequences.
+
+        Args:
+            data (pd.DataFrame): The DataFrame containing genomic data.
+            mod (str): The name of the modified sequence category.
+            canonical (str): The canonical sequence category.
+
+        Returns:
+            Tuple[Dict[str, List[float]], Dict[str, int]]: A tuple containing:
+                - composition_data (Dict[str, List[float]]): A dictionary containing composition values for A, C, G, and T.
+                - composition_counts (Dict[str, int]): A dictionary containing counts of modification and canonical sequences for A, C, G, and T.
+
+        Note:
+            This method prepares data for composition analysis based on modification and canonical sequences.
+            It filters data to extract relevant sequences for 'mod' and 'canonical' categories, both matching
+            and mismatching. Median values are computed for each category, and the relative composition of A, C, G, and T
+            is calculated. The resulting data is returned in dictionaries for composition values and sequence counts.
+
+        """
         mod_match = data.loc[(data.bed_name==mod) & (data.ref_base==data.majority_base), ["n_a_rel", "n_c_rel", "n_g_rel", "n_t_rel"]]
         mod_mismatch = data.loc[(data.bed_name==mod) & (data.ref_base!=data.majority_base), ["n_a_rel", "n_c_rel", "n_g_rel", "n_t_rel"]]
         unm_match = data.loc[(data.ref_base == canonical) & (data.bed_name.isna()) & (data.ref_base==data.majority_base), ["n_a_rel", "n_c_rel", "n_g_rel", "n_t_rel"]]
@@ -173,6 +398,35 @@ class POIAnalyzer():
                                                                                     Tuple[List[float], List[float]], 
                                                                                     Tuple[List[float], List[float]], 
                                                                                     Tuple[List[float], List[float]]]:
+        """
+        Prepare data for error rates analysis based on modification and canonical sequences.
+
+        Args:
+            data (pd.DataFrame): The DataFrame containing genomic data.
+            mod (str): The name of the modified sequence category.
+            canonical (str): The canonical sequence category.
+
+        Returns:
+            Tuple[Tuple[List[float], List[float]],
+                Tuple[List[float], List[float]],
+                Tuple[List[float], List[float]],
+                Tuple[List[float], List[float]],
+                Tuple[List[float], List[float]]]:
+            A tuple containing five sub-tuples, each with two lists:
+            - data_mismatch (Tuple[List[float], List[float]]): Mismatch percentage data for different categories.
+            - data_deletion (Tuple[List[float], List[float]]): Deletion percentage data for different categories.
+            - data_insertion (Tuple[List[float], List[float]]): Insertion percentage data for different categories.
+            - data_ref_skip (Tuple[List[float], List[float]]): Reference skip percentage data for different categories.
+            - data_quality (Tuple[List[float], List[float]]): Quality mean data for different categories.
+
+        Note:
+            This method prepares data for error rates analysis based on modification and canonical sequences.
+            It filters data to extract relevant sequences for 'mod' and 'canonical' categories, both matching
+            and mismatching. Various error rate-related columns are selected for analysis, and data is organized
+            into sub-tuples containing lists for each category. The resulting data is returned in the specified
+            tuple format for plotting.
+
+        """
         cols = [self.perc_mismatch_col, "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "q_mean"]
         mod_match = data.loc[(data.bed_name==mod) & (data.ref_base==data.majority_base), cols]
         unm_match = data.loc[(data.ref_base == canonical) & (data.bed_name.isna()) & (data.ref_base==data.majority_base), cols]
@@ -200,7 +454,31 @@ class POIAnalyzer():
         return (data_mismatch, data_deletion, data_insertion, data_ref_skip, data_quality)
 
     def prepare_nb_counts(self, data: pd.DataFrame, bed_category: str) -> Tuple[List[int], List[int], List[int], List[int], List[str], List[int]]:
-        
+        """
+        Prepare data for analyzing neighboring error positions in a specified bed category.
+
+        Args:
+            data (pd.DataFrame): The DataFrame containing genomic data.
+            bed_category (str): The bed category for which neighboring error positions should be analyzed.
+
+        Returns:
+            Tuple[List[int], List[int], List[int], List[int], List[str], List[int]]:
+            A tuple containing:
+            - x_vals (List[int]): Positions of neighboring errors.
+            - y_vals (List[int]): Counts of neighboring errors.
+            - x_vals_mod (List[int]): Positions of neighboring errors due to modifications.
+            - y_vals_mod (List[int]): Counts of neighboring errors due to modifications.
+            - pie_labs (List[str]): Labels for a pie chart indicating the presence of surrounding errors.
+            - pie_vals (List[int]): Counts for the pie chart categories.
+
+        Note:
+            This method prepares data for analyzing neighboring error positions in a specified bed category.
+            It extracts relevant data from the DataFrame, including neighboring error positions, and counts
+            of these positions. Additionally, it identifies neighboring errors that are due to modifications.
+            The resulting data is organized into lists for plotting, including a pie chart indicating the presence
+            of surrounding errors.
+
+        """
         def to_numeric(pos_str: str) -> List[int]:
             if type(pos_str) == float: # in case the value is nan
                 return []
@@ -286,6 +564,21 @@ class POIAnalyzer():
         return fig
 
     def create_map_plot(self, mod_type: str): 
+        """
+        Create a map plot for a specified modification type.
+
+        Args:
+            mod_type (str): The modification type for which the map plot should be created.
+
+        Returns:
+            str: HTML code representing the map plot.
+
+        Note:
+            This method creates a map plot for a specified modification type. It reads reference sequences from a FASTA file,
+            extracts relevant data from the DataFrame, and plots chromosome lengths as bars and modification sites as markers.
+            The resulting map plot is converted to HTML code.
+
+        """
         def get_references(path: str) -> Dict[str, str]:
             """
             Reads a fasta file and stores the sequences in a dictionary (values) with the 
@@ -364,6 +657,20 @@ class POIAnalyzer():
         return to_html(fig, include_plotlyjs=False)
 
     def create_mism_types_plot(self, mod: str):
+        """
+        Create a mismatch types plot for a specified modification type.
+
+        Args:
+            mod (str): The modification type for which the mismatch types plot should be created.
+
+        Returns:
+            str: HTML code representing the mismatch types plot.
+
+        Note:
+            This method creates a mismatch types plot for a specified modification type. It prepares data
+            for the plot, generates a heatmap using Plotly Express, and returns the resulting plot as HTML code.
+
+        """
         data = self.data.loc[self.data.bed_name == mod]
         data.to_csv("/home/vincent/masterthesis/data/45s_rrna/processed/dRNA_cytoplasm/test.csv")
         matrix_data, matrix_labels, matrix_max_mism = self.prepare_data_mism_types(data)
@@ -377,6 +684,22 @@ class POIAnalyzer():
         return to_html(fig, include_plotlyjs=False)
 
     def create_composition_plot(self, mod: str, canonical: str) -> str:
+        """
+        Create a composition plot for a specified modification type and canonical sequence.
+
+        Args:
+            mod (str): The modification type for which the composition plot should be created.
+            canonical (str): The canonical sequence for comparison.
+
+        Returns:
+            str: HTML code representing the composition plot.
+
+        Note:
+            This method creates a composition plot for a specified modification type and canonical sequence.
+            It prepares data for the plot, generates a stacked bar chart using Plotly, and returns the resulting
+            plot as HTML code.
+
+        """
         y_data, category_count = self.prepare_data_composition(self.data, mod, canonical)
 
         x_vals = [f"<i>{mod}</i> match<br>(n = {category_count['A']})", 
@@ -397,6 +720,22 @@ class POIAnalyzer():
         return to_html(fig, include_plotlyjs=False)
 
     def create_error_rate_plot(self, mod: str, canonical: str) -> str:
+        """
+        Create an error rate plot for a specified modification type and canonical sequence.
+
+        Args:
+            mod (str): The modification type for which the error rate plot should be created.
+            canonical (str): The canonical sequence for comparison.
+
+        Returns:
+            str: HTML code representing the error rate plot.
+
+        Note:
+            This method creates an error rate plot for a specified modification type and canonical sequence.
+            It prepares data for the plot, generates box plots for mismatch rate, deletion rate, insertion rate,
+            reference skip rate, and mean quality score using Plotly, and returns the resulting plot as HTML code.
+
+        """
         data_mismatch, data_deletion, data_insertion, data_ref_skip, data_quality = self.prepare_data_errorrates(self.data, mod, canonical)
 
         box_mismatch = go.Box(x=data_mismatch[0], y=data_mismatch[1], name="Mismatch rate", offsetgroup=0, line=dict(color="black"), marker=dict(outliercolor="black", size=2), fillcolor="#8c564b")
@@ -416,6 +755,22 @@ class POIAnalyzer():
         return to_html(fig, include_plotlyjs=False)
 
     def create_nb_plot(self, mod: str) -> str:
+        """
+        Create a neighbor position plot for a specified modification type.
+
+        Args:
+            mod (str): The modification type for which the neighbor position plot should be created.
+
+        Returns:
+            str: HTML code representing the neighbor position plot.
+
+        Note:
+            This method creates a neighbor position plot for a specified modification type. It prepares data for
+            the plot, generates stacked bar charts for neighbor positions with and without modification errors,
+            as well as a pie chart showing the distribution of surrounding errors, using Plotly, and returns the
+            resulting plot as HTML code.
+
+        """
         x_vals, y_vals, x_vals_mod, y_vals_mod, pie_labs, pie_vals = self.prepare_nb_counts(self.data, mod)
 
         fig = self.update_plot(make_subplots(rows=1, cols=2, column_widths=[0.75, 0.25], specs=[[{"type": "bar"}, {"type": "pie"}]]), width=1200)
@@ -440,6 +795,17 @@ class POIAnalyzer():
     ##############################################################################################################
 
     def write_template(self, plots: List[str], category: str, corresponding_base: str) -> None:
+        """
+        Generate an HTML report template with interactive plots.
+
+        Args:
+            plots (List[str]): A list of HTML code representing interactive plots.
+            category (str): The category or modification type for which the report is generated.
+            corresponding_base (str): The corresponding base associated with the category.
+
+        Returns:
+            None: The template is written to an HTML file.
+        """
         name = f"<i>{category}</i>"
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -706,6 +1072,14 @@ class POIAnalyzer():
             out.write(template)
 
     def write_tsv(self) -> None:
+        """
+        Write the current DataFrame to a TSV (tab-separated values) file with additional bed information.
+
+        The output filename is derived from the input filename by appending "_w_bed_info.tsv".
+
+        Returns:
+            None: The DataFrame is saved as a TSV file.
+        """
         self.data.to_csv(f"{os.path.splitext(self.in_path)[0]}_w_bed_info.tsv", sep="\t", index=False, header=True)
 
     ##############################################################################################################
@@ -713,10 +1087,32 @@ class POIAnalyzer():
     ##############################################################################################################
 
     def main(self):
+        """
+        Main entry point of the script.
+
+        This method iterates through the bed categories and their corresponding bases, processing each category using
+        the `process_category` method.
+
+        Returns:
+            None: The script performs the desired processing and saves the output files.
+        """
         for category, corr_base in zip(self.bed_categories, self.bed_categories_canoncial_bases):
             self.process_category(category, corr_base)
 
     def process_category(self, category: str, corresponding_base: str):
+        """
+        Process and analyze the data for a specific category and corresponding base.
+
+        This method generates multiple plots and saves them along with a summary HTML template. Optionally, it also
+        writes the processed data to a TSV file.
+
+        Parameters:
+            category (str): The category of interest.
+            corresponding_base (str): The corresponding base for the category.
+
+        Returns:
+            None: The plots and summary are saved to files, and optionally, the data is saved in TSV format.
+        """
         plot_mod_map = self.create_map_plot(category)
         plot_mism_types = self.create_mism_types_plot(category)
         plot_comp = self.create_composition_plot(category, corresponding_base)
