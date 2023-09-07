@@ -99,7 +99,7 @@ class POIAnalyzer():
                 parts = line.strip().split('\t')
                 if len(parts) >= 3:
                     chromosome = parts[0]
-                    start = int(parts[1])+1 # +1 to account for 0-index in BED files
+                    start = int(parts[1])+1 # +1 to account for 0-index in BED files 
                     end = int(parts[2])+1 # +1 to account for 0-index in BED files
                     name = parts[3] if len(parts) >= 4 else None
                     interval_tree[start:end] = (chromosome, name)
