@@ -99,8 +99,8 @@ class POIAnalyzer():
                 parts = line.strip().split('\t')
                 if len(parts) >= 3:
                     chromosome = parts[0]
-                    start = int(parts[1])
-                    end = int(parts[2])
+                    start = int(parts[1])+1 # +1 to account for 0-index in BED files
+                    end = int(parts[2])+1 # +1 to account for 0-index in BED files
                     name = parts[3] if len(parts) >= 4 else None
                     interval_tree[start:end] = (chromosome, name)
         return interval_tree
@@ -365,6 +365,7 @@ class POIAnalyzer():
 
     def create_mism_types_plot(self, mod: str):
         data = self.data.loc[self.data.bed_name == mod]
+        data.to_csv("/home/vincent/masterthesis/data/45s_rrna/processed/dRNA_cytoplasm/test.csv")
         matrix_data, matrix_labels, matrix_max_mism = self.prepare_data_mism_types(data)
 
         fig = px.imshow(matrix_data, labels=dict(x="Called base", y="Reference base", color="Count"), zmin=0, zmax=1.2*matrix_max_mism, color_continuous_scale="portland")
@@ -730,7 +731,7 @@ class POIAnalyzer():
 if __name__ == "__main__":
     poi_analyzer = POIAnalyzer("/home/vincent/masterthesis/data/45s_rrna/processed/dRNA_cytoplasm/dRNA_cytoplasm_extracted.tsv",
                                "/home/vincent/masterthesis/data/45s_rrna/processed/dRNA_cytoplasm",
-                               "/home/vincent/masterthesis/data/45s_rrna/rRNA_modifications_conv.bed",
+                               "/home/vincent/masterthesis/data/45s_rrna/rRNA_modifications_conv_cleaned.bed",
                                "/home/vincent/masterthesis/data/45s_rrna/RNA45SN1_cleaned.fasta",
-                               "Gm", "G", True, False)
+                               "psu", "T", True, False)
     poi_analyzer.main()
