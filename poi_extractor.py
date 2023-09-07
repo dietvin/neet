@@ -7,7 +7,7 @@ import plotly.express as px
 from plotly.subplots import make_subplots
 from plotly.io import to_html
 from intervaltree import IntervalTree
-import collections, datetime
+import collections, datetime, argparse
 
 class POIAnalyzer():
 
@@ -728,10 +728,63 @@ class POIAnalyzer():
         if self.output_tsv:
             self.write_tsv()
 
+def setup_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="Neet - Position-of-Interest Analyzer", description="Analyze features of one or more types of positions of interest.")
+    parser.add_argument('-i', '--tsv', type=str, required=True,
+                        help="""
+                            Path to the input file. Must be of type tsv, as returned by the PileupExtractor.
+                            """)
+    parser.add_argument('-o', '--output', type=str, required=True,
+                        help="""
+                            Path to output a output directory, in which all output files will be stored.
+                            """)
+    parser.add_argument('-b', '--bed', type=str, required=True,
+                        help="""
+                            Path to the bed file containing information in the fourth column.
+                            """)
+    parser.add_argument('-r', '--ref', type=str, required=True,
+                        help="""
+                            Path to the reference file. Must be of type fasta.
+                            """)
+    parser.add_argument('-c', '--bed_categories', type=str, required=True, 
+                        help="""
+                            One or more categories from the bed file to aggregate the data by. 
+                            Must be in the format: 'cat1' or 'cat1,cat2,cat3'
+                            """)
+    parser.add_argument('-cc', '--counterparts', type=str, required=True, 
+                        help="""
+                            Canonical base corresponding to each category specified in --bed_categories. 
+                            Same format as --bed_categories flag.
+                            """)
+    parser.add_argument('--update_tsv', action="store_true", 
+                        help="""
+                            If specified, the a new tsv file gets written containing the information from the bed 
+                            file in the last column. Suffix '_w_bed_info' will be added to newly created file.
+                            """)
+    parser.add_argument('--use_perc_mismatch_alt', action="store_true", 
+                        help="""
+                            If specified, uses the mismatch from the perc_mismatch_alt colum.
+                            """)
+    return parser
+    
 if __name__ == "__main__":
-    poi_analyzer = POIAnalyzer("/home/vincent/masterthesis/data/45s_rrna/processed/dRNA_cytoplasm/dRNA_cytoplasm_extracted.tsv",
-                               "/home/vincent/masterthesis/data/45s_rrna/processed/dRNA_cytoplasm",
-                               "/home/vincent/masterthesis/data/45s_rrna/rRNA_modifications_conv_cleaned.bed",
-                               "/home/vincent/masterthesis/data/45s_rrna/RNA45SN1_cleaned.fasta",
-                               "psu", "T", True, False)
+
+    parser = setup_parser()
+    args = parser.parse_args()
+
+    poi_analyzer = POIAnalyzer(in_path=args.tsv,
+                               out_path=args.output,
+                               bed_path=args.bed,
+                               ref_path=args.ref,
+                               categories=args.bed_categories,
+                               canonical_counterpart=args.counterparts,
+                               output_tsv=args.update_tsv,
+                               use_perc_mismatch_alt=args.use_perc_mismatch_alt)
     poi_analyzer.main()
+                
+    # poi_analyzer = POIAnalyzer("/home/vincent/masterthesis/data/45s_rrna/processed/dRNA_cytoplasm/dRNA_cytoplasm_extracted.tsv",
+    #                            "/home/vincent/masterthesis/data/45s_rrna/processed/dRNA_cytoplasm",
+    #                            "/home/vincent/masterthesis/data/45s_rrna/rRNA_modifications_conv_cleaned.bed",
+    #                            "/home/vincent/masterthesis/data/45s_rrna/RNA45SN1_cleaned.fasta",
+    #                            "psu,Gm,Um", "T,G,T", True, False)
+    # poi_analyzer.main()
