@@ -913,7 +913,7 @@ class SummaryCreator:
         with open(self.output_path, "w") as o:
             o.write(template)
 
-if __name__=="__main__":
+def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="Neet - summary creator", description="Create overview in HTML format containing interactive plots.")
     parser.add_argument('-i', '--input', type=str, required=True,
                         help="""
@@ -932,7 +932,14 @@ if __name__=="__main__":
                         help="""
                             Specify whether to use the perc_mismatch or perc_mismatch_alt values for plot creation.
                             """)
+    return parser
+
+
+if __name__=="__main__":
+
+    parser = setup_parser()
     args = parser.parse_args()
+    
     sc = SummaryCreator(args.input, args.output, args.n_bins, args.plot_alt)
     sc.create_summary()
 

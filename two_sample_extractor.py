@@ -806,6 +806,8 @@ class PositionExtractor:
         self.create_summary()
 
 
+
+
 def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="Neet - position extractor", description="Identify and map positions of interest between two samples.")
     parser.add_argument('-i', '--sample1', type=str, required=True,
@@ -832,8 +834,6 @@ def setup_parser() -> argparse.ArgumentParser:
                             """)
     parser.add_argument('-r', '--reference', type=str, required=True, help="Path to the reference file")
     return parser
-
-
 
 if __name__ == "__main__":
     parser = setup_parser()

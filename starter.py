@@ -120,7 +120,6 @@ class Processor:
         if file_type != extension:
             raise Exception(f"Found file extension {file_type}. File extension to must be {extension}.")
 
-
     def main(self):
         feature_extract_path = self.out_path + self.basename1 + "_extracted.tsv"
         if not self.skip_pileup:
@@ -163,6 +162,9 @@ class Processor:
         hs.print_update(f"Starting statistical comparison of files {sample1} and {sample2}. Writing to {out}")
         stat_comp = StatComparer(sample1, sample2, out, **self.stat_comp_args)
         stat_comp.main()
+
+
+
 
 def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="Neet", description="Extract different characteristics from given bam file(s).")
@@ -248,11 +250,9 @@ def setup_parser() -> argparse.ArgumentParser:
                         help="""
                             When stated does not store the calculated p-values from the statistical comparison in a TSV file and only as HTML.
                             """)
-
     return parser
 
 if __name__=="__main__":
-
     parser = setup_parser()
     args = parser.parse_args()
 

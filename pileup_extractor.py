@@ -293,7 +293,7 @@ class FeatureExtractor:
     #################################################################################################################
     #                                  Functions called during feature extraction                                   #
     #################################################################################################################
-    def process_files(self) -> None:
+    def main(self) -> None:
         """
         Process multiple pairs of input and output files. Reads .pileup files and processes them in parallel using multiprocessing.
 
@@ -859,8 +859,9 @@ class FeatureExtractor:
 
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog="Pileup feature extractor", description="Extract different characteristics from given pileup file(s).")
+
+def setup_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="Neet - Pileup Extractor", description="Extract different features from given pileup file(s).")
     parser.add_argument('-i', '--input', type=str, required=True, default="-",
                         help="""
                             Path to the input file(s). If multiple are available, specify paths comma-separated (<pileup1>,<pileup2>,...).
@@ -915,8 +916,10 @@ if __name__ == "__main__":
                         help="""
                             Specify whether to use the perc_mismatch or perc_mismatch_alt values for plot creation.
                             """)
+    return parser
 
-
+if __name__ == "__main__":
+    parser = setup_parser()
     args = parser.parse_args()
     
     feature_extractor = FeatureExtractor(args.input, args.output, args.reference,
@@ -933,7 +936,7 @@ if __name__ == "__main__":
                                          n_bins_summary = args.n_bins,
                                          use_alt_summary=args.plot_alt)
     
-    feature_extractor.process_files()
+    feature_extractor.main()
 
 
     # feature_extractor = FeatureExtractor("/home/vincent/masterthesis/data/actinomycin_d/test.pileup", "/home/vincent/masterthesis/data/actinomycin_d", "/home/vincent/masterthesis/data/actinomycin_d/GRCh38_clean.genome.fa",

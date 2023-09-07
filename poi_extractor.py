@@ -63,7 +63,7 @@ class POIAnalyzer():
         self.output_tsv = output_tsv
 
     ##############################################################################################################
-    #                                             Initialization methods                                             #
+    #                                           Initialization methods                                           #
     ##############################################################################################################
 
     def process_path(self, in_path: str, out_path: str, bed_path: str, ref_path: str) -> None:
@@ -310,7 +310,7 @@ class POIAnalyzer():
         self.bed_categories_canoncial_bases = counterparts
 
     ##############################################################################################################
-    #                                             Data preparation methods                                             #
+    #                                          Data preparation methods                                          #
     ##############################################################################################################
 
     def prepare_data_mism_types(self, data: pd.DataFrame):
@@ -531,7 +531,7 @@ class POIAnalyzer():
         return x_vals, y_vals, x_vals_mod, y_vals_mod, pie_labs, pie_vals
 
     ##############################################################################################################
-    #                                             Plotting methods                                             #
+    #                                              Plotting methods                                              #
     ##############################################################################################################
 
     def update_plot(self, fig, title: str|None = None, xlab: str|None = None, ylab: str|None = None, height: int = 500, width: int = 800):
@@ -791,7 +791,7 @@ class POIAnalyzer():
     
     
     ##############################################################################################################
-    #                                             Output methods                                             #
+    #                                               Output methods                                               #
     ##############################################################################################################
 
     def write_template(self, plots: List[str], category: str, corresponding_base: str) -> None:
@@ -1083,7 +1083,7 @@ class POIAnalyzer():
         self.data.to_csv(f"{os.path.splitext(self.in_path)[0]}_w_bed_info.tsv", sep="\t", index=False, header=True)
 
     ##############################################################################################################
-    #                                             Main processing methods                                             #
+    #                                           Main processing methods                                          #
     ##############################################################################################################
 
     def main(self):

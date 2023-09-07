@@ -316,9 +316,11 @@ class Filter:
             if not check_func(q_score, self.q_score): return False
         return True
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(prog="TSV filter",
-                                     description="Filter TSV output from PileupExtractor by given values.")
+
+
+
+def setup_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="Neet - Filter", description="Filter TSV output from PileupExtractor by given values.")
     parser.add_argument("-i", "--input", type=str, required=True,
                         help="Path to input TSV file. If none is given, read from stdin.")
     parser.add_argument("-o", "--output", type=str, required=True,
@@ -343,7 +345,10 @@ if __name__ == "__main__":
                         help="Filter by motif around position.")
     parser.add_argument("-q", "--q_score", type=str, required=False,
                         help="Filter by mean quality. To filter q_mean >= x: 'x'; q_mean <= x: '<=x'")
+    return parser
 
+if __name__ == "__main__":
+    parser = setup_parser()
     args = parser.parse_args()
 
     filter = Filter(input_path=args.input,
