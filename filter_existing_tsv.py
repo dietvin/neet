@@ -48,6 +48,9 @@ class Filter:
     perc_mismatched: Tuple[float, Callable[[float, float], bool]] | None
     perc_mismatched_alt: Tuple[float, Callable[[float, float], bool]] | None
     q_score: Tuple[float, Callable[[float, float], bool]] | None
+    bed_positions: set[Tuple[str, int]]
+    filter_bed: bool
+    inlude_bed: bool
 
     OPERATORS = {
         "<": lambda x, y: x < y,
@@ -69,7 +72,9 @@ class Filter:
                  perc_mismatched: str, 
                  perc_mismatched_alt: str,
                  motif: str, 
-                 q_score: str) -> None:
+                 q_score: str,
+                 bed_include: str | None,
+                 bed_exclude: str | None) -> None:
         """
         Initializes the Filter object.
 
@@ -98,7 +103,18 @@ class Filter:
         self.perc_mismatched_alt = self.get_val_fun_float(perc_mismatched_alt)
         self.motif = motif.upper() if motif else None
         self.q_score = self.get_val_fun_float(q_score)
-        
+
+        if bed_include:
+            self.filter_bed = True
+            self.bed_positions = self.get_bed_positions(bed_include)
+            self.inlude_bed = True
+        elif bed_exclude:
+            self.filter_bed = True
+            self.bed_positions = self.get_bed_positions(bed_exclude)
+            self.inlude_bed = False
+        else:
+            self.filter_bed = False
+
 
     def get_sites(self, site_str: str) -> List[int]|None:
         """
@@ -247,6 +263,32 @@ class Filter:
                 raise Exception(f"Could not extract information from given string '{string}'")
         return val, fun
 
+    def get_bed_positions(self, bed_path: str) -> set[Tuple[str, int]]:
+        """
+        Retrieves genomic positions from a BED file.
+
+        This method reads a BED (Browser Extensible Data) file containing genomic
+        position information and returns a set of tuples, where each tuple represents
+        a genomic position with chromosome and start coordinate.
+
+        Args:
+            bed_path (str): The path to the BED file to read.
+
+        Returns:
+            set[Tuple[str, int]]: A set of tuples, where each tuple contains the
+            chromosome (str) and the start coordinate (int) of a genomic position.
+        """
+        pos = []
+        with open(bed_path, "r") as bed:
+            for line in bed:
+                chr = line[0]
+                start = int(line[1])
+                end = int(line[2])
+                for i in range(start, end):
+                    pos.append((chr, start))
+        return set(pos)
+
+
     def filter_tsv(self) -> None:
         """
         Filters the TSV file based on the specified criteria.
@@ -284,6 +326,13 @@ class Filter:
         row = row_str.strip("\n").split("\t")
         chr = row[0]
         site = int(row[1])
+
+        if self.filter_bed:
+            if self.inlude_bed & ((chr, site) not in self.bed_positions):
+                return False
+            if (~self.inlude_bed) & ((chr, site) in self.bed_positions):
+                return False
+                
         n_reads = int(row[2])
         ref_base = row[3]
         maj_base = row[4]
@@ -345,6 +394,17 @@ def setup_parser() -> argparse.ArgumentParser:
                         help="Filter by motif around position.")
     parser.add_argument("-q", "--q_score", type=str, required=False,
                         help="Filter by mean quality. To filter q_mean >= x: 'x'; q_mean <= x: '<=x'")
+    parser.add_argument("-bi", "--filter_bed", type=str, required=False,
+                        help="""
+                            Path to a bed file. The TSV file will be filtered by the positions from the bed file,
+                            keeping only positions that are found in the bed file.
+                            """)
+    parser.add_argument("-be", "--exclude_bed", type=str, required=False,
+                        help="""
+                            Path to a bed file. The TSV file will be filtered by the positions from the bed file,
+                            keeping only positions that are NOT found in the bed file.
+                            """)
+
     return parser
 
 if __name__ == "__main__":
@@ -362,5 +422,7 @@ if __name__ == "__main__":
                     perc_mismatched=args.percent_mismatched,
                     perc_mismatched_alt=args.percent_mismatched_alt,
                     motif=args.motif,
-                    q_score=args.q_score)
+                    q_score=args.q_score,
+                    bed_include=args.filter_bed,
+                    bed_exclude=args.exclude_bed)
     filter.filter_tsv()
