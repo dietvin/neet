@@ -281,11 +281,12 @@ class Filter:
         pos = []
         with open(bed_path, "r") as bed:
             for line in bed:
+                line = line.strip().split("\t")
                 chr = line[0]
                 start = int(line[1])
                 end = int(line[2])
                 for i in range(start, end):
-                    pos.append((chr, start))
+                    pos.append((chr, start+1)) # bed files are 0-indexed
         return set(pos)
 
 
