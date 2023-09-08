@@ -335,13 +335,22 @@ class PositionExtractor:
 
         """
         outpath = f"{self.out_dir}{self.label_1}_exclusive.bed"
-        self.excl_in_1.to_csv(outpath, sep="\t", header=False, index=False)
+        data = self.excl_in_1.copy()
+        data["end"] = data["site"]
+        data["site"] = data["site"] - 1
+        data.to_csv(outpath, sep="\t", header=False, index=False)
 
         outpath = f"{self.out_dir}{self.label_2}_exclusive.bed"
-        self.excl_in_2.to_csv(outpath, sep="\t", header=False, index=False)
+        data = self.excl_in_2.copy()
+        data["end"] = data["site"]
+        data["site"] = data["site"] - 1
+        data.to_csv(outpath, sep="\t", header=False, index=False)
 
         outpath = f"{self.out_dir}{self.label_1}_and_{self.label_2}.bed"
-        self.in_1_and_2.to_csv(outpath, sep="\t", header=False, index=False)
+        data = self.in_1_and_2.copy()
+        data["end"] = data["site"]
+        data["site"] = data["site"] - 1
+        data.to_csv(outpath, sep="\t", header=False, index=False)
 
     ##############################################################################################################
     #                                          Summary creation methods                                          #
