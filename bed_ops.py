@@ -1,4 +1,5 @@
 import argparse, os, csv
+from typing import List, Tuple, Dict
 
 def tsv_to_bed(in_path: str, out_path: str) -> None:
     """
@@ -21,8 +22,8 @@ def tsv_to_bed(in_path: str, out_path: str) -> None:
 def intersect_beds(file_a: str,
                    file_b: str,
                    out_path: str,
-                   label_a: str = None, 
-                   label_b: str = None) -> None:
+                   label_a: str|None = None, 
+                   label_b: str|None = None) -> None:
     """
     Intersects two BED files and writes the results to an output file.
 
@@ -62,6 +63,98 @@ def intersect_beds(file_a: str,
             out.write("\t".join(line)+f"\t{label_a}\n")
         for line in exclusive_file_b:
             out.write("\t".join(line)+f"\t{label_b}\n")
+
+def get_coord_names(path: str, keep_name_pos: bool = True) -> Tuple[set[Tuple[str, int]], Dict[Tuple[str, int], str]]:
+    with open(path, "r") as file:
+        file_pos = []
+        name_pos = {}
+        for line in file:
+            line = line.strip().split("\t")
+            chromosome = line[0]
+            start = int(line[1])
+            end = int(line[2])
+
+            if keep_name_pos:
+                for i in range(start, end):
+                    file_pos.append((chromosome, i))
+
+                    if len(line) >= 4:
+                        name_pos[(chromosome, i)] = line[3]
+            else:
+                for i in range(start, end):
+                    file_pos.append((chromosome, i))
+
+        if keep_name_pos:
+            return set(file_pos), name_pos
+        else:
+            return set(file_pos), {}
+
+def intersect(bed1: str, bed2: str, out: str):
+    file1_pos, name1_pos = get_coord_names(bed1)
+    file2_pos, name2_pos = get_coord_names(bed2)
+    
+    shared_coordinates = file1_pos.intersection(file2_pos)
+    del(file1_pos)
+    del(file2_pos)
+
+    with open(out, "w") as out_file:
+        for coordinate in shared_coordinates:
+            has_name_in1 = coordinate in name1_pos
+            has_name_in2 = coordinate in name2_pos
+
+            if has_name_in1 & has_name_in2:
+                name = f"{name1_pos[coordinate]},{name2_pos[coordinate]}"
+            elif has_name_in1:
+                name = {name1_pos[coordinate]}
+            elif has_name_in2:
+                name = {name2_pos[coordinate]}
+            else:
+                name = ""
+            out_file.write(f"{coordinate[0]}\t{coordinate[1]}\t{coordinate[1]+1}\t{name}\n")
+
+def difference(bed1: str, bed2: str, out: str):
+    file1_pos, name_pos = get_coord_names(bed1)
+    file2_pos, _ = get_coord_names(bed2, keep_name_pos=False)
+    
+    exclusive_file1 = file1_pos.intersection(file2_pos)
+    del(file1_pos)
+    del(file2_pos)
+
+    with open(out, "w") as out_file:
+        for coordinate in exclusive_file1:
+            has_name = coordinate in name_pos
+            name = name_pos[coordinate] if has_name else ""
+            out_file.write(f"{coordinate[0]}\t{coordinate[1]}\t{coordinate[1]+1}\t{name}\n")
+
+
+def merge(file_paths: str, output_file_path: str):
+    merged_data = {}
+    file_path_list = file_paths.split(",")
+
+    for file_path in file_path_list:
+        with open(file_path, "r") as bed:
+            for line in bed:
+                line = line.strip().split("\t")
+                if len(line) >= 3:
+                    chromosome = line[0]
+                    start = int(line[1])
+                    end = int(line[2])
+                    name_value = line[3] if len(line) >= 4 else ""
+
+                    for i in range(start, end):
+                        pos_key = (chromosome, i)
+                        if pos_key not in merged_data:
+                            merged_data[pos_key] = [chromosome, i, i+1, name_value]
+                        elif len(name_value) > 0:
+                            merged_data[pos_key][3] += f",{name_value}"
+    
+    sorted_data = sorted(merged_data.values(), key=lambda x: (x[0], x[1]))
+
+    with open(output_file_path, 'w') as output_file:
+        for entries in sorted_data:
+            for entry in entries:
+                output_file.write(f"{entry[0]}\t{entry[1]}\t{entry[2]}\t{entry[3]}\n")
+
 
 def add_bed_info(tsv_file: str, bed_file: str, out_file: str) -> None:
     """
@@ -103,29 +196,6 @@ def add_bed_info(tsv_file: str, bed_file: str, out_file: str) -> None:
             out_writer.writerow(row)
 
 
-def filter_with_bed(tsv_file: str, bed_file: str, out_file: str) -> None:
-    bed_data = []
-    with open(bed_file, "r") as bed:
-        for row in bed:
-            row = row.strip().split("\t")
-            chromosome = row[0]
-            start = int(row[1]) #+ 1 # get it to 1-indexed to fit tsv file
-            bed_data.append((chromosome, start))
-    bed_data = set(bed_data)
-    
-    with open(tsv_file, "r") as tsv, open(out_file, "w") as out:
-        header = next(tsv)
-        out.write(header)
-
-        for row_str in tsv:
-            row = row_str.strip().split("\t")
-            chromosome = row[0]
-            start = int(row[1])
-            if (chromosome, start) in bed_data:
-                out.write(row_str)
-
-
-
 
 
 if __name__=="__main__":
@@ -163,14 +233,20 @@ if __name__=="__main__":
     add_bed_parser.add_argument("-b", "--bed", type=str, required=True,
                                 help="BED file containing additional information in the 'name' column")
 
-
-    filter_parser = subparsers.add_parser("filter_tsv", prog="Filter TSV by BED", description="Filter existing TSV file based on positions in BED file.")
-    filter_parser.add_argument("-i", "--input", type=str, required=True,
-                                help="TSV output from PileupExtractor/NeighbourhoodSearcher")
-    filter_parser.add_argument("-o", "--output", type=str, required=True,
+    merge_parser = subparsers.add_parser("merge", prog="Merge bed files", description="Merges the position contained in multiple bed files.")
+    merge_parser.add_argument("-i", "--input", type=str, required=True,
+                                help="Paths to multiple bed files, comma separated. For example: '/path/to/file1.bed,/path/to/file2.bed,...'")
+    merge_parser.add_argument("-o", "--output", type=str, required=True,
                                 help="Path to the output file")
-    filter_parser.add_argument("-b", "--bed", type=str, required=True,
-                                help="BED file containing single positions")
+
+    merge_parser = subparsers.add_parser("difference", prog="Get difference bed files", 
+                                         description="Extract the positons present in file 1 and not present in file 2.")
+    merge_parser.add_argument("-i1", "--input1", type=str, required=True,
+                                help="Path to bed file 1")
+    merge_parser.add_argument("-i2", "--input2", type=str, required=True,
+                                help="Path to bed file 2")
+    merge_parser.add_argument("-o", "--output", type=str, required=True,
+                                help="Path to the output file")
 
 
     args = parser.parse_args()
@@ -181,7 +257,9 @@ if __name__=="__main__":
         intersect_beds(args.file_a, args.file_b, args.output, args.label_a, args.label_b)
     elif args.subcommand == "add_bed_info":
         add_bed_info(args.input, args.bed, args.output)
-    elif args.subcommand == "filter_tsv":
-        filter_with_bed(args.input, args.bed, args.output)
+    elif args.subcommand == "merge":
+        merge(args.input, args.output)
+    elif args.subcommand == "difference":
+        difference(bed1=args.input1, bed2=args.input1, out=args.output)
     else:
         parser.print_help()
