@@ -338,18 +338,21 @@ class PositionExtractor:
         data = self.excl_in_1.copy()
         data["end"] = data["site"]
         data["site"] = data["site"] - 1
+        data["name"] = f"{self.label_1}_exclusive"
         data.to_csv(outpath, sep="\t", header=False, index=False)
 
         outpath = f"{self.out_dir}{self.label_2}_exclusive.bed"
         data = self.excl_in_2.copy()
         data["end"] = data["site"]
         data["site"] = data["site"] - 1
+        data["name"] = f"{self.label_2}_exclusive"
         data.to_csv(outpath, sep="\t", header=False, index=False)
 
         outpath = f"{self.out_dir}{self.label_1}_and_{self.label_2}.bed"
         data = self.in_1_and_2.copy()
         data["end"] = data["site"]
         data["site"] = data["site"] - 1
+        data["name"] = f"{self.label_1}_{self.label_2}"
         data.to_csv(outpath, sep="\t", header=False, index=False)
 
     ##############################################################################################################
