@@ -37,6 +37,12 @@ class SummaryCreator:
     perc_mis_col: str
     data: pd.DataFrame
 
+    dtypes = {'chr': str, 'site': int, 'n_reads': int, 'ref_base': str, 'majority_base': str, 'n_a': int, 'n_c': int,
+            'n_g': int, 'n_t': int, 'n_del': int, 'n_ins': int, 'n_ref_skip': int, 'n_a_rel': float, 'n_c_rel': float,
+            'n_g_rel': float, 'n_t_rel': float, 'n_del_rel': float, 'n_ins_rel': float, 'n_ref_skip_rel': float,
+            'perc_mismatch': float, 'perc_mismatch_alt': float, 'motif': str, 'q_mean': float, 'q_std': float,
+            'neighbour_error_pos': str}
+
     def __init__(self, in_path: str, out_path: str, n_bins: int|None = 5000, use_perc_mismatch_alt: bool = False) -> None:
         """
         Initializes a SummaryCreator object.
@@ -119,7 +125,7 @@ class SummaryCreator:
             return out
       
     def load_data(self) -> None:
-        self.data = pd.read_csv(self.input_path, sep="\t", low_memory=False)
+        self.data = pd.read_csv(self.input_path, sep="\t", dtype=self.dtypes)
 
     ######################################################################################################################
     #                                               Main processing method                                               #
