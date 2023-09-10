@@ -166,7 +166,7 @@ class Filter:
         if n_reads_str is None:
             return None
         try:
-            val = int(n_reads_str)
+            value = int(n_reads_str)
             fun = self.OPERATORS.get(">=")
         except:
             match = re.match(r'([<>]=?|==)(\d+)', n_reads_str)
