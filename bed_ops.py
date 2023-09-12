@@ -153,8 +153,10 @@ def merge(file_paths: str, output_file_path: str):
     with open(output_file_path, 'w') as output_file:
         for entries in sorted_data:
             for entry in entries:
-                output_file.write(f"{entry[0]}\t{entry[1]}\t{entry[2]}\t{entry[3]}\n")
-
+                try:
+                    output_file.write(f"{entry[0]}\t{entry[1]}\t{entry[2]}\t{entry[3]}\n")
+                except:
+                    print(entry)
 
 def add_bed_info(tsv_file: str, bed_file: str, out_file: str) -> None:
     """
