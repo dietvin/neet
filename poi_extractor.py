@@ -672,7 +672,6 @@ class POIAnalyzer():
 
         """
         data = self.data.loc[self.data.bed_name == mod]
-        data.to_csv("/home/vincent/masterthesis/data/45s_rrna/processed/dRNA_cytoplasm/test.csv")
         matrix_data, matrix_labels, matrix_max_mism = self.prepare_data_mism_types(data)
 
         fig = px.imshow(matrix_data, labels=dict(x="Called base", y="Reference base", color="Count"), zmin=0, zmax=1.2*matrix_max_mism, color_continuous_scale="portland")
