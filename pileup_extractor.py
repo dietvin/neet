@@ -603,23 +603,11 @@ class FeatureExtractor:
         """
         #n_reads = sum([count_dict["a"], count_dict["c"], count_dict["g"], count_dict["t"]])
         rel_dict = {}
-        try:
-            rel_dict["a"] = count_dict["a"] / n_reads
-            rel_dict["c"] = count_dict["c"] / n_reads 
-            rel_dict["g"] = count_dict["g"] / n_reads
-            rel_dict["t"] = count_dict["t"] / n_reads
-            rel_dict["del"] = count_dict["del"] / n_reads
-            rel_dict["ins"] = count_dict["ins"] / n_reads
-            rel_dict["ref_skip"] = count_dict["ref_skip"] / n_reads
-
-        except ZeroDivisionError:
-            rel_dict["a"] = 0
-            rel_dict["c"] = 0
-            rel_dict["g"] = 0
-            rel_dict["t"] = 0
-            rel_dict["del"] = 0
-            rel_dict["ins"] = 0
-            rel_dict["ref_skip"] = 0
+        for category in ["a", "c", "g", "t", "del", "ins", "ref_skip"]:
+            try:
+                rel_dict[category] = count_dict[category] / n_reads
+            except:
+                rel_dict[category] = 0
 
         return rel_dict
 
