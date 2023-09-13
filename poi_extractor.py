@@ -8,6 +8,7 @@ from plotly.subplots import make_subplots
 from plotly.io import to_html
 from intervaltree import IntervalTree
 import collections, datetime, argparse
+from scipy.stats import normaltest, bartlett, ttest_ind, mannwhitneyu
 
 class POIAnalyzer():
 
@@ -530,6 +531,47 @@ class POIAnalyzer():
         
         return x_vals, y_vals, x_vals_mod, y_vals_mod, pie_labs, pie_vals
 
+    def perform_test(self, set1: List[float], set2: List[float], alpha: float = 0.05) -> str:
+        try:
+            if (normaltest(set1)[1] >= alpha) & (normaltest(set2)[1] >= alpha) & (bartlett(set1, set2)[1] >= alpha): # normal distributions in both samples + equal variances
+                return f"{ttest_ind(a=set1, b=set2)[1]} (TT)"
+            else: # normal distribution in both samples and equal variances
+                return f"{mannwhitneyu(x=set1, y=set2)[1]} (MWU)"
+        except:
+            return "ERROR"
+
+    def test_type(self, data: Tuple[List[float], List[float]],
+                  category: str, 
+                  corresponding_base: str) -> Dict[str, str]:
+        d = pd.DataFrame(data).T
+        mod_mat = list(d.loc[d[0]==f"<i>{category}</i> match",1])
+        unm_mat = list(d.loc[d[0]==f"{corresponding_base} match",1])
+        mod_mis = list(d.loc[d[0]==f"<i>{category}</i> mismatch",1])
+        unm_mis = list(d.loc[d[0]==f"{corresponding_base} mismatch",1])
+        res = {}
+        
+        res["mod_mat_unm_mat"] = self.perform_test(mod_mat, unm_mat)
+        res["mod_mis_unm_mis"] = self.perform_test(mod_mis, unm_mis)
+        res["mod_mat_mod_mis"] = self.perform_test(mod_mat, mod_mis)
+        res["unm_mat_unm_mis"] = self.perform_test(unm_mat, unm_mis)
+        
+        return res
+
+    def create_test_overview(self, datasets: List[Tuple[List[float], List[float]]], 
+                             category: str, 
+                             corresponding_base: str) -> str:
+        results = []
+        for data in datasets:
+            results.append(self.test_type(data, category, corresponding_base))
+
+        r = pd.DataFrame(results)
+        r.columns = [f"{category} match vs. {corresponding_base} match", 
+                    f"{category} mismatch vs. {corresponding_base} mismatch", 
+                    f"{category} match vs. {category} mismatch", 
+                    f"{corresponding_base} match vs. {corresponding_base} mismatch"]
+        r.index = pd.Index(["Mismatch rate", "Deletion rate", "Insertion rate","Ref. skip rate", "Mean quality scores"])
+        return r.to_html()
+
     ##############################################################################################################
     #                                              Plotting methods                                              #
     ##############################################################################################################
@@ -718,7 +760,7 @@ class POIAnalyzer():
 
         return to_html(fig, include_plotlyjs=False)
 
-    def create_error_rate_plot(self, mod: str, canonical: str) -> str:
+    def create_error_rate_plot(self, mod: str, canonical: str) -> Tuple[str, str]:
         """
         Create an error rate plot for a specified modification type and canonical sequence.
 
@@ -737,6 +779,8 @@ class POIAnalyzer():
         """
         data_mismatch, data_deletion, data_insertion, data_ref_skip, data_quality = self.prepare_data_errorrates(self.data, mod, canonical)
 
+        p_val_table = self.create_test_overview([data_mismatch, data_deletion, data_insertion, data_ref_skip, data_quality], mod, canonical)
+
         box_mismatch = go.Box(x=data_mismatch[0], y=data_mismatch[1], name="Mismatch rate", offsetgroup=0, line=dict(color="black"), marker=dict(outliercolor="black", size=2), fillcolor="#8c564b")
         box_deletion = go.Box(x=data_deletion[0], y=data_deletion[1], name="Deletion rate", offsetgroup=1, line=dict(color="black"), marker=dict(outliercolor="black", size=2), fillcolor="#e377c2")
         box_insertion = go.Box(x=data_insertion[0], y=data_insertion[1], name="Insertion rate", offsetgroup=2, line=dict(color="black"), marker=dict(outliercolor="black", size=2), fillcolor="#7f7f7f")
@@ -751,7 +795,7 @@ class POIAnalyzer():
         fig.update_yaxes(title_text="Error rate", row = 1, col = 1)
         fig.update_yaxes(title_text="Quality score", row = 1, col = 2)
 
-        return to_html(fig, include_plotlyjs=False)
+        return to_html(fig, include_plotlyjs=False), p_val_table
 
     def create_nb_plot(self, mod: str) -> str:
         """
@@ -969,6 +1013,30 @@ class POIAnalyzer():
                         margin-right: 1.5em;
                     }}
 
+                    table {{
+                        width: 100%;
+                        border-collapse: collapse;
+                        font-family: Arial, sans-serif;
+                    }}
+
+                    .table-box {{
+                        margin: 2em;
+                        border: 1px solid #ccc;
+                    }}
+
+                    th, td {{
+                        padding: 8px;
+                        text-align: center;
+                        border: 1px solid #ccc;
+                    }}
+                    th {{
+                        background-color: #f2f2f2;
+                    }}
+                    td:hover {{
+                        filter: brightness(85%);
+                        border: 1px solid #ccc;
+                    }}
+
                 </style>
             </head>
 
@@ -1037,6 +1105,7 @@ class POIAnalyzer():
                     <div class="plot-container">
                         {plots[3]}
                     </div>
+                    
                     <p>
                         Left: Distributions of mismatch, deletion, insertion and reference skip rates for different
                         subsets. Right: Distribution of mean quality scores for different subsets. {name} match: positions
@@ -1047,13 +1116,17 @@ class POIAnalyzer():
                         mismatch: positions with reference base {corresponding_base}, where the called base 
                         differs.
                     </p>
+
+                    <div class="table-box">
+                        {plots[4]}
+                    </div>
                 </section>
 
                 <section>
                     <h2>Neighbouring errors</h2>
                     <h3>Count of positions with high error rate in the surrounding of {name} positions</h3>
                     <div class="plot-container">
-                        {plots[4]}
+                        {plots[5]}
                     </div>
                     <p>
                         Left: Occurences of high mismatch rates two bases up- and downstream from {name} positions.
@@ -1115,10 +1188,10 @@ class POIAnalyzer():
         plot_mod_map = self.create_map_plot(category)
         plot_mism_types = self.create_mism_types_plot(category)
         plot_comp = self.create_composition_plot(category, corresponding_base)
-        plot_err_rate = self.create_error_rate_plot(category, corresponding_base)
+        plot_err_rate, p_val_table = self.create_error_rate_plot(category, corresponding_base)
         plot_nb = self.create_nb_plot(category)
 
-        plots = [plot_mod_map, plot_mism_types, plot_comp, plot_err_rate, plot_nb]
+        plots = [plot_mod_map, plot_mism_types, plot_comp, plot_err_rate, p_val_table, plot_nb]
         self.write_template(plots, category, corresponding_base)
         if self.output_tsv:
             self.write_tsv()
