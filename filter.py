@@ -47,6 +47,8 @@ class Filter:
     mismatch_types: List[Tuple[str, str]] | None
     perc_mismatched: Tuple[float, Callable[[float, float], bool]] | None
     perc_mismatched_alt: Tuple[float, Callable[[float, float], bool]] | None
+    perc_deletion: Tuple[float, Callable[[float, float], bool]] | None
+    perc_insertion: Tuple[float, Callable[[float, float], bool]] | None
     q_score: Tuple[float, Callable[[float, float], bool]] | None
     bed_positions: set[Tuple[str, int]]
     filter_bed: bool
@@ -71,6 +73,8 @@ class Filter:
                  mismatch_types: str,
                  perc_mismatched: str, 
                  perc_mismatched_alt: str,
+                 perc_deletion: str,
+                 perc_insertion: str,
                  motif: str, 
                  q_score: str,
                  bed_include: str | None,
@@ -101,6 +105,8 @@ class Filter:
         self.mismatch_types = self.get_mismatch_types(mismatch_types)
         self.perc_mismatched = self.get_val_fun_float(perc_mismatched)
         self.perc_mismatched_alt = self.get_val_fun_float(perc_mismatched_alt)
+        self.perc_deletion = self.get_val_fun_float(perc_deletion)
+        self.perc_insertion = self.get_val_fun_float(perc_insertion)
         self.motif = motif.upper() if motif else None
         self.q_score = self.get_val_fun_float(q_score)
 
@@ -339,6 +345,8 @@ class Filter:
         maj_base = row[4]
         perc_mismatched = float(row[19])
         perc_mismatched_alt = float(row[20])
+        perc_deletion = float(row[16])
+        perc_insertion = float(row[17])
         motif = row[21]
         q_score = float(row[22])
 
@@ -360,6 +368,11 @@ class Filter:
             if not check_func(perc_mismatched, self.perc_mismatched): return False
         if self.perc_mismatched_alt:
             if not check_func(perc_mismatched_alt, self.perc_mismatched_alt): return False
+        if self.perc_deletion:
+            if not check_func(perc_deletion, self.perc_deletion): return False
+        if self.perc_insertion:
+            if not check_func(perc_insertion, self.perc_insertion): return False
+
         if self.motif:
             if motif != self.motif: return False
         if self.q_score:
@@ -391,6 +404,10 @@ def setup_parser() -> argparse.ArgumentParser:
                         help="Filter by percent of mismatched reads. To filter perc_mismatched >= x: 'x'; perc_mismatched <= x: '<=x'")
     parser.add_argument("-pa", "--percent_mismatched_alt", type=str, required=False,
                         help="Filter by percent of mismatched reads using the alternative measure. To filter perc_mismatched >= x: 'x'; perc_mismatched <= x: '<=x'")
+    parser.add_argument("-d", "--percent_deletion", type=str, required=False,
+                        help="Filter by percent of deleted reads. To filter percent_deletion >= x: 'x'; percent_deletion <= x: '<=x'")
+    parser.add_argument("-pi", "--percent_insertion", type=str, required=False,
+                        help="Filter by percent of inserted reads. To filter percent_insertion >= x: 'x'; percent_insertion <= x: '<=x'")
     parser.add_argument("-f", "--motif", type=str, required=False,
                         help="Filter by motif around position.")
     parser.add_argument("-q", "--q_score", type=str, required=False,
@@ -422,6 +439,8 @@ if __name__ == "__main__":
                     mismatch_types=args.mismatch_types,
                     perc_mismatched=args.percent_mismatched,
                     perc_mismatched_alt=args.percent_mismatched_alt,
+                    perc_deletion=args.percent_deletion,
+                    perc_insertion=args.percent_insertion,
                     motif=args.motif,
                     q_score=args.q_score,
                     bed_include=args.filter_bed,
