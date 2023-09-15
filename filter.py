@@ -109,7 +109,7 @@ class Filter:
         self.perc_mismatched_alt = self.get_val_fun_float(perc_mismatched_alt)
         self.perc_deletion = self.get_val_fun_float(perc_deletion)
         self.perc_insertion = self.get_val_fun_float(perc_insertion)
-        self.percent_refskip = self.get_val_fun_float(perc_refskip)
+        self.perc_refskip = self.get_val_fun_float(perc_refskip)
         self.motif = motif.upper() if motif else None
         self.q_score = self.get_val_fun_float(q_score)
 
