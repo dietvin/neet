@@ -693,7 +693,7 @@ class POIAnalyzer():
         fig.add_trace(go.Bar(x=list(present_chr), y=list(chr_lens), marker=dict(color="lightgrey", line=dict(color="black", width=2)), name="Chromosomes", showlegend=False))
         fig.update_layout(bargap=0.5, yaxis=dict(range=[0,max(chr_lens)+0.1*max(chr_lens)]))
 
-        fig.add_trace(go.Scatter(x=list(data["chr"]), y=list(data["site"]), mode='markers', marker=dict(symbol='line-ew', color="#1f77b4", size=scatter_size, line=dict(width=1.1, color="#1f77b4")), name=f"psU sites", hovertemplate="Chr%{x}:%{y}"))
+        fig.add_trace(go.Scatter(x=list(data["chr"]), y=list(data["site"]), mode='markers', marker=dict(symbol='line-ew', color="#1f77b4", size=scatter_size, line=dict(width=1.1, color="#1f77b4")), name=f"{mod_type} sites", hovertemplate="Chr%{x}:%{y}"))
         fig.update_xaxes(fixedrange=True)
 
         return to_html(fig, include_plotlyjs=False)
@@ -1116,7 +1116,10 @@ class POIAnalyzer():
                         mismatch: positions with reference base {corresponding_base}, where the called base 
                         differs.
                     </p>
-
+                    <p>
+                        The table below shows p-values for statistical tests between the four groups for different error rate
+                        the mean quality distributions. 
+                    </p>
                     <div class="table-box">
                         {plots[4]}
                     </div>
