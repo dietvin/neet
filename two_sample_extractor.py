@@ -515,7 +515,7 @@ class PositionExtractor:
         return count_table.to_html()
     
     def write_svg(self, fig: go.Figure, name: str) -> None:
-        outpath = f"{self.output_path}_{name}.svg"
+        outpath = f"{self.out_dir}/{name}.svg"
         fig.write_image(outpath)
 
     def create_summary(self) -> None:
