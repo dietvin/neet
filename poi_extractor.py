@@ -843,7 +843,7 @@ class POIAnalyzer():
         fig.write_image(outpath)
 
     def figs_to_str(self, plot_figs: List[go.Figure]) -> List[str]:
-        plot_str = map(lambda x: to_html(x, include_plotlyjs=False), plot_figs)
+        plot_str = list(map(lambda x: to_html(x, include_plotlyjs=False), plot_figs))
         return plot_str
 
     def write_template(self, plot_figs: List[go.Figure], category: str, corresponding_base: str) -> None:
