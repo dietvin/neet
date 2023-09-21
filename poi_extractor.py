@@ -846,7 +846,7 @@ class POIAnalyzer():
         plot_str = list(map(lambda x: to_html(x, include_plotlyjs=False), plot_figs))
         return plot_str
 
-    def write_template(self, plot_figs: List[go.Figure], category: str, corresponding_base: str) -> None:
+    def write_template(self, plot_figs: List[go.Figure], tables: List[str], category: str, corresponding_base: str) -> None:
         """
         Generate an HTML report template with interactive plots.
 
@@ -862,7 +862,7 @@ class POIAnalyzer():
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         if self.export_svg:
-            for fig, name in zip([plot_figs[0], plot_figs[1], plot_figs[2], plot_figs[3], plot_figs[5]], ["poi_map", "poi_mismatch_types", "poi_base_comp", 
+            for fig, name in zip(plot_figs, ["poi_map", "poi_mismatch_types", "poi_base_comp", 
                                              "poi_error_rates", "poi_neighbours"]):
                 self.write_svg(fig, name)
 
@@ -1137,7 +1137,7 @@ class POIAnalyzer():
                         the mean quality distributions. 
                     </p>
                     <div class="table-box">
-                        {plots[4]}
+                        {tables[0]}
                     </div>
                 </section>
 
@@ -1145,7 +1145,7 @@ class POIAnalyzer():
                     <h2>Neighbouring errors</h2>
                     <h3>Count of positions with high error rate in the surrounding of {name} positions</h3>
                     <div class="plot-container">
-                        {plots[5]}
+                        {plots[4]}
                     </div>
                     <p>
                         Left: Occurences of high mismatch rates two bases up- and downstream from {name} positions.
@@ -1210,8 +1210,9 @@ class POIAnalyzer():
         plot_err_rate, p_val_table = self.create_error_rate_plot(category, corresponding_base)
         plot_nb = self.create_nb_plot(category)
 
-        plots = [plot_mod_map, plot_mism_types, plot_comp, plot_err_rate, p_val_table, plot_nb]
-        self.write_template(plots, category, corresponding_base)
+        plots = [plot_mod_map, plot_mism_types, plot_comp, plot_err_rate, plot_nb]
+        tables = [p_val_table]
+        self.write_template(plots, tables, category, corresponding_base)
         if self.output_tsv:
             self.write_tsv()
 
