@@ -7,6 +7,7 @@ from plotly.io import to_html
 
 class PositionExtractor:
     out_dir: str
+    export_svg: bool
 
     in_paths_1: List[str]
     in_paths_2: List[str]
@@ -32,7 +33,8 @@ class PositionExtractor:
           'perc_mismatch': float, 'perc_mismatch_alt': float, 'motif': str, 'q_mean': float, 'q_std': float,
           'neighbour_error_pos': str}
 
-    def __init__(self, in_paths_1: str, in_paths_2: str, out_dir: str, ref_path: str, label_1: str|None = None, label_2: str|None = None) -> None:
+    def __init__(self, in_paths_1: str, in_paths_2: str, out_dir: str, ref_path: str, label_1: str|None = None, label_2: str|None = None,
+                 export_svg: bool = False) -> None:
         """
         Initialize an instance of the PositionExtractor class.
 
@@ -66,6 +68,7 @@ class PositionExtractor:
         self.check_out(out_dir)
         if not out_dir.endswith("/"): out_dir+="/"
         self.out_dir = out_dir
+        self.export_svg = export_svg
 
         self.label_1 = label_1 if label_1 else "sample1"
         self.label_2 = label_2 if label_2 else "sample2"
@@ -388,7 +391,7 @@ class PositionExtractor:
             return (float('inf'), item)  # Place non-digits at the end
 
 
-    def create_plot(self):
+    def create_plot(self) -> go.Figure:
         """
         Create a Plotly figure displaying genomic positions.
 
@@ -436,14 +439,22 @@ class PositionExtractor:
         present_chr = np.array(sorted(present_chr, key=self.custom_sort_key))
         chr_lens = np.array([len(self.ref_dict[x]) for x in present_chr])
 
-        fig = update_plot(go.Figure(), height = 1000, width = 1200)
-        fig.add_trace(go.Bar(x=present_chr, y=chr_lens, marker=dict(color="lightgrey"), name="Chromosomes", showlegend=False))
-        fig.add_trace(go.Scatter(x=self.in_1_and_2.chr, y=self.in_1_and_2.site, mode='markers', marker=dict(symbol='line-ew', color="#1f77b4", size=18, line=dict(width=1.1, color="#1f77b4")), name=f"{self.label_1}+{self.label_2}", hovertemplate="Chr%{x}:%{y}"))
-        fig.add_trace(go.Scatter(x=self.excl_in_1.chr, y=self.excl_in_1.site, mode='markers', marker=dict(symbol='line-ew', color="#ff7f0e", size=18, line=dict(width=1.1, color="#ff7f0e")), name=f"{self.label_1}", hovertemplate="Chr%{x}:%{y}"))
-        fig.add_trace(go.Scatter(x=self.excl_in_2.chr, y=self.excl_in_2.site, mode='markers', marker=dict(symbol='line-ew', color="#2ca02c", size=18, line=dict(width=1.1, color="#2ca02c")), name=f"{self.label_2}", hovertemplate="Chr%{x}:%{y}"))
+        width = 1200
+        bargap = 0.9
+        bar_width = 1-bargap+0.15
+        n_bars = len(present_chr)
+        scatter_size = width/n_bars*bar_width
+
+        fig = update_plot(go.Figure(), height = 1000, width = width)
+        fig.add_trace(go.Bar(x=present_chr, y=chr_lens, marker=dict(color="lightgrey", line=dict(color="black", width=2)), name="Chromosomes", showlegend=False))
+        fig.update_layout(bargap=0.5, yaxis=dict(range=[0,max(chr_lens)+0.1*max(chr_lens)]))
+
+        fig.add_trace(go.Scatter(x=self.in_1_and_2.chr, y=self.in_1_and_2.site, mode='markers', marker=dict(symbol='line-ew', color="#1f77b4", size=scatter_size, line=dict(width=1.1, color="#1f77b4")), name=f"{self.label_1}+{self.label_2}", hovertemplate="Chr%{x}:%{y}"))
+        fig.add_trace(go.Scatter(x=self.excl_in_1.chr, y=self.excl_in_1.site, mode='markers', marker=dict(symbol='line-ew', color="#ff7f0e", size=scatter_size, line=dict(width=1.1, color="#ff7f0e")), name=f"{self.label_1}", hovertemplate="Chr%{x}:%{y}"))
+        fig.add_trace(go.Scatter(x=self.excl_in_2.chr, y=self.excl_in_2.site, mode='markers', marker=dict(symbol='line-ew', color="#2ca02c", size=scatter_size, line=dict(width=1.1, color="#2ca02c")), name=f"{self.label_2}", hovertemplate="Chr%{x}:%{y}"))
         fig.update_xaxes(fixedrange=True)
 
-        return to_html(fig, include_plotlyjs=False)
+        return fig
 
     def get_file_paths(self) -> Tuple[str, str]:
         """
@@ -502,6 +513,10 @@ class PositionExtractor:
         count_table = count_table.T.fillna(0).astype(int)
         count_table["Genome-wide"] = count_table.sum(axis=1)
         return count_table.to_html()
+    
+    def write_svg(self, fig: go.Figure, name: str) -> None:
+        outpath = f"{self.output_path}_{name}.svg"
+        fig.write_image(outpath)
 
     def create_summary(self) -> None:
         """
@@ -529,6 +544,11 @@ class PositionExtractor:
 
         """
         plot = self.create_plot()
+        if self.export_svg:
+            self.write_svg(plot, "twosample_map")
+        
+        plot = to_html(plot, include_plotlyjs=False)
+
         paths_1, paths_2 = self.get_file_paths()
         count_table = self.create_count_table()
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -845,13 +865,20 @@ def setup_parser() -> argparse.ArgumentParser:
                             Path to output a output directory, in which all output files will be stored.
                             """)
     parser.add_argument('-r', '--reference', type=str, required=True, help="Path to the reference file")
+    parser.add_argument('--export_svg', action="store_true", 
+                        help="""
+                            If specified, exports created plots as svg files.
+                            """)
     return parser
 
 if __name__ == "__main__":
     parser = setup_parser()
     args = parser.parse_args()
 
-    posextr = PositionExtractor(in_paths_1=args.sample1, in_paths_2=args.sample2, out_dir=args.output, ref_path=args.reference, label_1=args.basename, label_2=args.basename2)
+    posextr = PositionExtractor(in_paths_1=args.sample1, in_paths_2=args.sample2, 
+                                out_dir=args.output, ref_path=args.reference, 
+                                label_1=args.basename, label_2=args.basename2, 
+                                export_svg=args.export_svg)
     posextr.main()
     
     # posextr = PositionExtractor(in_paths_1="/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/cytoplasm1_extracted.tsv,/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/cytoplasm2_extracted.tsv,/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/cytoplasm3_extracted.tsv",

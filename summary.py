@@ -36,6 +36,7 @@ class SummaryCreator:
     n_bins: int|None
     perc_mis_col: str
     data: pd.DataFrame
+    export_svg: bool
 
     dtypes = {'chr': str, 'site': int, 'n_reads': int, 'ref_base': str, 'majority_base': str, 'n_a': int, 'n_c': int,
             'n_g': int, 'n_t': int, 'n_del': int, 'n_ins': int, 'n_ref_skip': int, 'n_a_rel': float, 'n_c_rel': float,
@@ -43,7 +44,7 @@ class SummaryCreator:
             'perc_mismatch': float, 'perc_mismatch_alt': float, 'motif': str, 'q_mean': float, 'q_std': float,
             'neighbour_error_pos': str}
 
-    def __init__(self, in_path: str, out_path: str, n_bins: int|None = 5000, use_perc_mismatch_alt: bool = False) -> None:
+    def __init__(self, in_path: str, out_path: str, n_bins: int|None = 5000, use_perc_mismatch_alt: bool = False, export_svg: bool = False) -> None:
         """
         Initializes a SummaryCreator object.
 
@@ -55,6 +56,7 @@ class SummaryCreator:
         self.process_path(in_path, out_path)
         self.n_bins = n_bins
         self.perc_mis_col = "perc_mismatch_alt" if use_perc_mismatch_alt else "perc_mismatch"
+        self.export_svg = export_svg
         
     #################################################################################################################
     #                                   Functions called during initialization                                      #
@@ -368,7 +370,7 @@ class SummaryCreator:
         return fig
 
 
-    def create_general_plot(self) -> str:
+    def create_general_plot(self) -> go.Figure:
         """
         Creates and returns an HTML representation of the general summary plot.
 
@@ -397,9 +399,8 @@ class SummaryCreator:
         except Exception as e:
             fig = self.create_error_placeholder(e)
 
-        return to_html(fig, include_plotlyjs=False)
-    
-    def create_chr_plot(self) -> str:
+        return fig
+    def create_chr_plot(self) -> go.Figure:
         """
         Creates and returns an HTML representation of the chromosome-specific summary plot.
 
@@ -437,9 +438,9 @@ class SummaryCreator:
         except Exception as e:
             fig = self.create_error_placeholder(e)
 
-        return to_html(fig, include_plotlyjs=False)
+        return fig
 
-    def create_mism_general_plot(self) -> str:
+    def create_mism_general_plot(self) -> go.Figure:
         """
         Creates and returns an HTML representation of the general mismatch summary plot.
 
@@ -492,9 +493,9 @@ class SummaryCreator:
         except Exception as e:
             fig = self.create_error_placeholder(e)
 
-        return to_html(fig, include_plotlyjs=False)
+        return fig
 
-    def create_mism_types_plots(self) -> List[str]:
+    def create_mism_types_plots(self) -> List[go.Figure]:
         """
         Creates and returns HTML representations of mismatch types summary plots.
 
@@ -505,7 +506,7 @@ class SummaryCreator:
             matrix_data, matrix_labels, matrix_max_mism, pie_data, pie_labels, box_data = self.prepare_data_mism_types()
         except Exception as e:
             fig = self.create_error_placeholder(e)
-            fig = to_html(fig, include_plotlyjs=False)
+            fig = fig
             return [fig, fig, fig]
 
         try:
@@ -517,7 +518,7 @@ class SummaryCreator:
             matrix = to_html(fig, include_plotlyjs=False)
         except Exception as e:
             fig = self.create_error_placeholder(e)
-            matrix = to_html(fig, include_plotlyjs=False)
+            matrix = fig
 
         try:
             fig = go.Figure(go.Pie(labels=pie_labels, values=pie_data, 
@@ -528,7 +529,7 @@ class SummaryCreator:
             pie = to_html(fig, include_plotlyjs=False)
         except Exception as e:
             fig = self.create_error_placeholder(e)
-            pie = to_html(fig, include_plotlyjs=False)
+            pie = fig
 
         try:
             fig = go.Figure()
@@ -546,11 +547,11 @@ class SummaryCreator:
             box = to_html(fig, include_plotlyjs=False)
         except Exception as e:
             fig = self.create_error_placeholder(e)
-            box = to_html(fig, include_plotlyjs=False)
+            box = fig
 
         return [matrix, pie, box]
 
-    def create_motif_plot(self) -> str:
+    def create_motif_plot(self) -> go.Figure:
         """
         Creates and returns an HTML representation of the motif summary plot.
 
@@ -633,14 +634,21 @@ class SummaryCreator:
 
         except Exception as e:
             fig = self.create_error_placeholder(e)            
-        return to_html(fig, include_plotlyjs=False)
+        return fig
 
 
     ################################################################################################################
     #                                               Create HTML file                                               #
     ################################################################################################################
+    def write_svg(self, fig: go.Figure, name: str) -> None:
+        outpath = f"{os.path.splitext(self.output_path)[0]}_{name}.svg"
+        fig.write_image(outpath)
 
-    def write_to_html(self, n_positions, n_chr, plots: List[str]):
+    def figs_to_str(self, plot_figs: List[go.Figure]) -> List[str]:
+        plot_str = map(lambda x: to_html(x, include_plotlyjs=False), plot_figs)
+        return plot_str
+
+    def write_to_html(self, n_positions, n_chr, plot_figs: List[go.Figure]) -> None:
         """
         Generate an HTML document containing summary information and plots created from extracted data.
 
@@ -653,6 +661,13 @@ class SummaryCreator:
             None: The method generates an HTML file based on the provided template and plots,
                 and writes it to the specified output path.
         """
+        if self.export_svg:
+            for fig, name in zip(plot_figs, ["summary_general_info", "summary_chr_info", "summary_mismatch_stats", 
+                                             "summary_mismatch_matrix", "summary_mismatch_pie", 
+                                             "summary_error_rates_by_mismatch", "summary_error_rates_by_motif"]):
+                self.write_svg(fig, name)
+        plots = self.figs_to_str(plot_figs)
+
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         data_point_descr = f"Each data point corresponds to the average value along all positions in one of {self.n_bins} bins" if self.n_bins else "Each data point corresponds to one extracted position"
         template = f"""

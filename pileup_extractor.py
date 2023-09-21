@@ -39,7 +39,8 @@ class FeatureExtractor:
                  window_size: int,
                  neighbour_error_threshold: float,
                  n_bins_summary: int,
-                 use_alt_summary: bool) -> None:
+                 use_alt_summary: bool,
+                 export_svg_summary: bool) -> None:
 
         print(Figlet(font="slant").renderText("Neet - pileup extractor"))
 
@@ -61,6 +62,7 @@ class FeatureExtractor:
 
         self.n_bins_summary = n_bins_summary if n_bins_summary > 0 else None 
         self.use_alt_summary = use_alt_summary
+        self.export_svg_summary = export_svg_summary
 
     def __str__(self) -> str:
         return ""
@@ -418,7 +420,9 @@ class FeatureExtractor:
             None
         """
         out_path = os.path.splitext(file_path)[0]+"_summary.html"
-        summary_creator = SummaryCreator(file_path, out_path, n_bins=self.n_bins_summary, use_perc_mismatch_alt=self.use_alt_summary)
+        summary_creator = SummaryCreator(file_path, out_path, n_bins=self.n_bins_summary, 
+                                         use_perc_mismatch_alt=self.use_alt_summary,
+                                         export_svg=self.export_svg_summary)
         summary_creator.create_summary()
 
     def process_position(self, line_str: str) -> str:
@@ -904,6 +908,10 @@ def setup_parser() -> argparse.ArgumentParser:
                         help="""
                             Specify whether to use the perc_mismatch or perc_mismatch_alt values for plot creation.
                             """)
+    parser.add_argument("--export_svg", action="store_true", 
+                        help="""
+                            Specify whether to use the perc_mismatch or perc_mismatch_alt values for plot creation.
+                            """)
     return parser
 
 if __name__ == "__main__":
@@ -922,7 +930,8 @@ if __name__ == "__main__":
                                          window_size=args.window_size,
                                          neighbour_error_threshold=args.neighbour_thresh,
                                          n_bins_summary = args.n_bins,
-                                         use_alt_summary=args.plot_alt)
+                                         use_alt_summary=args.plot_alt,
+                                         export_svg_summary=args.export_svg)
     
     feature_extractor.main()
 

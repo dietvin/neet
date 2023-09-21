@@ -19,6 +19,7 @@ class POIAnalyzer():
 
     perc_mismatch_col: str
     output_tsv: bool
+    export_svg: bool
 
     data: pd.DataFrame
     bed_categories: List[str]
@@ -34,7 +35,8 @@ class POIAnalyzer():
                  categories: str,
                  canonical_counterpart: str,
                  output_tsv: bool = True, 
-                 use_perc_mismatch_alt: bool = False) -> None:
+                 use_perc_mismatch_alt: bool = False,
+                 export_svg: bool = False) -> None:
         """
         Initialize an instance of the GenomicDataProcessor class.
 
@@ -62,6 +64,7 @@ class POIAnalyzer():
         self.get_bed_categories(categories)
         self.get_corrensponding_base(canonical_counterpart)
         self.output_tsv = output_tsv
+        self.export_svg = export_svg
 
     ##############################################################################################################
     #                                           Initialization methods                                           #
@@ -605,7 +608,7 @@ class POIAnalyzer():
 
         return fig
 
-    def create_map_plot(self, mod_type: str): 
+    def create_map_plot(self, mod_type: str) -> go.Figure: 
         """
         Create a map plot for a specified modification type.
 
@@ -696,9 +699,9 @@ class POIAnalyzer():
         fig.add_trace(go.Scatter(x=list(data["chr"]), y=list(data["site"]), mode='markers', marker=dict(symbol='line-ew', color="#1f77b4", size=scatter_size, line=dict(width=1.1, color="#1f77b4")), name=f"{mod_type} sites", hovertemplate="Chr%{x}:%{y}"))
         fig.update_xaxes(fixedrange=True)
 
-        return to_html(fig, include_plotlyjs=False)
+        return fig
 
-    def create_mism_types_plot(self, mod: str):
+    def create_mism_types_plot(self, mod: str) -> go.Figure:
         """
         Create a mismatch types plot for a specified modification type.
 
@@ -722,9 +725,9 @@ class POIAnalyzer():
         fig.update_xaxes(fixedrange=True)
         fig.update_yaxes(fixedrange=True)
         
-        return to_html(fig, include_plotlyjs=False)
+        return fig
 
-    def create_composition_plot(self, mod: str, canonical: str) -> str:
+    def create_composition_plot(self, mod: str, canonical: str) -> go.Figure:
         """
         Create a composition plot for a specified modification type and canonical sequence.
 
@@ -742,7 +745,6 @@ class POIAnalyzer():
 
         """
         y_data, category_count = self.prepare_data_composition(self.data, mod, canonical)
-
         x_vals = [f"<i>{mod}</i> match<br>(n = {category_count['A']})", 
                 f"{canonical} match<br>(n = {category_count['G']})", 
                 f"<i>{mod}</i> mismatch<br>(n = {category_count['C']})", 
@@ -758,9 +760,9 @@ class POIAnalyzer():
         fig.update_layout(barmode="stack")
         fig.update_traces(marker=dict(line=dict(color="black", width=1.5)))
 
-        return to_html(fig, include_plotlyjs=False)
+        return fig
 
-    def create_error_rate_plot(self, mod: str, canonical: str) -> Tuple[str, str]:
+    def create_error_rate_plot(self, mod: str, canonical: str) -> Tuple[go.Figure, str]:
         """
         Create an error rate plot for a specified modification type and canonical sequence.
 
@@ -795,9 +797,9 @@ class POIAnalyzer():
         fig.update_yaxes(title_text="Error rate", row = 1, col = 1)
         fig.update_yaxes(title_text="Quality score", row = 1, col = 2)
 
-        return to_html(fig, include_plotlyjs=False), p_val_table
+        return fig, p_val_table
 
-    def create_nb_plot(self, mod: str) -> str:
+    def create_nb_plot(self, mod: str) -> go.Figure:
         """
         Create a neighbor position plot for a specified modification type.
 
@@ -830,14 +832,21 @@ class POIAnalyzer():
 
         fig.update_layout(showlegend=False)
         
-        return to_html(fig, include_plotlyjs=False)
+        return fig
     
     
     ##############################################################################################################
     #                                               Output methods                                               #
     ##############################################################################################################
+    def write_svg(self, fig: go.Figure, name: str) -> None:
+        outpath = f"{self.output_path}_{name}.svg"
+        fig.write_image(outpath)
 
-    def write_template(self, plots: List[str], category: str, corresponding_base: str) -> None:
+    def figs_to_str(self, plot_figs: List[go.Figure]) -> List[str]:
+        plot_str = map(lambda x: to_html(x, include_plotlyjs=False), plot_figs)
+        return plot_str
+
+    def write_template(self, plot_figs: List[go.Figure], category: str, corresponding_base: str) -> None:
         """
         Generate an HTML report template with interactive plots.
 
@@ -851,6 +860,13 @@ class POIAnalyzer():
         """
         name = f"<i>{category}</i>"
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+        if self.export_svg:
+            for fig, name in zip([plot_figs[0], plot_figs[1], plot_figs[2], plot_figs[3], plot_figs[5]], ["poi_map", "poi_mismatch_types", "poi_base_comp", 
+                                             "poi_error_rates", "poi_neighbours"]):
+                self.write_svg(fig, name)
+
+        plots = self.figs_to_str(plot_figs)
 
         basename = os.path.splitext(os.path.basename(self.in_path))[0]
         out_path = f"{self.output_path}{category}_{basename}_summary.html"
@@ -1236,6 +1252,11 @@ def setup_parser() -> argparse.ArgumentParser:
                         help="""
                             If specified, uses the mismatch from the perc_mismatch_alt colum.
                             """)
+    parser.add_argument('--export_svg', action="store_true", 
+                        help="""
+                            If specified, exports created plots as svg files.
+                            """)
+
     return parser
     
 if __name__ == "__main__":
@@ -1250,7 +1271,8 @@ if __name__ == "__main__":
                                categories=args.bed_categories,
                                canonical_counterpart=args.counterparts,
                                output_tsv=args.update_tsv,
-                               use_perc_mismatch_alt=args.use_perc_mismatch_alt)
+                               use_perc_mismatch_alt=args.use_perc_mismatch_alt,
+                               export_svg=args.export_svg)
     poi_analyzer.main()
                 
     # poi_analyzer = POIAnalyzer("/home/vincent/masterthesis/data/45s_rrna/processed/dRNA_cytoplasm/dRNA_cytoplasm_extracted.tsv",
