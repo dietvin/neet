@@ -33,7 +33,7 @@ class SummaryCreator:
     """
     input_path: str
     output_path: str
-    n_bins: int|None
+    n_bins: int | None
     perc_mis_col: str
     data: pd.DataFrame
     export_svg: bool
@@ -515,7 +515,7 @@ class SummaryCreator:
             fig.update_traces(text=matrix_labels, texttemplate="%{text}")
             fig.update_xaxes(fixedrange=True)
             fig.update_yaxes(fixedrange=True)
-            matrix = to_html(fig, include_plotlyjs=False)
+            matrix = fig
         except Exception as e:
             fig = self.create_error_placeholder(e)
             matrix = fig
@@ -526,7 +526,7 @@ class SummaryCreator:
                         marker=dict(line=dict(color='#000000', width=2))))
             fig = self.update_plot(fig, width=800)
             fig.update_layout(legend=dict(bgcolor='#f5f5f5', bordercolor='#000000', borderwidth=2))
-            pie = to_html(fig, include_plotlyjs=False)
+            pie = fig
         except Exception as e:
             fig = self.create_error_placeholder(e)
             pie = fig
@@ -544,7 +544,7 @@ class SummaryCreator:
 
             fig.update_layout(boxmode="group", legend=dict(orientation="h", yanchor="bottom", y=1.05, xanchor="right", x=1.0, bgcolor='#f5f5f5', bordercolor='#000000', borderwidth=2))
             fig.update_xaxes(categoryorder='array', categoryarray=pie_labels)
-            box = to_html(fig, include_plotlyjs=False)
+            box = fig
         except Exception as e:
             fig = self.create_error_placeholder(e)
             box = fig
@@ -645,7 +645,7 @@ class SummaryCreator:
         fig.write_image(outpath)
 
     def figs_to_str(self, plot_figs: List[go.Figure]) -> List[str]:
-        plot_str = map(lambda x: to_html(x, include_plotlyjs=False), plot_figs)
+        plot_str = list(map(lambda x: to_html(x, include_plotlyjs=False), plot_figs))
         return plot_str
 
     def write_to_html(self, n_positions, n_chr, plot_figs: List[go.Figure]) -> None:
@@ -953,6 +953,11 @@ def setup_parser() -> argparse.ArgumentParser:
                         help="""
                             Specify whether to use the perc_mismatch or perc_mismatch_alt values for plot creation.
                             """)
+    parser.add_argument('--export_svg', action="store_true", 
+                        help="""
+                            Specify whether to export the created plots as svg files.
+                            """)
+
     return parser
 
 
@@ -961,7 +966,7 @@ if __name__=="__main__":
     parser = setup_parser()
     args = parser.parse_args()
     
-    sc = SummaryCreator(args.input, args.output, args.n_bins, args.plot_alt)
+    sc = SummaryCreator(args.input, args.output, args.n_bins, args.plot_alt, export_svg=args.export_svg)
     sc.create_summary()
 
     # sc = SummaryCreator("/home/vincent/masterthesis/data/45s_rrna/processed/45s_cytoplasm_extracted.tsv", "/home/vincent/masterthesis/data/45s_rrna/processed/", None)
