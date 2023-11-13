@@ -1,4 +1,4 @@
-import re, os, warnings, argparse, sys, io, tempfile
+import re, os, warnings, argparse, sys, io, random
 from typing import Dict, List, Tuple, Union, Any
 from tqdm import tqdm
 from pyfiglet import Figlet
@@ -15,6 +15,7 @@ class FeatureExtractor:
     ref_sequences : Dict[str, str]
 
     eventalign_paths: List[str]
+    eventalign_subsampling: int | None
     current_eventalign_file: str | None
     eventalign_index: Dict[Tuple[str, int], List[int]] | None
     
@@ -34,6 +35,7 @@ class FeatureExtractor:
                  out_paths: str, 
                  ref_path: str,
                  eventalign_path: str | None,
+                 eventalign_subsampling: int | None,
                  num_reads: int, 
                  perc_mismatch: float | None,
                  perc_mismatch_alt: float | None,
@@ -54,6 +56,7 @@ class FeatureExtractor:
 
         if not eventalign_path:
             self.current_eventalign_file = None
+        self.eventalign_subsampling = eventalign_subsampling
 
         # if one of the following arguments was not provided (i.e. arg=None), set variable to a value so nothing gets filtered out
         self.filter_num_reads = num_reads if num_reads is not None else 1
@@ -327,7 +330,10 @@ class FeatureExtractor:
         for in_file, out_file, eventalign_file in zip(self.input_paths, self.output_paths, self.eventalign_paths):
             hs.print_update(f"Processing file '{in_file}'. Writing to '{out_file}'.")
             if eventalign_file:
-                hs.print_update(f"Adding current features from file {eventalign_file}")
+                if self.eventalign_subsampling:
+                    hs.print_update(f"Adding current features from file {eventalign_file}. Subsampling to {self.eventalign_subsampling} data points.")
+                else:
+                    hs.print_update(f"Adding current features from file {eventalign_file}.")
                 self.current_eventalign_file = eventalign_file # update the eventalign file path so the process_position method can access it
                 self.eventalign_index = self.create_eventalign_index()
 
@@ -523,7 +529,7 @@ class FeatureExtractor:
         majority_base = self.get_majority_base(count)
 
         # get 11b motif
-        motif = self.get_motif(chr, site, ref, k=5)
+        motif = self.get_motif(chr, site, ref, k=2)
 
         # if provided get raw current features
         if self.current_eventalign_file:
@@ -944,6 +950,7 @@ class FeatureExtractor:
         This method searches for event data associated with the specified chromosome and site in the eventalign file.
         It uses an index created for the eventalign file to locate the positions of the data related to the given chromosome
         and site, retrieving and aggregating the event-level mean, standard deviation, and length from the file.
+        If a number of 
 
         Note:
         - The method expects the eventalign file to be in a specific format, and it uses an index created by 'create_eventalign_index'.
@@ -957,6 +964,8 @@ class FeatureExtractor:
         with open(self.current_eventalign_file, 'rb') as file:
             try:
                 positions = self.eventalign_index[(chr.encode('utf-8'), site)]
+                if self.eventalign_subsampling:
+                    positions = self.random_subsample(positions)
             except KeyError:
                 return "", "", ""  
             event_level_mean = ""
@@ -971,10 +980,33 @@ class FeatureExtractor:
                 event_length += data[2] + ","
                 
             return event_level_mean[:-1], event_stdv[:-1], event_length[:-1] 
+        
+    def random_subsample(self, positions: List[int]) -> List[int]:
+        """
+        Randomly subsamples positions from a list.
+
+        Args:
+        positions (List[int]): A list of positions to subsample from.
+
+        Returns:
+        List[int]: A list containing a random subsample of positions from the input list.
+
+        This method performs random subsampling by selecting 'eventalign_subsampling' number of positions
+        randomly from the provided list. It utilizes the 'random.sample' function from the Python standard library.
+
+        Note:
+        - 'eventalign_subsampling' is always set when the method is called (if statement before).
+        - The method uses the 'random' module to generate random samples.
+        """
+        if len(positions) <= self.eventalign_subsampling:
+            return positions
+        else:
+            return random.sample(positions, k=self.eventalign_subsampling)
 
 
 def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="Neet - Pileup Extractor", description="Extract different features from given pileup file(s).")
+    # input options
     parser.add_argument('-i', '--input', type=str, required=True, default="-",
                         help="""
                             Path to the input file(s). If multiple are available, specify paths comma-separated (<pileup1>,<pileup2>,...).
@@ -985,6 +1017,19 @@ def setup_parser() -> argparse.ArgumentParser:
                             If a directory is given, the output files are created using the basename from an input file with the suffix "_extracted.tsv".
                             """)
     parser.add_argument('-r', '--reference', type=str, required=True, help='Path to the reference file')
+    # options for including nanopolish signal-to-sequence alignment (eventalign) 
+    parser.add_argument('-ea', '--eventalign', type=str, required=False, 
+                        help="""
+                            Path to a Nanopolish eventalignment file. If provided, raw current features are extracted and added to the feature table.
+                            If multiple pileup files are given, an eventalign file must be provided for each one. Multiple paths can be provided comma-
+                            separated (<eventalign1>,<eventalign2>,...).
+                            """)
+    parser.add_argument('-es', '--subsample_eventalign', type=positive_int, required=False, 
+                        help="""
+                            If specified subsample eventalign data to the given number of data points. Performs random subsampling of k values if more 
+                            than k values are given for a eventalign feature. 
+                            """)
+    # filtering options
     parser.add_argument('-n', '--num_reads', type=positive_int, required=False,
                         help='Filter by minimum number of reads at a position')
     parser.add_argument('-p', '--perc_mismatched', type=float_between_zero_and_one, required=False,
@@ -994,18 +1039,13 @@ def setup_parser() -> argparse.ArgumentParser:
                             Filter by minimum fraction of mismatched. Relative values measured on only the number of matched/mismatched reads without
                             deletion and reference skip rate.
                             """)
-    parser.add_argument('-ea', '--eventalign', type=str, required=False, 
-                        help="""
-                            Path to a Nanopolish eventalignment file. If provided, raw current features are extracted and added to the feature table.
-                            If multiple pileup files are given, an eventalign file must be provided for each one. Multiple paths can be provided comma-
-                            separated (<eventalign1>,<eventalign2>,...).
-                            """)
     parser.add_argument('-d', '--perc_deletion', type=float_between_zero_and_one, required=False,
                         help='Filter by minimum percentage of deleted bases')
     parser.add_argument('-q', '--mean_quality', type=positive_float, required=False,
                         help='Filter by mean read quality scores')
     parser.add_argument('-g', '--genomic_region', type=str, required=False,
                         help='Genomic region in "CHR:START-END" format or "CHR" for whole chromosome. Specify to only extract information from a specific region.')
+    # multiprocessing options
     parser.add_argument('--use_multiprocessing', action="store_true", 
                         help="""
                             Specify whether to use multiprocessing for processing. Recommended for shorter, deeply sequenced data.
@@ -1013,19 +1053,15 @@ def setup_parser() -> argparse.ArgumentParser:
                             """)
     parser.add_argument('-t', '--num_processes', type=int, required=False, default=4,
                         help='Number of threads to use for processing.')
-    parser.add_argument('--coverage_alt', action="store_true", 
-                        help="""
-                            Specify which approach should be used to calculate the number of reads a given position.
-                            Default: use coverage as calculated by samtools mpileup (i.e. #A+#C+#G+#T+#del).
-                            Alternative: calculates coverage considering only matched and mismatched reads, not considering deletions
-                            """)
+    # neighbourhood error search options
     parser.add_argument('-nw', '--window_size', type=int, required=False, default=2,
-                        help='Size of the sliding window = 2*w+1. Required when -s flag is set')
+                        help='Size of the sliding window for neighbouring error search = 2*w+1. Required when -s flag is set')
     parser.add_argument("-nt", "--neighbour_thresh", type=float_between_zero_and_one, required=False, default=0.5,
                         help="""
                             Threshold of error percentage (--perc_mismatched / --perc_deletion), from which a neighbouring position
                             should be considered as an error.
                             """)
+    # summary options
     parser.add_argument('-b', '--n_bins', type=int, required=False, default=5000,
                         help="""Number of bins to split the data into when creating the summary plots. This does not affect the extracted data.
                             Used only to improve performance and clarity of the created plots. Note that setting the value to a low number 
@@ -1047,6 +1083,7 @@ if __name__ == "__main__":
     
     feature_extractor = FeatureExtractor(args.input, args.output, args.reference,
                                          eventalign_path=args.eventalign,
+                                         eventalign_subsampling=args.subsample_eventalign,
                                          num_reads=args.num_reads, 
                                          perc_mismatch=args.perc_mismatched,
                                          perc_mismatch_alt=args.perc_mismatched_alt,
