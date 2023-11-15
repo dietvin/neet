@@ -13,11 +13,6 @@ class FeatureExtractor:
     output_paths : List[str]
     ref_path : str
     ref_sequences : Dict[str, str]
-
-    eventalign_paths: List[str]
-    eventalign_subsampling: int | None
-    current_eventalign_file: str | None
-    eventalign_index: Dict[Tuple[str, int], List[int]] | None
     
     filter_num_reads: int
     filter_perc_mismatch: float
@@ -34,8 +29,6 @@ class FeatureExtractor:
                  in_paths: str,
                  out_paths: str, 
                  ref_path: str,
-                 eventalign_path: str | None,
-                 eventalign_subsampling: int | None,
                  num_reads: int, 
                  perc_mismatch: float | None,
                  perc_mismatch_alt: float | None,
@@ -52,11 +45,7 @@ class FeatureExtractor:
 
         print(Figlet(font="slant").renderText("Neet - pileup extractor"))
 
-        self.process_paths(ref_path, in_paths, out_paths, eventalign_path)    
-
-        if not eventalign_path:
-            self.current_eventalign_file = None
-        self.eventalign_subsampling = eventalign_subsampling
+        self.process_paths(ref_path, in_paths, out_paths)    
 
         # if one of the following arguments was not provided (i.e. arg=None), set variable to a value so nothing gets filtered out
         self.filter_num_reads = num_reads if num_reads is not None else 1
@@ -84,7 +73,7 @@ class FeatureExtractor:
     #                                   Functions called during initialization                                      #
     #################################################################################################################
 
-    def process_paths(self, ref_path: str, in_paths_str: str, out_paths: str, eventalign_paths_str: str|None) -> None:
+    def process_paths(self, ref_path: str, in_paths_str: str, out_paths: str) -> None:
         """
         Process input and output file paths for the data processing.
 
@@ -96,7 +85,6 @@ class FeatureExtractor:
             ref_path (str): The file path to the reference fasta file.
             in_paths (str): Comma-separated list of input file paths.
             out_paths (str): Output file path or directory path.
-            eventalign_paths (str|None): If provided, comma-separated list of paths to eventalign.txt files corresponding to the pileup files.  
 
         Returns:
             None
@@ -104,7 +92,6 @@ class FeatureExtractor:
         Raises:
             FileNotFoundError: If the reference file or any of the input files do not exist.
             Warning: If the file extension of any input file is not among the expected extensions.
-            Exception: If the number of given pileup and eventalign files do not match.
 
         Note:
             - The reference fasta file should have one or more sequence entries in the format:
@@ -124,18 +111,6 @@ class FeatureExtractor:
         # process path to reference fasta
         self.check_path(ref_path, [".fasta", ".fna", ".ffn", ".faa", ".frn", ".fa"])
         self.ref_sequences = self.get_references(ref_path)
-
-        # check if eventalign file(s) is/are given
-        if eventalign_paths_str:
-            # check if an eventalign file is given for each pileup file
-            eventalign_paths = eventalign_paths_str.split(",")
-            if len(eventalign_paths) != len(in_paths):
-                raise Exception(f"Number of given eventalign files ({len(eventalign_paths)}) does not match the number of pileup files {len(in_paths)}.")
-            for path in eventalign_paths: self.check_path(path, [".txt", ".sam"])
-            self.eventalign_paths = eventalign_paths
-        else:
-            self.eventalign_paths = [None for _ in range(len(in_paths))] 
-
 
     def check_path(self, path: str, extensions: List[str]) -> None:
         """
@@ -327,16 +302,8 @@ class FeatureExtractor:
         Returns:
             None
         """ 
-        for in_file, out_file, eventalign_file in zip(self.input_paths, self.output_paths, self.eventalign_paths):
+        for in_file, out_file in zip(self.input_paths, self.output_paths):
             hs.print_update(f"Processing file '{in_file}'. Writing to '{out_file}'.")
-            if eventalign_file:
-                if self.eventalign_subsampling:
-                    hs.print_update(f"Adding current features from file {eventalign_file}. Subsampling to {self.eventalign_subsampling} data points.")
-                else:
-                    hs.print_update(f"Adding current features from file {eventalign_file}.")
-                self.current_eventalign_file = eventalign_file # update the eventalign file path so the process_position method can access it
-                self.eventalign_index = self.create_eventalign_index()
-
             self.process_file(in_file, out_file)
             self.create_summary_file(out_file)
 
@@ -394,10 +361,7 @@ class FeatureExtractor:
             hs.print_update("Counting number of lines to process.")
             progress_bar = tqdm(desc=desc, total=hs.get_num_lines(in_file))
 
-            if self.current_eventalign_file:
-                header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_ref_skip\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tn_ref_skip_rel\tperc_mismatch\tperc_mismatch_alt\tmotif\tq_mean\tq_std\tevent_level_mean\tevent_stdv\tevent_length\tneighbour_error_pos\n"
-            else:
-                header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_ref_skip\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tn_ref_skip_rel\tperc_mismatch\tperc_mismatch_alt\tmotif\tq_mean\tq_std\tneighbour_error_pos\n"
+            header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_ref_skip\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tn_ref_skip_rel\tperc_mismatch\tperc_mismatch_alt\tmotif\tq_mean\tq_std\tneighbour_error_pos\n"
             o.write(header)
             
             nb_size_full = 1 + 2 * self.window_size
@@ -524,19 +488,13 @@ class FeatureExtractor:
         if perc_mismatch_alt < self.filter_perc_mismatch_alt:
             return ""
 
-
         # get majority base
         majority_base = self.get_majority_base(count)
 
         # get 11b motif
         motif = self.get_motif(chr, site, ref, k=2)
 
-        # if provided get raw current features
-        if self.current_eventalign_file:
-            event_level_mean, event_stdv, event_length = self.get_position_data(chr, site)
-            out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["t"]}\t{count["del"]}\t{count["ins"]}\t{count["ref_skip"]}\t{count_rel["a"]}\t{count_rel["c"]}\t{count_rel["g"]}\t{count_rel["t"]}\t{count_rel["del"]}\t{count_rel["ins"]}\t{count_rel["ref_skip"]}\t{perc_mismatch}\t{perc_mismatch_alt}\t{motif}\t{quality_mean}\t{quality_std}\t{event_level_mean}\t{event_stdv}\t{event_length}\n'
-        else:
-            out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["t"]}\t{count["del"]}\t{count["ins"]}\t{count["ref_skip"]}\t{count_rel["a"]}\t{count_rel["c"]}\t{count_rel["g"]}\t{count_rel["t"]}\t{count_rel["del"]}\t{count_rel["ins"]}\t{count_rel["ref_skip"]}\t{perc_mismatch}\t{perc_mismatch_alt}\t{motif}\t{quality_mean}\t{quality_std}\n'
+        out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["t"]}\t{count["del"]}\t{count["ins"]}\t{count["ref_skip"]}\t{count_rel["a"]}\t{count_rel["c"]}\t{count_rel["g"]}\t{count_rel["t"]}\t{count_rel["del"]}\t{count_rel["ins"]}\t{count_rel["ref_skip"]}\t{perc_mismatch}\t{perc_mismatch_alt}\t{motif}\t{quality_mean}\t{quality_std}\n'
         return out
 
     def remove_indels(self, pileup_string: str) -> str:
@@ -890,118 +848,118 @@ class FeatureExtractor:
                     nb_info += str(relative_pos)+","
         return nb_info
 
-    #################################################################################################################
-    #                           Functions called during extraction of raw current features                          #
-    #################################################################################################################
-    def create_eventalign_index(self) -> Dict[Tuple[str, int], int]:
-        """
-        Creates an index for the eventalign file, mapping a tuple of strings and integers to their positions in the file.
+    # #################################################################################################################
+    # #                           Functions called during extraction of raw current features                          #
+    # #################################################################################################################
+    # def create_eventalign_index(self) -> Dict[Tuple[str, int], int]:
+    #     """
+    #     Creates an index for the eventalign file, mapping a tuple of strings and integers to their positions in the file.
 
-        Returns:
-        Dict[Tuple[str, int], int]: A dictionary where the keys are tuples consisting of a string and an integer, 
-        and the values are the positions of these tuples within the eventalign file.
+    #     Returns:
+    #     Dict[Tuple[str, int], int]: A dictionary where the keys are tuples consisting of a string and an integer, 
+    #     and the values are the positions of these tuples within the eventalign file.
 
-        This method parses the eventalign file, creating an index of positions for each unique tuple (string, int) 
-        found in the file. It iterates through the file, collecting positions and organizing them into a dictionary.
+    #     This method parses the eventalign file, creating an index of positions for each unique tuple (string, int) 
+    #     found in the file. It iterates through the file, collecting positions and organizing them into a dictionary.
 
-        Note:
-        - The method assumes the file is in a specific format (lines split by tabs, the first element being a string,
-        the second an integer).
-        - The method uses tqdm to display progress while indexing the eventalign file.
+    #     Note:
+    #     - The method assumes the file is in a specific format (lines split by tabs, the first element being a string,
+    #     the second an integer).
+    #     - The method uses tqdm to display progress while indexing the eventalign file.
 
-        """
-        eventalign_file = self.current_eventalign_file
-        hs.print_update(f"Creating index for {eventalign_file}")
-        index = {}
-        with open(eventalign_file, 'rb') as file:
-            next(file)
-            position = file.tell()
-            progress_bar = tqdm(desc="Indexing eventalign file", total=hs.get_num_lines(eventalign_file))
-            while True:
-                line = file.readline()
-                if not line:
-                    break
-                line = line.split(b"\t")
-                key = (line[0], int(line[1]))
-                # key already exists --> append position to it
-                if key in index.keys():
-                    index[key].append(position)
-                # key does not exist --> create new entry and append position to it
-                else:
-                    index[key] = [position]
+    #     """
+    #     eventalign_file = self.current_eventalign_file
+    #     hs.print_update(f"Creating index for {eventalign_file}")
+    #     index = {}
+    #     with open(eventalign_file, 'rb') as file:
+    #         next(file)
+    #         position = file.tell()
+    #         progress_bar = tqdm(desc="Indexing eventalign file", total=hs.get_num_lines(eventalign_file))
+    #         while True:
+    #             line = file.readline()
+    #             if not line:
+    #                 break
+    #             line = line.split(b"\t")
+    #             key = (line[0], int(line[1]))
+    #             # key already exists --> append position to it
+    #             if key in index.keys():
+    #                 index[key].append(position)
+    #             # key does not exist --> create new entry and append position to it
+    #             else:
+    #                 index[key] = [position]
 
-                position = file.tell()
-                progress_bar.update()
+    #             position = file.tell()
+    #             progress_bar.update()
 
-        return index
+    #     return index
 
-    def get_position_data(self, chr: str, site: int) -> Tuple[str, str, str]:
-        """
-        Retrieves event data associated with a specific chromosome and site position.
+    # def get_position_data(self, chr: str, site: int) -> Tuple[str, str, str]:
+    #     """
+    #     Retrieves event data associated with a specific chromosome and site position.
 
-        Args:
-        chr (str): The chromosome identifier.
-        site (int): The specific site position.
+    #     Args:
+    #     chr (str): The chromosome identifier.
+    #     site (int): The specific site position.
 
-        Returns:
-        Tuple[str, str, str]: A tuple containing three comma-separated strings representing event-level mean, 
-        event standard deviation, and event length associated with the given chromosome and site position.
+    #     Returns:
+    #     Tuple[str, str, str]: A tuple containing three comma-separated strings representing event-level mean, 
+    #     event standard deviation, and event length associated with the given chromosome and site position.
 
-        This method searches for event data associated with the specified chromosome and site in the eventalign file.
-        It uses an index created for the eventalign file to locate the positions of the data related to the given chromosome
-        and site, retrieving and aggregating the event-level mean, standard deviation, and length from the file.
-        If a number of 
+    #     This method searches for event data associated with the specified chromosome and site in the eventalign file.
+    #     It uses an index created for the eventalign file to locate the positions of the data related to the given chromosome
+    #     and site, retrieving and aggregating the event-level mean, standard deviation, and length from the file.
+    #     If a number of 
 
-        Note:
-        - The method expects the eventalign file to be in a specific format, and it uses an index created by 'create_eventalign_index'.
-        - If no data is found for the provided chromosome and site, the method returns empty strings for all values.
+    #     Note:
+    #     - The method expects the eventalign file to be in a specific format, and it uses an index created by 'create_eventalign_index'.
+    #     - If no data is found for the provided chromosome and site, the method returns empty strings for all values.
 
-        """
-        def get_data_from_line(line: str) -> Tuple[str, str, str]:
-            line = line.strip().split("\t")[6:9]
-            return line[0], line[1], line[2]
+    #     """
+    #     def get_data_from_line(line: str) -> Tuple[str, str, str]:
+    #         line = line.strip().split("\t")[6:9]
+    #         return line[0], line[1], line[2]
 
-        with open(self.current_eventalign_file, 'rb') as file:
-            try:
-                positions = self.eventalign_index[(chr.encode('utf-8'), site)]
-                if self.eventalign_subsampling:
-                    positions = self.random_subsample(positions)
-            except KeyError:
-                return "", "", ""  
-            event_level_mean = ""
-            event_stdv = ""
-            event_length = ""
-            for position in positions:
-                file.seek(position)
-                data = get_data_from_line(file.readline().decode('utf-8'))
+    #     with open(self.current_eventalign_file, 'rb') as file:
+    #         try:
+    #             positions = self.eventalign_index[(chr.encode('utf-8'), site)]
+    #             if self.eventalign_subsampling:
+    #                 positions = self.random_subsample(positions)
+    #         except KeyError:
+    #             return "", "", ""  
+    #         event_level_mean = ""
+    #         event_stdv = ""
+    #         event_length = ""
+    #         for position in positions:
+    #             file.seek(position)
+    #             data = get_data_from_line(file.readline().decode('utf-8'))
 
-                event_level_mean += data[0] + ","
-                event_stdv += data[1] + ","
-                event_length += data[2] + ","
+    #             event_level_mean += data[0] + ","
+    #             event_stdv += data[1] + ","
+    #             event_length += data[2] + ","
                 
-            return event_level_mean[:-1], event_stdv[:-1], event_length[:-1] 
+    #         return event_level_mean[:-1], event_stdv[:-1], event_length[:-1] 
         
-    def random_subsample(self, positions: List[int]) -> List[int]:
-        """
-        Randomly subsamples positions from a list.
+    # def random_subsample(self, positions: List[int]) -> List[int]:
+    #     """
+    #     Randomly subsamples positions from a list.
 
-        Args:
-        positions (List[int]): A list of positions to subsample from.
+    #     Args:
+    #     positions (List[int]): A list of positions to subsample from.
 
-        Returns:
-        List[int]: A list containing a random subsample of positions from the input list.
+    #     Returns:
+    #     List[int]: A list containing a random subsample of positions from the input list.
 
-        This method performs random subsampling by selecting 'eventalign_subsampling' number of positions
-        randomly from the provided list. It utilizes the 'random.sample' function from the Python standard library.
+    #     This method performs random subsampling by selecting 'eventalign_subsampling' number of positions
+    #     randomly from the provided list. It utilizes the 'random.sample' function from the Python standard library.
 
-        Note:
-        - 'eventalign_subsampling' is always set when the method is called (if statement before).
-        - The method uses the 'random' module to generate random samples.
-        """
-        if len(positions) <= self.eventalign_subsampling:
-            return positions
-        else:
-            return random.sample(positions, k=self.eventalign_subsampling)
+    #     Note:
+    #     - 'eventalign_subsampling' is always set when the method is called (if statement before).
+    #     - The method uses the 'random' module to generate random samples.
+    #     """
+    #     if len(positions) <= self.eventalign_subsampling:
+    #         return positions
+    #     else:
+    #         return random.sample(positions, k=self.eventalign_subsampling)
 
 
 def setup_parser() -> argparse.ArgumentParser:
@@ -1017,18 +975,6 @@ def setup_parser() -> argparse.ArgumentParser:
                             If a directory is given, the output files are created using the basename from an input file with the suffix "_extracted.tsv".
                             """)
     parser.add_argument('-r', '--reference', type=str, required=True, help='Path to the reference file')
-    # options for including nanopolish signal-to-sequence alignment (eventalign) 
-    parser.add_argument('-ea', '--eventalign', type=str, required=False, 
-                        help="""
-                            Path to a Nanopolish eventalignment file. If provided, raw current features are extracted and added to the feature table.
-                            If multiple pileup files are given, an eventalign file must be provided for each one. Multiple paths can be provided comma-
-                            separated (<eventalign1>,<eventalign2>,...).
-                            """)
-    parser.add_argument('-es', '--subsample_eventalign', type=positive_int, required=False, 
-                        help="""
-                            If specified subsample eventalign data to the given number of data points. Performs random subsampling of k values if more 
-                            than k values are given for a eventalign feature. 
-                            """)
     # filtering options
     parser.add_argument('-n', '--num_reads', type=positive_int, required=False,
                         help='Filter by minimum number of reads at a position')
@@ -1082,8 +1028,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
     
     feature_extractor = FeatureExtractor(args.input, args.output, args.reference,
-                                         eventalign_path=args.eventalign,
-                                         eventalign_subsampling=args.subsample_eventalign,
                                          num_reads=args.num_reads, 
                                          perc_mismatch=args.perc_mismatched,
                                          perc_mismatch_alt=args.perc_mismatched_alt,
