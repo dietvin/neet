@@ -1,7 +1,7 @@
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Set
 import os, warnings, sys, datetime, argparse
-import pandas as pd
-import numpy as np
+from collections import Counter
+import helper_functions as hs
 import plotly.graph_objects as go
 from plotly.io import to_html
 
@@ -9,69 +9,61 @@ class PositionExtractor:
     out_dir: str
     export_svg: bool
 
-    in_paths_1: List[str]
-    in_paths_2: List[str]
+    in_paths_a: List[str]
+    in_paths_b: List[str]
 
-    datasets_1: List[pd.DataFrame]
-    datasets_2: List[pd.DataFrame]
+    label_a: str
+    label_b: str
 
-    label_1: str
-    label_2: str
+    error_feature_idx: int
+    error_threshold: float
+    coverage_threshold: int
 
     ref_dict: Dict[str, str]
 
-    common_pos_1: pd.DataFrame
-    common_pos_2: pd.DataFrame
-
-    excl_in_1: pd.DataFrame
-    excl_in_2: pd.DataFrame
-    in_1_and_2: pd.DataFrame
-
-    dtypes = {'chr': str, 'site': int, 'n_reads': int, 'ref_base': str, 'majority_base': str, 'n_a': int, 'n_c': int,
-          'n_g': int, 'n_t': int, 'n_del': int, 'n_ins': int, 'n_ref_skip': int, 'n_a_rel': float, 'n_c_rel': float,
-          'n_g_rel': float, 'n_t_rel': float, 'n_del_rel': float, 'n_ins_rel': float, 'n_ref_skip_rel': float,
-          'perc_mismatch': float, 'perc_mismatch_alt': float, 'motif': str, 'q_mean': float, 'q_std': float,
-          'neighbour_error_pos': str}
-
-    def __init__(self, in_paths_1: str, in_paths_2: str, out_dir: str, ref_path: str, label_1: str|None = None, label_2: str|None = None,
-                 export_svg: bool = False) -> None:
+    def __init__(self, in_paths_a: str, in_paths_b: str, out_dir: str, ref_path: str, error_feature: str, error_threshold: float, coverage_threshold: int, 
+                 label_a: str, label_b: str, export_svg: bool = False) -> None:
         """
-        Initialize an instance of the PositionExtractor class.
-
-        This constructor initializes an instance of the MyClass class by processing input file paths,
-        reading datasets from these paths, checking and setting the output directory, labels, and reference data.
+        Initialize the PositionExtractor object with input parameters.
 
         Parameters:
-            in_paths_1 (str): A comma-separated string of input file paths for the first set of datasets.
-            in_paths_2 (str): A comma-separated string of input file paths for the second set of datasets.
-            out_dir (str): The output directory path.
-            ref_path (str): The path to the reference data.
-            label_1 (str | None, optional): A label for the first set of datasets. Defaults to None.
-            label_2 (str | None, optional): A label for the second set of datasets. Defaults to None.
+        - in_paths_a (str): Comma-separated string of file paths for dataset A.
+        - in_paths_b (str): Comma-separated string of file paths for dataset B.
+        - out_dir (str): Output directory for the extracted data.
+        - ref_path (str): File path to the reference data in FASTA format.
+        - error_feature (str): The type of error feature to be analyzed.
+        - error_threshold (float): Threshold for the specified error feature.
+        - coverage_threshold (int): Threshold for the coverage of positions to be considered.
+        - label_a (str): Label for dataset A.
+        - label_b (str): Label for dataset B.
+        - export_svg (bool, optional): Flag indicating whether to export SVG plots (default is False).
 
-        Returns:
-            None
-
-        Note:
-            - Processed input file paths are stored in `self.in_paths_1` and `self.in_paths_2`.
-            - Loaded datasets are stored in `self.datasets_1` and `self.datasets_2`.
-            - The output directory is stored in `self.out_dir`.
-            - Labels are stored in `self.label_1` and `self.label_2`.
-            - Reference data is stored in `self.ref_dict`.
+        Raises:
+        - Exception: If an invalid error feature is provided.
         """
-        self.in_paths_1 = self.process_in(in_paths_1)
-        self.in_paths_2 = self.process_in(in_paths_2)
-        self.datasets_1 = []
-        self.datasets_2 = []
-        self.read_datasets(self.in_paths_1, self.in_paths_2)
+        self.in_paths_a = self.process_in(in_paths_a)
+        self.in_paths_b = self.process_in(in_paths_b)
 
         self.check_out(out_dir)
+
         if not out_dir.endswith("/"): out_dir+="/"
         self.out_dir = out_dir
         self.export_svg = export_svg
 
-        self.label_1 = label_1 if label_1 else "sample1"
-        self.label_2 = label_2 if label_2 else "sample2"
+        self.label_a = label_a
+        self.label_b = label_b
+        
+        try:
+            feature_idx = {"n_del_rel": 16,
+                           "n_ins_rel": 17,
+                           "perc_mismatch": 19,
+                           "perc_mismatch_alt": 20}
+            self.error_feature_idx = feature_idx[error_feature]
+        except KeyError:
+            raise Exception(f"Invalid error feature '{error_feature}'. Use one of: n_del_rel, n_ins_rel, perc_mismatch, perc_mismatch_alt")
+
+        self.error_threshold = error_threshold
+        self.coverage_threshold = coverage_threshold
 
         self.ref_dict = self.get_references(ref_path)
 
@@ -81,20 +73,17 @@ class PositionExtractor:
 
     def process_in(self, in_paths: str) -> List[str]:
         """
-        Process a list of input file paths, ensuring they are of the same type.
-
-        This function takes a comma-separated string of input file paths, splits it into a list,
-        and checks the file extensions for each path to ensure they are all of the same type (e.g., '.tsv').
-        If the input files have different extensions, it raises an Exception.
+        Process a comma-separated string of input file paths.
 
         Parameters:
-            in_paths (str): A comma-separated string of input file paths.
+        - in_paths (str): A comma-separated string of input file paths.
 
         Returns:
-            List[str]: A list of input file paths.
+        - in_list (List[str]): A list of validated input file paths.
 
         Raises:
-            Exception: If input files have different extensions, indicating they are not of the same type.
+        - Exception: If any input file does not exist or has an unexpected file extension.
+        - Exception: If input files are of different kinds (either .bam or .pileup). All files must be of the same kind.
         """
         in_list = in_paths.split(",")
         extensions = []
@@ -109,18 +98,14 @@ class PositionExtractor:
 
     def check_out(self, out: str): 
         """
-        Check if the specified output directory exists and create it if necessary.
-
-        This function checks whether the directory specified by the given path exists.
-        If the directory does not exist, it raises a warning and attempts to create the directory.
-        If the creation fails, it raises an Exception.
+        Check if the specified output directory exists, and create it if necessary.
 
         Parameters:
-            out (str): The output directory path to be checked or created.
+        - out (str): The path to the output directory.
 
         Raises:
-            Warning: If the specified directory does not exist, a warning is issued, and the directory is created.
-            Exception: If the directory creation fails.
+        - Warning: If the specified directory does not exist, a warning is issued, and the directory is created.
+        - Exception: If the directory could not be created.
         """
         if not os.path.isdir(out):
             warnings.warn(f"Directory '{out}' does not exist. Creating directory.")
@@ -133,16 +118,13 @@ class PositionExtractor:
         """
         Check if the specified file path exists and has the expected file extension.
 
-        This function verifies whether the file specified by the given path exists and has a valid extension.
-        If the file does not exist, it raises a FileNotFoundError with a detailed error message.
-        If the file extension does not match any of the expected extensions, it raises an Exception.
-
         Parameters:
-            path (str): The file path to be checked.
+        - path (str): The file path to be checked.
+        - extension (str, optional): The expected file extension (default is ".tsv").
 
         Raises:
-            FileNotFoundError: If the specified file path does not exist.
-            Exception: If the file format is not correct.
+        - FileNotFoundError: If the specified file path does not exist.
+        - Exception: If the file extension of the specified path does not match the expected extension.
         """        
         if not os.path.exists(path): # does file exist?
             raise FileNotFoundError(f"Input file not found. File '{path}' does not exist.")
@@ -150,49 +132,19 @@ class PositionExtractor:
         if file_type != extension:
             raise Exception(f"Found file extension {file_type}. File extension to must be {extension}.")
 
-    def read_datasets(self, in_paths_1: List[str], in_paths_2: List[str]) -> None:
-        """
-        Read and load datasets from specified file paths into two separate lists.
-
-        This function reads datasets from a list of file paths and appends them to separate lists,
-        `self.datasets_1` and `self.datasets_2`. The datasets are expected to be in a tab-separated format.
-
-        Parameters:
-            in_paths_1 (List[str]): A list of file paths for the first set of datasets.
-            in_paths_2 (List[str]): A list of file paths for the second set of datasets.
-
-        Returns:
-            None
-
-        Note:
-            The loaded datasets are stored in the class attributes `self.datasets_1` and `self.datasets_2`.
-
-        Raises:
-            - FileNotFoundError: If any of the specified input files do not exist.
-            - Exception: If an error occurs while reading the datasets.
-
-        """
-        for path in in_paths_1:
-            self.datasets_1.append(pd.read_csv(path, sep="\t", dtype=self.dtypes, usecols=["chr", "site"]))
-        for path in in_paths_2:
-            self.datasets_2.append(pd.read_csv(path, sep="\t", dtype=self.dtypes, usecols=["chr", "site"]))        
-
     def get_references(self, path: str) -> Dict[str, str]:
         """
-        Reads a fasta file and stores the sequences in a dictionary (values) with the 
-        corresponding chromosome names (keys).
+        Extract reference sequences from a FASTA file.
 
-        Parameters
-        ----------
-        path : str
-            filepath to a fasta file
+        Parameters:
+        - path (str): The path to the FASTA file.
 
-        Returns
-        -------
-        dict[str]
-            Dictionary where the key is the chromosome name and the value is the sequence
+        Returns:
+        - refs (Dict[str, str]): A dictionary where keys are chromosome names and values are corresponding sequences.
+
+        Raises:
+        - Exception: If there is a format error in the FASTA file, such as a missing header in the first line.
         """
-
         def stdout_progress(n: int):
             sys.stdout.write(f"\rSequences found: {n}")
             sys.stdout.flush()
@@ -229,134 +181,107 @@ class PositionExtractor:
     #                                             Processing methods                                             #
     ##############################################################################################################
 
-    def extract_subsets_positions(self) -> None:
-        # find positions that are present in all replicates
-        self.replicates_find_common_pos()
-
-        # find positions that are exclusive in dataset 1
-        self.excl_in_1 = self.find_a_wo_b(self.common_pos_1, self.common_pos_2)
-        # find positions that are exclusive in dataset 2
-        self.excl_in_2 = self.find_a_wo_b(self.common_pos_2, self.common_pos_1)
-        # find positions that are present in 1 AND 2 
-        self.in_1_and_2 = self.find_intersect_pos([self.common_pos_1, self.common_pos_2])
-
-    def replicates_find_common_pos(self) -> None:
+    def extract_positions(self) -> None:
         """
-        Find common positions among replicates in two sets of datasets.
-
-        This method identifies and stores common positions among replicates in two sets of datasets,
-        `self.datasets_1` and `self.datasets_2`, based on the 'chr' and 'site' columns. If there is only
-        one dataset in a set, it is considered the common positions.
-
-        Returns:
-            None
-
-        Note:
-            - The common positions for `self.datasets_1` are stored in `self.common_pos_1`.
-            - The common positions for `self.datasets_2` are stored in `self.common_pos_2`.
-
-        Example:
-            To find common positions among replicates, you can call this method as follows:
-            ```
-            obj.replicates_find_common_pos()
-            ```
-
+        Extract positions based on coverage and error thresholds, identify systematic positions,
+        and categorize them into overlapping and exclusive sets for datasets A and B.
         """
-        if len(self.datasets_1) > 1:
-            self.common_pos_1 = self.find_intersect_pos(self.datasets_1)
-        else:
-            self.common_pos_1 = self.datasets_1[0]
-        if len(self.datasets_2) > 1:
-            self.common_pos_2 = self.find_intersect_pos(self.datasets_2)
-        else:
-            self.common_pos_2 = self.datasets_2[0]
-    
-    def find_a_wo_b(self, df_a: pd.DataFrame, df_b: pd.DataFrame) -> pd.DataFrame:
-        """
-        Find rows that exist in DataFrame A but not in DataFrame B.
+        subsets_a = [self.extract_suffient_cvg_pos(path) for path in self.in_paths_a]
+        subsets_b = [self.extract_suffient_cvg_pos(path) for path in self.in_paths_b]
 
-        This function takes two Pandas DataFrames, df_a and df_b, and identifies rows in df_a that do not
-        have corresponding matches in df_b based on the 'chr' and 'site' columns.
+        a_high_cvg = [pos[0] for pos in subsets_a]
+        a_high_err = [pos[1] for pos in subsets_a]
+        del(subsets_a)
+
+        b_high_cvg = [pos[0] for pos in subsets_b]
+        b_high_err = [pos[1] for pos in subsets_b]
+        del(subsets_b)
+
+        a_high_cvg_syst = self.find_systematic_pos(a_high_cvg)
+        del(a_high_cvg)
+        a_high_err_syst = self.find_systematic_pos(a_high_err)
+        del(a_high_err)
+
+        b_high_cvg_syst = self.find_systematic_pos(b_high_cvg)
+        del(b_high_cvg)
+        b_high_err_syst = self.find_systematic_pos(b_high_err)
+        del(b_high_err)
+
+        a_and_b = set.intersection(a_high_err_syst, b_high_err_syst)
+        a_excl = set.intersection(a_high_err_syst, b_high_cvg_syst-a_and_b)
+        b_excl = set.intersection(b_high_err_syst, a_high_cvg_syst-a_and_b)
+
+        self.a_and_b = sorted(a_and_b)
+        self.a_excl = sorted(a_excl)
+        self.b_excl = sorted(b_excl)
+
+    def extract_suffient_cvg_pos(self, path: str) -> Tuple[List[Tuple[str, int]], List[Tuple[str, int]]]:
+        """
+        Extract positions with sufficient coverage and error rate from the specified input file.
 
         Parameters:
-            df_a (pd.DataFrame): The first DataFrame.
-            df_b (pd.DataFrame): The second DataFrame.
+        - path (str): Path to the input file.
 
         Returns:
-            pd.DataFrame: A new DataFrame containing rows from df_a that are not present in df_b.
+        - Tuple[List[Tuple[str, int]], List[Tuple[str, int]]]: Two lists of positions - one for high coverage and one for high error rate.
 
         Note:
-            - Both input DataFrames should have columns 'chr' and 'site' for the comparison to work.
-
+        - Uses the error feature index specified during object initialization.
         """
-        merged = pd.merge(df_a, df_b, on=["chr", "site"], how="left", indicator=True)
-        return merged.loc[merged["_merge"]=="left_only"][["chr", "site"]]
-    
-    def find_intersect_pos(self, datasets: List[pd.DataFrame]) -> pd.DataFrame:
-        """
-        Find the intersection of positions between multiple datasets.
+        hs.print_update(f"Processing {path} ... ", line_break=False)
+        with open(path, "r") as file:
+            high_cvg_sites = []
+            high_cvg_high_err_sites = []
 
-        This function takes a list of Pandas DataFrames representing datasets and finds the intersection
-        of positions (rows) among these datasets based on the 'chr' and 'site' columns.
+            next(file)
+            for line in file:
+                line = line.split("\t")
+                chrom, site, n_reads, n_ref_skip, error_rate = line[0], int(line[1]), int(line[2]), int(line[11]), float(line[self.error_feature_idx])            
+                if n_reads-n_ref_skip >= self.coverage_threshold:
+                    high_cvg_sites.append((chrom, site)) 
+                    if error_rate >= self.error_threshold:
+                        high_cvg_high_err_sites.append((chrom, site))
+
+            hs.print_update("done", with_time=False)
+
+            return high_cvg_sites, high_cvg_high_err_sites
+
+    def find_systematic_pos(self, replicate_pos: List[List[Tuple[str, int]]]) -> List[Tuple[str, int]]:
+        """
+        Identify systematic positions that are common across multiple replicates.
 
         Parameters:
-            datasets (List[pd.DataFrame]): A list of Pandas DataFrames containing datasets.
+        - replicate_pos (List[List[Tuple[str, int]]]): List of positions from multiple replicates.
 
         Returns:
-            pd.DataFrame: A new DataFrame containing rows that exist in all input datasets.
-
-        Note:
-            - Input datasets should have columns 'chr' and 'site' for the intersection operation to work.
-
+        - List[Tuple[str, int]]: List of systematic positions.
         """
-        merged = datasets[0]
-        for dataset in datasets[1:]:
-            merged = pd.merge(merged, dataset, on=["chr", "site"])
-        return merged
+        replicate_pos = [set(pos) for pos in replicate_pos]
+        return set.intersection(*replicate_pos)
 
     def write_bed_files(self) -> None:
+        """Write BED files for overlapping and exclusive positions."""
+        self.positions_to_bed(self.a_and_b, self.out_dir, f"{self.label_a}_{self.label_b}")
+        self.positions_to_bed(self.a_excl, self.out_dir, f"{self.label_a}_excl")
+        self.positions_to_bed(self.b_excl, self.out_dir, f"{self.label_b}_excl")
+
+    def positions_to_bed(self, positions: Set[Tuple[str, int]], out_dir: str, name: str) -> None:
         """
-        Write exclusive and shared positions to BED files.
+        Write positions to a BED file.
 
-        This method writes the exclusive positions for sample 1, sample 2, and the shared positions
-        between sample 1 and sample 2 to BED files. The files are saved in the specified output directory.
-
-        Returns:
-            None
-
-        Example:
-            To write BED files for exclusive and shared positions, you can call this method as follows:
-            ```
-            obj.write_bed_files()
-            ```
-
-        Note:
-            - Exclusive positions for sample 1 are saved in a file named '{self.label_1}_exclusive.bed'.
-            - Exclusive positions for sample 2 are saved in a file named '{self.label_2}_exclusive.bed'.
-            - Shared positions between sample 1 and sample 2 are saved in a file named '{self.label_1}_and_{self.label_2}.bed'.
-            - Each file is saved in the specified output directory.
-
+        Parameters:
+        - positions (Set[Tuple[str, int]]): Set of positions to be written.
+        - out_dir (str): Output directory.
+        - name (str): Name for the output BED file.
         """
-        outpath = f"{self.out_dir}{self.label_1}_exclusive.bed"
-        data = self.excl_in_1.copy()
-        data["end"] = data["site"]
-        data["site"] = data["site"] - 1
-        data["name"] = f"{self.label_1}_exclusive"
-        data.to_csv(outpath, sep="\t", header=False, index=False)
+        path = f"{out_dir}{name}.bed"
+        hs.print_update(f"Writing {len(positions)} sites to {path}")
+        with open(path, "w") as out:
+            for position in positions:
+                chrom, site = position[0], position[1]
+                out.write(f"{chrom}\t{site-1}\t{site}\t{name}\n")
 
-        outpath = f"{self.out_dir}{self.label_2}_exclusive.bed"
-        data = self.excl_in_2.copy()
-        data["end"] = data["site"]
-        data["site"] = data["site"] - 1
-        data["name"] = f"{self.label_2}_exclusive"
-        data.to_csv(outpath, sep="\t", header=False, index=False)
-
-        outpath = f"{self.out_dir}{self.label_1}_and_{self.label_2}.bed"
-        data = self.in_1_and_2.copy()
-        data["end"] = data["site"]
-        data["site"] = data["site"] - 1
-        data["name"] = f"{self.label_1}_{self.label_2}"
-        data.to_csv(outpath, sep="\t", header=False, index=False)
+    
 
     ##############################################################################################################
     #                                          Summary creation methods                                          #
@@ -393,33 +318,25 @@ class PositionExtractor:
 
     def create_plot(self) -> go.Figure:
         """
-        Create a Plotly figure displaying genomic positions.
-
-        This method creates a Plotly figure to display genomic positions for shared and exclusive positions
-        between two samples, as well as chromosome lengths. The figure is customized with layout settings.
+        Create a Plotly figure representing the chromosome-wise distribution of positions.
 
         Returns:
-            str: A Plotly HTML string containing the generated figure.
-
-        Note:
-            - The figure includes bar charts for chromosome lengths and scatter plots for positions.
-            - The figure is customized with various layout settings such as title, labels, fonts, and colors.
-
+        - go.Figure: The Plotly figure.
         """
         def update_plot(fig, title: str|None = None, xlab: str|None = None, ylab: str|None = None, height: int = 500, width: int = 800):
             """
             Updates the layout of a Plotly figure.
 
-            Args:
-                fig (go.Figure): The Plotly figure to be updated.
-                title (str|None): Title of the plot (optional).
-                xlab (str|None): Label for the x-axis (optional).
-                ylab (str|None): Label for the y-axis (optional).
-                height (int): Height of the plot (default: 500).
-                width (int): Width of the plot (default: 800).
+            Parameters:
+            - fig (go.Figure): The Plotly figure to be updated.
+            - title (str | None): Title of the plot (optional).
+            - xlab (str | None): Label for the x-axis (optional).
+            - ylab (str | None): Label for the y-axis (optional).
+            - height (int): Height of the plot (default: 500).
+            - width (int): Width of the plot (default: 800).
 
             Returns:
-                go.Figure: The updated Plotly figure.
+            - go.Figure: The updated Plotly figure.
             """
             fig.update_layout(template="seaborn",
                         title = title,
@@ -434,10 +351,19 @@ class PositionExtractor:
             fig.update_yaxes(showline=True, linewidth=2, linecolor='black', mirror=True, showticklabels=True, ticks='outside', showgrid=False, tickwidth=2)
             return fig
         
+        chr_a_and_b = [pos[0] for pos in self.a_and_b]
+        sites_a_and_b = [pos[1] for pos in self.a_and_b]
+
+        chr_a_excl = [pos[0] for pos in self.a_excl]
+        sites_a_excl = [pos[1] for pos in self.a_excl]
+
+        chr_b_excl =[pos[0] for pos in self.b_excl]
+        sites_b_excl =[pos[1] for pos in self.b_excl]
+
         all_keys = self.ref_dict.keys()
-        present_chr = set((all_keys & self.excl_in_1.chr.unique()) | (all_keys & self.excl_in_2.chr.unique()) | (all_keys & self.in_1_and_2.chr.unique()))
-        present_chr = np.array(sorted(present_chr, key=self.custom_sort_key))
-        chr_lens = np.array([len(self.ref_dict[x]) for x in present_chr])
+        present_chr = set((all_keys & chr_a_and_b) | (all_keys & chr_a_excl) | (all_keys & chr_b_excl))
+        present_chr = list(sorted(present_chr, key=self.custom_sort_key))
+        chr_lens = [len(self.ref_dict[x]) for x in present_chr]
 
         width = 1200
         bargap = 0.9
@@ -449,29 +375,19 @@ class PositionExtractor:
         fig.add_trace(go.Bar(x=present_chr, y=chr_lens, marker=dict(color="lightgrey", line=dict(color="black", width=2)), name="Chromosomes", showlegend=False))
         fig.update_layout(bargap=0.5, yaxis=dict(range=[0,max(chr_lens)+0.1*max(chr_lens)]))
 
-        fig.add_trace(go.Scatter(x=self.in_1_and_2.chr, y=self.in_1_and_2.site, mode='markers', marker=dict(symbol='line-ew', color="#1f77b4", size=scatter_size, line=dict(width=1.1, color="#1f77b4")), name=f"{self.label_1}+{self.label_2}", hovertemplate="Chr%{x}:%{y}"))
-        fig.add_trace(go.Scatter(x=self.excl_in_1.chr, y=self.excl_in_1.site, mode='markers', marker=dict(symbol='line-ew', color="#ff7f0e", size=scatter_size, line=dict(width=1.1, color="#ff7f0e")), name=f"{self.label_1}", hovertemplate="Chr%{x}:%{y}"))
-        fig.add_trace(go.Scatter(x=self.excl_in_2.chr, y=self.excl_in_2.site, mode='markers', marker=dict(symbol='line-ew', color="#2ca02c", size=scatter_size, line=dict(width=1.1, color="#2ca02c")), name=f"{self.label_2}", hovertemplate="Chr%{x}:%{y}"))
+        fig.add_trace(go.Scatter(x=chr_a_and_b, y=sites_a_and_b, mode='markers', marker=dict(symbol='line-ew', color="#1f77b4", size=scatter_size, line=dict(width=1.1, color="#1f77b4")), name=f"{self.label_a}+{self.label_b}", hovertemplate="Chr%{x}:%{y}"))
+        fig.add_trace(go.Scatter(x=chr_a_excl, y=sites_a_excl, mode='markers', marker=dict(symbol='line-ew', color="#ff7f0e", size=scatter_size, line=dict(width=1.1, color="#ff7f0e")), name=f"{self.label_a}", hovertemplate="Chr%{x}:%{y}"))
+        fig.add_trace(go.Scatter(x=chr_b_excl, y=sites_b_excl, mode='markers', marker=dict(symbol='line-ew', color="#2ca02c", size=scatter_size, line=dict(width=1.1, color="#2ca02c")), name=f"{self.label_b}", hovertemplate="Chr%{x}:%{y}"))
         fig.update_xaxes(fixedrange=True)
 
         return fig
 
     def get_file_paths(self) -> Tuple[str, str]:
         """
-        Get formatted lists of file paths for samples 1 and 2.
-
-        This method creates formatted HTML lists of file paths for sample 1 and sample 2 based on the
-        provided input file paths. The file paths are wrapped in HTML <ul> and <li> tags for easy presentation.
+        Get formatted HTML lists of input file paths for datasets A and B.
 
         Returns:
-            Tuple[str, str]: A tuple containing the formatted HTML lists of file paths for sample 1 and sample 2.
-
-        Example:
-            To obtain formatted lists of file paths for samples 1 and 2, you can call this method as follows:
-            ```
-            paths_1, paths_2 = obj.get_file_paths()
-            ```
-
+        - Tuple[str, str]: Formatted HTML lists of file paths for datasets A and B.
         """
         def create_list(paths: List[str]):
             path_list = "<ul>"
@@ -480,68 +396,69 @@ class PositionExtractor:
             path_list += "</ul>"
             return path_list
         
-        return create_list(self.in_paths_1), create_list(self.in_paths_2)
+        return create_list(self.in_paths_a), create_list(self.in_paths_b)
 
     def create_count_table(self) -> str:
         """
-        Create a count table summarizing genomic positions.
-
-        This method generates a count table that summarizes the number of genomic positions in different groups
-        for samples 1 and 2, including shared positions, exclusive positions, and systematic positions.
-        The table is formatted as an HTML string for easy presentation.
+        Create an HTML table showing the counts of occurrences of chromosomes in each set.
 
         Returns:
-            str: An HTML string containing the generated count table.
-
-        Note:
-            - The count table includes columns for systematic positions in sample 1 and sample 2, shared positions,
-            exclusive positions for sample 1 and sample 2, and a "Genome-wide" total.
-            - The table is sorted by chromosome name using the custom sorting key.
-            - Counts are filled with 0 for missing values and converted to integers.
+        - str: The HTML representation of the count table.
         """
-        count_table = pd.concat([self.common_pos_1.groupby("chr").count(), 
-                         self.common_pos_2.groupby("chr").count(), 
-                         self.in_1_and_2.groupby("chr").count(), 
-                         self.excl_in_1.groupby("chr").count(), 
-                         self.excl_in_2.groupby("chr").count()], axis=1).sort_values("chr", key=lambda x: x.map(self.custom_sort_key))
-        count_table.columns = [f"systematic {self.label_1}", 
-                               f"systematic {self.label_2}", 
-                               f"{self.label_1} + {self.label_2}", 
-                               f"{self.label_1} excl.", 
-                               f"{self.label_2} excl."]
-        count_table.index = count_table.index.rename("")
-        count_table = count_table.T.fillna(0).astype(int)
-        count_table["Genome-wide"] = count_table.sum(axis=1)
-        return count_table.to_html()
+        # Count occurrences of chromosomes in each set
+        a_and_b_counts = Counter(chromosome for chromosome, _ in self.a_and_b)
+        a_excl_counts = Counter(chromosome for chromosome, _ in self.a_excl)
+        b_excl_counts = Counter(chromosome for chromosome, _ in self.b_excl)
+
+        # Get all unique chromosomes from the sets
+        all_chromosomes = set(a_and_b_counts.keys()) | set(a_excl_counts.keys()) | set(b_excl_counts.keys())
+
+        # Create HTML table
+        html_table = """
+        <table border="1">
+        <thead><tr>
+            <th></th>
+        """
+
+        # Add column headers
+        for chromosome in all_chromosomes:
+            html_table += f"<th>{chromosome}</th>"
+        html_table += "<th>Total</th></tr></thead><tbody>"
+
+        # Add rows and counts
+        for set_name, counts in [(f'{self.label_a} + {self.label_b}', a_and_b_counts), (f'{self.label_a} excl.', a_excl_counts), (f'{self.label_b} excl.', b_excl_counts)]:
+            html_table += f"<tr><td><b>{set_name}</b></td>"
+            total_count = sum(counts.values())
+            for chromosome in all_chromosomes:
+                html_table += f"<td>{counts[chromosome]}</td>"
+            html_table += f"<td>{total_count}</td></tr>"
+
+        html_table += "</tbody></table>"
+        return html_table
     
     def write_svg(self, fig: go.Figure, name: str) -> None:
+        """
+        Write a Plotly figure to an SVG file.
+
+        Parameters:
+        - fig (go.Figure): The Plotly figure to be written.
+        - name (str): The name of the SVG file.
+        """
         outpath = f"{self.out_dir}/{name}.svg"
         fig.write_image(outpath)
 
     def create_summary(self) -> None:
         """
-        Create a summary of the analysis results and save it to an HTML file.
+        Create a summary HTML file containing an overview of shared and exclusive positions in samples A and B.
 
-        This method orchestrates the creation of a summary for the analysis results, including
-        generating a plot, retrieving file paths, creating a count table, capturing the current date and time,
-        and saving the summary to an HTML file.
+        This method generates a summary HTML file that includes information about the input files, a count table, and a genome map.
+
+        If export_svg is True, the genome map is saved as an SVG file in the specified output directory.
+
+        The HTML file is saved with the format: "<out_dir>/<label_a>_<label_b>_summary.html".
 
         Returns:
-            None
-
-        Example:
-            To create a summary of analysis results and save it to a file, you can call this method as follows:
-            ```
-            obj.create_summary()
-            ```
-
-        Note:
-            - The generated plot is stored in a variable called `plot`.
-            - File paths for dataset 1 and dataset 2 are obtained using `self.get_file_paths()`.
-            - The count table is created using `self.create_count_table()`.
-            - The current date and time are captured in the `time` variable.
-            - The summary is saved to an HTML file in the specified output directory.
-
+        - None
         """
         plot = self.create_plot()
         if self.export_svg:
@@ -773,11 +690,11 @@ class PositionExtractor:
                     
                         <section>
                             <p class="intro-text">
-                                This summary file contains an overview of the shared and exclusive positions in samples <i>{self.label_1}</i> and <i>{self.label_2}</i>.
-                                Files provided for sample <i>{self.label_1}</i>:
+                                This summary file contains an overview of the shared and exclusive positions in samples <i>{self.label_a}</i> and <i>{self.label_b}</i>.
+                                Files provided for sample <i>{self.label_a}</i>:
                             </p>
                             {paths_1}
-                            <p class="intro-text">Files provided for sample <i>{self.label_2}</i>:</p>
+                            <p class="intro-text">Files provided for sample <i>{self.label_b}</i>:</p>
                             {paths_2}
                         </section>
 
@@ -785,13 +702,11 @@ class PositionExtractor:
                             <h2 class="collapsible-header">General information</h2>
                             <h3>Count table</h3>
                             <p>
-                                The count table displays the number of individual genomic positions for different groups in each row. These groups are: 
+                                Positions are only regarded if they are present in all replicates of a sample. The count table displays the number of individual genomic positions for different groups in each row. These groups are: 
                                 <ol>
-                                    <li>sytematic <i>{self.label_1}</i>:        Includes positions that are present in all replicates of sample <i>{self.label_1}</i></li>
-                                    <li>sytematic <i>{self.label_2}</i>:        Includes positions that are present in all replicates of sample <i>{self.label_2}</i></li>
-                                    <li><i>{self.label_1}</i> + <i>{self.label_2}</i>:       Positions from group (1) and (2) that are shared between the two</li>
-                                    <li><i>{self.label_1}</i> excl.:              Positions from group (1) that are not present in group (2)</li>
-                                    <li><i>{self.label_2}</i> excl.:              Positions from group (2) that are not present in group (1)</li>
+                                    <li><i>{self.label_a}</i> + <i>{self.label_b}</i>:       Positions from group (1) and (2) that are shared between the two</li>
+                                    <li><i>{self.label_a}</i> excl.:              Positions from group (1) that are not present in group (2)</li>
+                                    <li><i>{self.label_b}</i> excl.:              Positions from group (2) that are not present in group (1)</li>
                                 </ol>
                             </p>
                             <div class="table-box">
@@ -801,12 +716,12 @@ class PositionExtractor:
 
                         <section>
                             <h2 class="collapsible-header">Genome map</h2>
-                            <h3>Genome map displaying shared and exclusive positions between samples <i>{self.label_1}</i> and <i>{self.label_2}</i></h3>
+                            <h3>Genome map displaying shared and exclusive positions between samples <i>{self.label_a}</i> and <i>{self.label_b}</i></h3>
                             <div class="plot-container">
                                 {plot}
                             </div>
                             <p>
-                                Genome map displaying the positions that are present in both samples, only in sample <i>{self.label_1}</i> and only in sample <i>{self.label_2}</i>.
+                                Genome map displaying the positions that are present in both samples, only in sample <i>{self.label_a}</i> and only in sample <i>{self.label_b}</i>.
                                 Only chromosomes that contain extracted position(s) are shown.  
                             </p>
                         </section>
@@ -814,7 +729,7 @@ class PositionExtractor:
                     <footer></footer>
                     </html> 
             """
-        with open(f"{self.out_dir}{self.label_1}_{self.label_2}_summary.html", "w") as out:
+        with open(f"{self.out_dir}{self.label_a}_{self.label_b}_summary.html", "w") as out:
             out.write(template)
 
     ##############################################################################################################
@@ -823,17 +738,17 @@ class PositionExtractor:
 
     def main(self) -> None:
         """
-        Main method to execute the position extractor workflow.
+        Execute the main workflow of the PositionExtractor class.
 
-        This method serves as the entry point for the position extractor workflow. It calls the following key steps:
-        1. Extract subsets of positions.
-        2. Write BED files for exclusive and shared positions.
-        3. Create a summary HTML report.
+        This method performs the following tasks:
+        1. Extract positions from input files.
+        2. Write BED files for shared and exclusive positions.
+        3. Create a summary HTML file containing an overview of shared and exclusive positions.
 
         Returns:
-            None
+        - None
         """
-        self.extract_subsets_positions()
+        self.extract_positions()
         self.write_bed_files()
         self.create_summary()
 
@@ -847,16 +762,16 @@ def setup_parser() -> argparse.ArgumentParser:
                             Path to the input file(s). If replicates are available, specify paths comma-separated (<repl1.tsv>,<repl2.tsv>,...).
                             Must be of type tsv, as returned by the PileupExtractor.
                             """)
-    parser.add_argument('-bn', '--basename', type=str, required=False, default="sample1",
+    parser.add_argument('-bn', '--basename', type=str, default="sample1",
                         help="""
                             Basename of the given sample. Used to create the pileup and extracted features files. Default: 'sample1'
                             """)
-    parser.add_argument('-i2', '--sample2', type=str, required=False,
+    parser.add_argument('-i2', '--sample2', type=str, required=True,
                         help="""
                             Path to the input file(s) from a second sample. If replicates are available, specify paths comma-separated (<repl1.tsv>,<repl2.tsv>,...).
                             Must be of type tsv, as returned by the PileupExtractor. 
                             """)
-    parser.add_argument('-bn2', '--basename2', type=str, required=False, default="sample2",
+    parser.add_argument('-bn2', '--basename2', type=str, default="sample2",
                         help="""
                             Basename of the second sample. Used to create the pileup and extracted features files. Default: 'sample2'
                             """)
@@ -865,6 +780,19 @@ def setup_parser() -> argparse.ArgumentParser:
                             Path to output a output directory, in which all output files will be stored.
                             """)
     parser.add_argument('-r', '--reference', type=str, required=True, help="Path to the reference file")
+    parser.add_argument("-f", "--error_feature", type=str, default="perc_mismatch_alt", 
+                        help="""
+                            Error feature to use during extraction. Can be one of the following: 
+                            n_del_rel, n_ins_rel, perc_mismatch, perc_mismatch_alt.
+                            """)
+    parser.add_argument("-e", "--error_threshold", type=hs.float_between_zero_and_one, default=0.5, 
+                        help="""
+                            Threshold to identify positions of iterest. Uses the perc_mismatch_alt feature.
+                            """)
+    parser.add_argument("-c", "--coverage_threshold", type=hs.positive_int, default=40,
+                        help="""
+                            Minimum coverage of a position to be regarded in the extraction.
+                            """)
     parser.add_argument('--export_svg', action="store_true", 
                         help="""
                             If specified, exports created plots as svg files.
@@ -875,15 +803,9 @@ if __name__ == "__main__":
     parser = setup_parser()
     args = parser.parse_args()
 
-    posextr = PositionExtractor(in_paths_1=args.sample1, in_paths_2=args.sample2, 
+    posextr = PositionExtractor(in_paths_a=args.sample1, in_paths_b=args.sample2, 
                                 out_dir=args.output, ref_path=args.reference, 
-                                label_1=args.basename, label_2=args.basename2, 
+                                label_a=args.basename, label_b=args.basename2, 
+                                error_threshold=args.error_threshold, coverage_threshold=args.coverage_threshold,
                                 export_svg=args.export_svg)
     posextr.main()
-    
-    # posextr = PositionExtractor(in_paths_1="/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/cytoplasm1_extracted.tsv,/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/cytoplasm2_extracted.tsv,/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/cytoplasm3_extracted.tsv",
-    #                             in_paths_2="/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/nucleus1_extracted.tsv,/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/nucleus2_extracted.tsv,/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/nucleus3_extracted.tsv",
-    #                             out_dir="/home/vincent/masterthesis/data/nuc_cyt_3rep/processed/extracted_pos",
-    #                             ref_path="/home/vincent/masterthesis/data/nuc_cyt_3rep/GRCh38_clean.genome.fa",
-    #                             label_1="cytoplasm", label_2="nucleus")
-    # posextr.main()

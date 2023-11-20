@@ -4,11 +4,14 @@ from itertools import takewhile, repeat
 import datetime
 
 
-def print_update(message: str, line_break: bool = True) -> None:
+def print_update(message: str, line_break: bool = True, with_time: bool = True) -> None:
     time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     if line_break:
         message += "\n"
-    sys.stdout.write(f"{time}  |  {message}")
+    if with_time:
+        sys.stdout.write(f"{time}  |  {message}")
+    else:
+        sys.stdout.write(f"{message}")
 
 
 def get_num_lines(path: str) -> int:
