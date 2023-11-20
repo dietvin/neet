@@ -229,6 +229,7 @@ class PositionExtractor:
         - Uses the error feature index specified during object initialization.
         """
         hs.print_update(f"Processing {path} ... ", line_break=False)
+        sys.stdout.flush()
         with open(path, "r") as file:
             high_cvg_sites = []
             high_cvg_high_err_sites = []
@@ -704,9 +705,9 @@ class PositionExtractor:
                             <p>
                                 Positions are only regarded if they are present in all replicates of a sample. The count table displays the number of individual genomic positions for different groups in each row. These groups are: 
                                 <ol>
-                                    <li><i>{self.label_a}</i> + <i>{self.label_b}</i>:       Positions from group (1) and (2) that are shared between the two</li>
-                                    <li><i>{self.label_a}</i> excl.:              Positions from group (1) that are not present in group (2)</li>
-                                    <li><i>{self.label_b}</i> excl.:              Positions from group (2) that are not present in group (1)</li>
+                                    <li><i>{self.label_a}</i> + <i>{self.label_b}</i>:       Positions that are shared between samples {self.label_a} and {self.label_b}</li>
+                                    <li><i>{self.label_a}</i> excl.:              Positions that are exclusive to sample {self.label_a}</li>
+                                    <li><i>{self.label_b}</i> excl.:              Positions that are exclusive to sample {self.label_b}</li>
                                 </ol>
                             </p>
                             <div class="table-box">
@@ -806,6 +807,7 @@ if __name__ == "__main__":
     posextr = PositionExtractor(in_paths_a=args.sample1, in_paths_b=args.sample2, 
                                 out_dir=args.output, ref_path=args.reference, 
                                 label_a=args.basename, label_b=args.basename2, 
+                                error_feature=args.error_feature,
                                 error_threshold=args.error_threshold, coverage_threshold=args.coverage_threshold,
                                 export_svg=args.export_svg)
     posextr.main()
