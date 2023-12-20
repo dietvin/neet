@@ -370,7 +370,8 @@ class PositionSummary:
                 
             for i in range(1, n_samples):
                 fig.update_xaxes(tickvals=[], ticktext=[], row=i, col=1)
-            
+            fig.update_xaxes(tickvals=list(range(-self.nb_size,self.nb_size+1)), ticktext=[d[3] for d in data_a[0]], row=n_samples, col=1)
+
             figs.append(fig.to_html(include_plotlyjs=False))
         return tuple(figs)
     
@@ -431,6 +432,7 @@ class PositionSummary:
         
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         files_a, files_b = self.get_file_paths()
+        # collapsible sections adapted from: https://github.com/wdecoster/NanoPlot (https://github.com/wdecoster/NanoPlot/blob/master/nanoplot/report.py)
         template = f"""
             <!DOCTYPE html>
             <html lang="en">
@@ -443,6 +445,8 @@ class PositionSummary:
             </head>
 
             <body>
+                <script type="text/javascript" src="/home/vincent/projects/neet_project/neet/plotly_js.js"></script>
+
                 <header>
                     <h1>Position extractor summary</h1>
                     <p>Produced by <a href="https://github.com/dietvin/neet">Neet</a> on <b>{time}</b></p>
@@ -460,7 +464,6 @@ class PositionSummary:
 
                 {collapsible_sections}
 
-                <script type="text/javascript" src="/home/vincent/projects/neet_project/neet/plotly_js.js"></script>
                 <script>
                     var coll = document.getElementsByClassName("collapsible");
                     var i;
