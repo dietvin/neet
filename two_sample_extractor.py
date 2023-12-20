@@ -96,7 +96,7 @@ class PositionExtractor:
             raise Exception("Input files of different kind. All files must be .bam or .pileup, not mixed.")
         return in_list
 
-    def check_out(self, out: str): 
+    def check_out(self, out: str) -> None: 
         """
         Check if the specified output directory exists, and create it if necessary.
 
@@ -788,11 +788,11 @@ def setup_parser() -> argparse.ArgumentParser:
                             """)
     parser.add_argument("-e", "--error_threshold", type=hs.float_between_zero_and_one, default=0.5, 
                         help="""
-                            Threshold to identify positions of iterest. Uses the perc_mismatch_alt feature.
+                            Threshold to identify positions of iterest. Uses the perc_mismatch_alt feature. Default: 0.5
                             """)
     parser.add_argument("-c", "--coverage_threshold", type=hs.positive_int, default=40,
                         help="""
-                            Minimum coverage of a position to be regarded in the extraction.
+                            Minimum coverage of a position to be regarded in the extraction. Default: 40
                             """)
     parser.add_argument('--export_svg', action="store_true", 
                         help="""
