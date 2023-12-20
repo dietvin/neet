@@ -438,7 +438,7 @@ class FeatureExtractor:
         line = line_str.split("\t")
         # extract elements from list
         try:
-            chr, site, ref_base, read_bases, read_qualities = line[0], int(line[1]), line[2], line[4], line[5]
+            chr, site, ref_base, read_bases, read_qualities = line[0], int(line[1]), line[2].replace("T", "U"), line[4], line[5]
         except:
             return ""
             
@@ -675,7 +675,7 @@ class FeatureExtractor:
             else:
                 motif = ref[idx_l:idx_r]
 
-            return motif
+            return motif.replace("T", "U")
         return ""
         
     def get_mismatch_perc(self, count_dict_rel: Dict[str, float], ref_base: str) -> float:

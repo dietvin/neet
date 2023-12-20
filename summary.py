@@ -147,24 +147,24 @@ class SummaryCreator:
                 to the specified output path.
         """
         hs.print_update(f"Starting creation of summary from file '{self.input_path}'.")
-        hs.print_update("1 - loading data")
+        hs.print_update("  - loading data")
         self.load_data()
-        hs.print_update("2 - creating general summary")
+        hs.print_update("  - creating general summary")
 
         n_positions = self.data.shape[0]
         n_chromosomes = len(self.data["chr"].unique())
         plots = []
         
         plots.append(self.create_general_plot())
-        hs.print_update("3 - creating chromosome-wise summary")
+        hs.print_update("  - creating chromosome-wise summary")
         plots.append(self.create_chr_plot())
-        hs.print_update("4 - creating general mismatch summary")
+        hs.print_update("  - creating general mismatch summary")
         plots.append(self.create_mism_general_plot())
-        hs.print_update("5 - creating specific mismatch type summary")
+        hs.print_update("  - creating specific mismatch type summary")
         plots += self.create_mism_types_plots()
-        hs.print_update("6 - creating motif summary")
+        hs.print_update("  - creating motif summary")
         plots.append(self.create_motif_plot())
-        hs.print_update(f"7 - creating HTML summary file at {self.output_path}")
+        hs.print_update(f"  - creating HTML summary file at {self.output_path}")
         self.write_to_html(n_positions, n_chromosomes, plots)
         hs.print_update("Finished.")
     
@@ -346,7 +346,7 @@ class SummaryCreator:
             pd.DataFrame: Processed data for motif summary.
         """
         data = self.data[["ref_base", "motif", self.perc_mis_col, "n_del_rel", "n_ins_rel", "n_ref_skip_rel"]]
-        motif_center_idx = len(data.motif[0]) //2
+        motif_center_idx = len(data.motif[0]) // 2
         data.loc[:, "motif_3b"] = data["motif"].map(lambda x: x[motif_center_idx-1:motif_center_idx+2])
         return data
 
@@ -560,7 +560,7 @@ class SummaryCreator:
         """
         try:
             def create_motif_trace(data: pd.DataFrame, center_base: str, showlegend: bool = False):
-                data = data.loc[(data.ref_base == center_base) & (~data.motif_3b.isin(["AAA", "AAC", "AAG", "AAT", "CAA", "GAA", "TAA", "CCC", "CCA", "CCG", "CCT", "ACC", "GCC", "TCC", "GGG", "GGA", "GGC", "GGT", "AGG", "CGG", "TGG", "TTT", "TTA", "TTC", "TTG", "ATT", "CTT", "GTT"]))]
+                data = data.loc[(data.ref_base == center_base) & (~data.motif_3b.isin(["AAA", "AAC", "AAG", "AAU", "CAA", "GAA", "UAA", "CCC", "CCA", "CCG", "CCU", "ACC", "GCC", "UCC", "GGG", "GGA", "GGC", "GGU", "AGG", "CGG", "UGG", "UU", "UUA", "UUC", "UUG", "AUU", "CUU", "GUU"]))]
                 data = data.melt(value_vars=[self.perc_mis_col, "n_del_rel", "n_ins_rel"], var_name="Error type", id_vars=["ref_base","motif_3b"])
 
                 d = []
@@ -606,10 +606,10 @@ class SummaryCreator:
 
             data = self.prepare_data_motifs()
             
-            x_order = {"A": ["CAC", "CAG", "CAT", "GAC", "GAG", "GAT", "TAC", "TAG", "TAT"], 
-                    "C": ["ACA", "ACG", "ACT", "GCA", "GCG", "GCT", "TCA", "TCG", "TCT"],
-                    "G": ["AGA", "AGC", "AGT", "CGA", "CGC", "CGT", "TGA", "TGC", "TGT"],
-                    "T": ["ATA", "ATC", "ATG", "CTA", "CTC", "CTG", "GTA", "GTC", "GTG"]}
+            x_order = {"A": ["CAC", "CAG", "CAU", "GAC", "GAG", "GAU", "UAC", "UAG", "UAU"], 
+                    "C": ["ACA", "ACG", "ACU", "GCA", "GCG", "GCU", "UCA", "UCG", "UCU"],
+                    "G": ["AGA", "AGC", "AGU", "CGA", "CGC", "CGU", "UGA", "UGC", "UGU"],
+                    "U": ["AUA", "AUC", "AUG", "CUA", "CUC", "CUG", "GUA", "GUC", "GUG"]}
 
             fig = make_subplots(rows=2, cols=2, 
                                 specs=[[{"type": "box"}, {"type": "box"}], [{"type": "box"}, {"type": "box"}]], 
@@ -620,7 +620,7 @@ class SummaryCreator:
             fig.add_traces(create_motif_trace(data, "A", showlegend=True), rows=1, cols=1)
             fig.add_traces(create_motif_trace(data, "C"), rows=1, cols=2)
             fig.add_traces(create_motif_trace(data, "G"), rows=2, cols=1)
-            fig.add_traces(create_motif_trace(data, "T"), rows=2, cols=2)
+            fig.add_traces(create_motif_trace(data, "U"), rows=2, cols=2)
 
             fig.update_layout(boxmode="group", boxgroupgap=0, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='#f5f5f5', bordercolor='#000000', borderwidth=2))
 
