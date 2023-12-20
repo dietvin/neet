@@ -139,6 +139,15 @@ class PositionSummary:
                 raise Exception(f"Directory '{out}' was not found and could not be created.")
 
     def get_positions(self, bed_path: str) -> None:
+        """
+        Extract positions from the specified BED file.
+
+        Parameters:
+        - bed_path (str): The path to the BED file.
+
+        Returns:
+        - None
+        """
         hs.print_update(f"Extracting positions from {bed_path}... ", line_break=False)
         with open(bed_path, "r") as bed_file:
             positions = []
@@ -150,7 +159,16 @@ class PositionSummary:
             self.positions = positions
 
     def get_data(self, paths_a: List[str], paths_b: List[str]) -> None:
+        """
+        Process input files to extract relevant data for both samples.
 
+        Parameters:
+        - paths_a (List[str]): List of input file paths for sample A.
+        - paths_b (List[str]): List of input file paths for sample B.
+
+        Returns:
+        - None
+        """
         def process_sample(paths: List[str]) -> List[List[List[str]]]:
             target_sites = set([(position[0], position[1]+i) for i in range(-self.nb_size, self.nb_size+1) for position in self.positions])
 
@@ -222,6 +240,18 @@ class PositionSummary:
 
 
     def create_bar_trace_base_composition(self, pos_data: List[str], x: int = 0, center: bool = True, show_legend: bool = False) -> List[go.Bar]:
+        """
+        Create a list of Plotly Bar traces for base composition visualization.
+
+        Parameters:
+        - pos_data (List[str]): List of position data.
+        - x (int, optional): X-coordinate for the bars (default is 0).
+        - center (bool, optional): Whether to center the bars at the specified x-coordinate (default is True).
+        - show_legend (bool, optional): Whether to display legends for the bars (default is False).
+
+        Returns:
+        - List[go.Bar]: List of Plotly Bar traces.
+        """
         a, c, g, u = int(pos_data[5]), int(pos_data[6]), int(pos_data[7]), int(pos_data[8])
         cvg = a+c+g+u
         a_rel, c_rel, g_rel, u_rel = a/cvg, c/cvg, g/cvg, u/cvg
@@ -260,6 +290,18 @@ class PositionSummary:
         return [a_bar, c_bar, g_bar, u_bar]
 
     def create_bar_trace_error_rates(self, pos_data: List[str], x: int = 0, center: bool = True, show_legend: bool = False) -> List[go.Bar]:
+        """
+        Create a list of Plotly Bar traces for error rates visualization.
+
+        Parameters:
+        - pos_data (List[str]): List of position data.
+        - x (int, optional): X-coordinate for the bars (default is 0).
+        - center (bool, optional): Whether to center the bars at the specified x-coordinate (default is True).
+        - show_legend (bool, optional): Whether to display legends for the bars (default is False).
+
+        Returns:
+        - List[go.Bar]: List of Plotly Bar traces.
+        """        
         base_idx_rel = {"A": 12, "C": 13, "G": 14, "T": 15}
         base_idx_abs = {"A": 5, "C": 6, "G": 7, "T": 8}
 
@@ -310,6 +352,18 @@ class PositionSummary:
         return [match_bar, mismatch_bar, deletion_bar, refskip_bar]
 
     def create_bar_trace_insertion_rate(self, pos_data: List[str], x: int = 0, center: bool = True, show_legend: bool = False) -> List[go.Bar]:
+        """
+        Create a list of Plotly Bar traces for insertion rate visualization.
+
+        Parameters:
+        - pos_data (List[str]): List of position data.
+        - x (int, optional): X-coordinate for the bars (default is 0).
+        - center (bool, optional): Whether to center the bars at the specified x-coordinate (default is True).
+        - show_legend (bool, optional): Whether to display legends for the bars (default is False).
+
+        Returns:
+        - List[go.Bar]: List of Plotly Bar traces.
+        """        
         n_ins = int(pos_data[10])
         ins_rate = float(pos_data[17])
 
@@ -326,6 +380,17 @@ class PositionSummary:
         return [ins_bar]
 
     def get_rep_bar_traces(self, data: List[List[str]], plot_type: str, showlegend: bool = False) -> List[go.Bar]:
+        """
+        Get a list of Plotly Bar traces for a replicate.
+
+        Parameters:
+        - data (List[List[str]]): List of data for a replicate.
+        - plot_type (str): Type of plot (base_composition, error_rates, insertion_rate).
+        - showlegend (bool, optional): Whether to display legends for the bars (default is False).
+
+        Returns:
+        - List[go.Bar]: List of Plotly Bar traces.
+        """        
         x_vals = range(-self.nb_size,self.nb_size+1)
         is_center_pos = [False]*self.nb_size + [True] + [False]*self.nb_size
         show_legend = is_center_pos if showlegend else [showlegend]*(2*self.nb_size+1)
@@ -343,6 +408,16 @@ class PositionSummary:
         return [item for t in bar_traces for item in t]
 
     def create_position_plots(self, data_a: List[List[List[str]]], data_b: List[List[List[str]]]) -> Tuple[str]:
+        """
+        Create Plotly plots for base composition, error rates, and insertion rates for each position.
+
+        Parameters:
+        - data_a (List[List[List[str]]]): Data for sample A.
+        - data_b (List[List[List[str]]]): Data for sample B.
+
+        Returns:
+        - Tuple[str]: Tuple of HTML representations of the created plots.
+        """        
         n_rep_a = len(data_a)
         n_rep_b = len(data_b)
         n_samples = n_rep_a+n_rep_b
@@ -376,6 +451,16 @@ class PositionSummary:
         return tuple(figs)
     
     def create_html_section(self, position: Tuple[str, int], plots: Tuple[str, str, str]) -> str:
+        """
+        Create an HTML section for a genomic position with embedded plots.
+
+        Parameters:
+        - position (Tuple[str, int]): Genomic position (chromosome, site).
+        - plots (Tuple[str, str, str]): Tuple of HTML representations for base composition, error rates, and insertion rates.
+
+        Returns:
+        - str: HTML section for the genomic position with embedded plots.
+        """
         chrom, site = position[0], position[1]
     
         plot_base_comp = plots[0]
@@ -411,10 +496,11 @@ class PositionSummary:
     def get_file_paths(self) -> Tuple[str, str]:
         """
         Get formatted HTML lists of input file paths for datasets A and B.
+        Collapsible sections are adapted from: https://github.com/wdecoster/NanoPlot/blob/master/nanoplot/report.py
 
         Returns:
         - Tuple[str, str]: Formatted HTML lists of file paths for datasets A and B.
-        """
+        """        
         def create_list(paths: List[str]):
             path_list = "<ul>"
             for path in paths:
@@ -425,6 +511,12 @@ class PositionSummary:
         return create_list(self.paths_a), create_list(self.paths_b)
 
     def main(self) -> str:
+        """
+        Main method to generate the HTML summary report.
+
+        Returns:
+        - str: File path to the generated HTML summary report.
+        """
         collapsible_sections = ""
         for (position_a, data_a), (position_b, data_b) in zip(self.data_sample_a.items(), self.data_sample_b.items()):
             plots = self.create_position_plots(data_a, data_b)
@@ -432,7 +524,6 @@ class PositionSummary:
         
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         files_a, files_b = self.get_file_paths()
-        # collapsible sections adapted from: https://github.com/wdecoster/NanoPlot/blob/master/nanoplot/report.py
         template = f"""
             <!DOCTYPE html>
             <html lang="en">
