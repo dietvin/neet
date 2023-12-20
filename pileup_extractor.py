@@ -361,7 +361,7 @@ class FeatureExtractor:
             hs.print_update("Counting number of lines to process.")
             progress_bar = tqdm(desc=desc, total=hs.get_num_lines(in_file))
 
-            header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_t\tn_del\tn_ins\tn_ref_skip\tn_a_rel\tn_c_rel\tn_g_rel\tn_t_rel\tn_del_rel\tn_ins_rel\tn_ref_skip_rel\tperc_mismatch\tperc_mismatch_alt\tmotif\tq_mean\tq_std\tneighbour_error_pos\n"
+            header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_u\tn_del\tn_ins\tn_ref_skip\tn_a_rel\tn_c_rel\tn_g_rel\tn_u_rel\tn_del_rel\tn_ins_rel\tn_ref_skip_rel\tperc_mismatch\tperc_mismatch_alt\tmotif\tq_mean\tq_std\tneighbour_error_pos\n"
             o.write(header)
             
             nb_size_full = 1 + 2 * self.window_size
@@ -457,7 +457,7 @@ class FeatureExtractor:
             ref = self.ref_sequences[chr]
         except:
             return ""
-        # get absolute number of A, C, G, T, ins, del
+        # get absolute number of A, C, G, U, ins, del
         count, ref_skip_positions = self.parse_pileup_string(read_bases, ref_base)
 
         # get qualitiy measures
@@ -469,9 +469,9 @@ class FeatureExtractor:
         # could use if else statement and get the other case down here, but then 
         # the count will be calculated each time, potentially wasting time in case the 
         # filter_num_reads is used
-        n_reads_alt = count["a"]+count["c"]+count["g"]+count["t"]
+        n_reads_alt = count["a"]+count["c"]+count["g"]+count["u"]
 
-        # get relative number of A, C, G and T counts
+        # get relative number of A, C, G and U counts
         count_rel = self.get_relative_count(count, n_reads)
         count_rel_alt = self.get_relative_count(count, n_reads_alt)
 
@@ -494,7 +494,7 @@ class FeatureExtractor:
         # get 11b motif
         motif = self.get_motif(chr, site, ref, k=2)
 
-        out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["t"]}\t{count["del"]}\t{count["ins"]}\t{count["ref_skip"]}\t{count_rel["a"]}\t{count_rel["c"]}\t{count_rel["g"]}\t{count_rel["t"]}\t{count_rel["del"]}\t{count_rel["ins"]}\t{count_rel["ref_skip"]}\t{perc_mismatch}\t{perc_mismatch_alt}\t{motif}\t{quality_mean}\t{quality_std}\n'
+        out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["u"]}\t{count["del"]}\t{count["ins"]}\t{count["ref_skip"]}\t{count_rel["a"]}\t{count_rel["c"]}\t{count_rel["g"]}\t{count_rel["u"]}\t{count_rel["del"]}\t{count_rel["ins"]}\t{count_rel["ref_skip"]}\t{perc_mismatch}\t{perc_mismatch_alt}\t{motif}\t{quality_mean}\t{quality_std}\n'
         return out
 
     def remove_indels(self, pileup_string: str) -> str:
@@ -547,7 +547,7 @@ class FeatureExtractor:
         Returns
         -------
         dict
-            Dictionary containing the number of A, T, C, G, 
+            Dictionary containing the number of A, U, C, G, 
             insertions and deletions.
         """
         pileup_string = pileup_string.lower()
@@ -555,7 +555,7 @@ class FeatureExtractor:
         pileup_string = re.sub(r'\^.', '', pileup_string)
 
         ref_base = ref_base.lower()
-        count_dict = {"a": 0, "t": 0, "c": 0, "g": 0, "del": 0, "ins": 0}
+        count_dict = {"a": 0, "u": 0, "c": 0, "g": 0, "del": 0, "ins": 0}
         
         # get number of deletions
         count_dict["del"] = pileup_string.count("*")
@@ -567,7 +567,7 @@ class FeatureExtractor:
 
         # get number of mismatches (i.e. [ACGT])
         count_dict["a"] = pileup_string.count("a")
-        count_dict["t"] = pileup_string.count("t")
+        count_dict["u"] = pileup_string.count("t")
         count_dict["c"] = pileup_string.count("c")
         count_dict["g"] = pileup_string.count("g")
 
@@ -589,24 +589,24 @@ class FeatureExtractor:
 
     def get_relative_count(self, count_dict: Dict[str, int], n_reads: int) -> Dict[str, float]:
         """
-        Gets a dictionary containing the absolute counts for A, C, G and T 
+        Gets a dictionary containing the absolute counts for A, C, G and U
         and calculates the relative proportions
 
         Parameters
         ----------
         count_dict : dict[int]
-            Dictionary containing the absolute counts for A, C, G and T
+            Dictionary containing the absolute counts for A, C, G and U
         n_reads : int
             Number of reads at the given position
 
         Returns
         -------
         dict[float]
-            Dictionary containing the relative counts for A, C, G and T
+            Dictionary containing the relative counts for A, C, G and U
         """
-        #n_reads = sum([count_dict["a"], count_dict["c"], count_dict["g"], count_dict["t"]])
+        #n_reads = sum([count_dict["a"], count_dict["c"], count_dict["g"], count_dict["u"]])
         rel_dict = {}
-        for category in ["a", "c", "g", "t", "del", "ins", "ref_skip"]:
+        for category in ["a", "c", "g", "u", "del", "ins", "ref_skip"]:
             try:
                 rel_dict[category] = count_dict[category] / n_reads
             except:
@@ -616,20 +616,20 @@ class FeatureExtractor:
 
     def get_majority_base(self, count_dict: Dict[str, int]) -> str:
         """
-        Gets a dictionary containing the absolute counts for A, C, G and T and returns the
+        Gets a dictionary containing the absolute counts for A, C, G and U and returns the
         key of the one with the highest count.
 
         Parameters
         ----------
         count_dict : dict
-            dictionary containing the absolute counts for A, C, G and T
+            dictionary containing the absolute counts for A, C, G and U
 
         Returns
         -------
         str
             Key from the dictionary corresponding to the largest value
         """
-        dict_subset = dict((k, count_dict[k]) for k in ("a", "c", "g", "t"))
+        dict_subset = dict((k, count_dict[k]) for k in ("a", "c", "g", "u"))
 
         return max(dict_subset, key = lambda k: dict_subset[k]).upper()
 
@@ -686,7 +686,7 @@ class FeatureExtractor:
         Parameters
         ----------
         count_dict : dict
-            Dictionary containing the number of occurences of A,C,G,T,ins,del for a given position
+            Dictionary containing the number of occurences of A,C,G,U,ins,del for a given position
         ref_base : str
             reference base at the given position
 
@@ -696,7 +696,7 @@ class FeatureExtractor:
             Number of mismatched reads a the given position
         """
         mismatch_perc_sum = 0
-        for b in ["a", "c", "g", "t"]:
+        for b in ["a", "c", "g", "u"]:
             if b != ref_base.lower():
                 mismatch_perc_sum += count_dict_rel[b]
 
