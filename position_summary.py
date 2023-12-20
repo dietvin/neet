@@ -432,7 +432,7 @@ class PositionSummary:
         
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         files_a, files_b = self.get_file_paths()
-        # collapsible sections adapted from: https://github.com/wdecoster/NanoPlot (https://github.com/wdecoster/NanoPlot/blob/master/nanoplot/report.py)
+        # collapsible sections adapted from: https://github.com/wdecoster/NanoPlot/blob/master/nanoplot/report.py
         template = f"""
             <!DOCTYPE html>
             <html lang="en">
