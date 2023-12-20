@@ -26,8 +26,8 @@ class POIAnalyzer():
     bed_categories_canoncial_bases: List[str]
 
     dtypes = {'chr': str, 'site': int, 'n_reads': int, 'ref_base': str, 'majority_base': str, 'n_a': int, 'n_c': int,
-            'n_g': int, 'n_t': int, 'n_del': int, 'n_ins': int, 'n_ref_skip': int, 'n_a_rel': float, 'n_c_rel': float,
-            'n_g_rel': float, 'n_t_rel': float, 'n_del_rel': float, 'n_ins_rel': float, 'n_ref_skip_rel': float,
+            'n_g': int, 'n_u': int, 'n_del': int, 'n_ins': int, 'n_ref_skip': int, 'n_a_rel': float, 'n_c_rel': float,
+            'n_g_rel': float, 'n_u_rel': float, 'n_del_rel': float, 'n_ins_rel': float, 'n_ref_skip_rel': float,
             'perc_mismatch': float, 'perc_mismatch_alt': float, 'motif': str, 'q_mean': float, 'q_std': float,
             'neighbour_error_pos': str}
     
@@ -360,20 +360,20 @@ class POIAnalyzer():
 
         Returns:
             Tuple[Dict[str, List[float]], Dict[str, int]]: A tuple containing:
-                - composition_data (Dict[str, List[float]]): A dictionary containing composition values for A, C, G, and T.
-                - composition_counts (Dict[str, int]): A dictionary containing counts of modification and canonical sequences for A, C, G, and T.
+                - composition_data (Dict[str, List[float]]): A dictionary containing composition values for A, C, G, and U.
+                - composition_counts (Dict[str, int]): A dictionary containing counts of modification and canonical sequences for A, C, G, and U.
 
         Note:
             This method prepares data for composition analysis based on modification and canonical sequences.
             It filters data to extract relevant sequences for 'mod' and 'canonical' categories, both matching
-            and mismatching. Median values are computed for each category, and the relative composition of A, C, G, and T
+            and mismatching. Median values are computed for each category, and the relative composition of A, C, G, and U
             is calculated. The resulting data is returned in dictionaries for composition values and sequence counts.
 
         """
-        mod_match = data.loc[(data.bed_name==mod) & (data.ref_base==data.majority_base), ["n_a_rel", "n_c_rel", "n_g_rel", "n_t_rel"]]
-        mod_mismatch = data.loc[(data.bed_name==mod) & (data.ref_base!=data.majority_base), ["n_a_rel", "n_c_rel", "n_g_rel", "n_t_rel"]]
-        unm_match = data.loc[(data.ref_base == canonical) & (data.bed_name.isna()) & (data.ref_base==data.majority_base), ["n_a_rel", "n_c_rel", "n_g_rel", "n_t_rel"]]
-        unm_mismatch = data.loc[(data.ref_base == canonical) & (data.bed_name.isna()) & (data.ref_base!=data.majority_base), ["n_a_rel", "n_c_rel", "n_g_rel", "n_t_rel"]]
+        mod_match = data.loc[(data.bed_name==mod) & (data.ref_base==data.majority_base), ["n_a_rel", "n_c_rel", "n_g_rel", "n_u_rel"]]
+        mod_mismatch = data.loc[(data.bed_name==mod) & (data.ref_base!=data.majority_base), ["n_a_rel", "n_c_rel", "n_g_rel", "n_u_rel"]]
+        unm_match = data.loc[(data.ref_base == canonical) & (data.bed_name.isna()) & (data.ref_base==data.majority_base), ["n_a_rel", "n_c_rel", "n_g_rel", "n_u_rel"]]
+        unm_mismatch = data.loc[(data.ref_base == canonical) & (data.bed_name.isna()) & (data.ref_base!=data.majority_base), ["n_a_rel", "n_c_rel", "n_g_rel", "n_u_rel"]]
 
         n_mod_match = mod_match.shape[0]
         n_mod_mismatch = mod_mismatch.shape[0]
@@ -395,7 +395,7 @@ class POIAnalyzer():
         g_vals = [mod_match["n_g_rel"], unm_match["n_g_rel"], mod_mismatch["n_g_rel"], unm_mismatch["n_g_rel"]]
         t_vals = [mod_match["n_t_rel"], unm_match["n_t_rel"], mod_mismatch["n_t_rel"], unm_mismatch["n_t_rel"]]
 
-        return {"A": a_vals, "C": c_vals, "G": g_vals, "T": t_vals}, {"A": n_mod_match, "C": n_mod_mismatch, "G": n_unm_match, "T": n_unm_mismatch}
+        return {"A": a_vals, "C": c_vals, "G": g_vals, "U": t_vals}, {"A": n_mod_match, "C": n_mod_mismatch, "G": n_unm_match, "U": n_unm_mismatch}
     
     def prepare_data_errorrates(self, data: pd.DataFrame, mod: str, canonical: str) -> Tuple[Tuple[List[float], List[float]], 
                                                                                     Tuple[List[float], List[float]], 
@@ -748,12 +748,12 @@ class POIAnalyzer():
         x_vals = [f"<i>{mod}</i> match<br>(n = {category_count['A']})", 
                 f"{canonical} match<br>(n = {category_count['G']})", 
                 f"<i>{mod}</i> mismatch<br>(n = {category_count['C']})", 
-                f"{canonical} mismatch<br>(n = {category_count['T']})"]
+                f"{canonical} mismatch<br>(n = {category_count['U']})"]
 
         bar_a = go.Bar(x=x_vals, y=y_data["A"], name="A", marker=dict(color="#2ca02c"), hovertemplate="%{y}")
         bar_c = go.Bar(x=x_vals, y=y_data["C"], name="C", marker=dict(color="#1f77b4"), hovertemplate="%{y}")
         bar_g = go.Bar(x=x_vals, y=y_data["G"], name="G", marker=dict(color="#ff7f0e"), hovertemplate="%{y}")
-        bar_t = go.Bar(x=x_vals, y=y_data["T"], name="T", marker=dict(color="#d62728"), hovertemplate="%{y}")
+        bar_t = go.Bar(x=x_vals, y=y_data["U"], name="U", marker=dict(color="#d62728"), hovertemplate="%{y}")
         
         fig = self.update_plot(go.Figure(), ylab="Relative abundance", height=600, width=1000)
         fig.add_traces([bar_a, bar_c, bar_g, bar_t])
@@ -1104,7 +1104,7 @@ class POIAnalyzer():
                         {plots[2]}
                     </div>
                     <p>
-                        Each A/C/G/T element in the bars corresponds to the median count of a given base
+                        Each A/C/G/U element in the bars corresponds to the median count of a given base
                         in a subset. The four medians were scaled to add up to one. {name} match: positions
                         labelled {name} from the bed file, where the called base is equal to the reference
                         base. {corresponding_base} match: positions with reference base {corresponding_base},
