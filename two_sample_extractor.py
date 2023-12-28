@@ -471,6 +471,10 @@ class PositionExtractor:
         count_table = self.create_count_table()
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
+        with open("/home/vincent/projects/neet_project/neet/summary/style.css", "r") as css:
+            css_string = css.read()
+        with open("/home/vincent/projects/neet_project/neet/summary/plotly_js.js", "r") as plotly_js:
+            plotly_js_string = plotly_js.read()
 
         template = f"""
                     <!DOCTYPE html>
@@ -480,210 +484,12 @@ class PositionExtractor:
                         <meta http-equiv="X-UA-Compatible" content="IE=edge">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
                         <title>Neet - Position extractor summary</title>
-                        <style>
-                            /* Reset some default browser styles */
-                            body, h1, h2, h3, h4, p, ul, li {{
-                                margin: 0;
-                                padding: 0;
-                            }}
-
-                            /* Apply modern font and line height */
-                            body {{
-                                font-family: 'Arial', sans-serif;
-                                line-height: 1.6;
-                            }}
-
-                            /* Style the header */
-                            header {{
-                                background-color: #333;
-                                color: white;
-                                padding: 1em 0;
-                                text-align: center;
-                                width: 100%; /* Make the header span the full width */
-                                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                            }}
-
-                            header h1 {{
-                                font-size: 2.5em;
-                                margin-bottom: 0.3em;
-                            }}
-
-                            header p {{
-                                font-size: 1.2em;
-                                opacity: 0.8;
-                            }}
-
-
-                            footer {{
-                                background-color: #333;
-                                color: white;
-                                padding: 1em 0;
-                                text-align: center;
-                                width: 100%; /* Make the header span the full width */
-                                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                            }}
-
-
-                            /* Center the content */
-                            body {{
-                                display: flex;
-                                justify-content: center;
-                                align-items: center;
-                                min-height: 100vh;
-                                flex-direction: column;
-                                background-color: #f5f5f5;
-                            }}
-
-                            /* Style sections */
-                            section {{
-                                background-color: white;
-                                border-radius: 15px;
-                                border-style: solid;
-                                border-color: #333;
-                                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                                margin: 1em 0;
-                                max-width: 1420px;
-                                width: 90%;
-                                text-align: left;
-                            }}
-
-                            section h2 {{
-                                background-color: #333;
-                                border-radius: 10px 10px 0 0;
-                                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                                text-align: center;
-                                color: white;
-                                opacity: 0.9;       
-                            }}
-
-                            section h3 {{
-                                background-color: #333;
-                                border-radius: 5px;
-                                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                                text-align: center;
-                                margin-top: 0.5em;
-                                margin-left: 0.5em;
-                                margin-right: 0.5em;
-                                color: white;
-                                opacity: 0.8;
-                            }}
-
-                            section h4 {{
-                                background-color: #333;
-                                border-radius: 5px;
-                                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                                text-align: center;
-                                margin-top: 0.5em;
-                                margin-left: 1.5em;
-                                margin-right: 1.5em;
-                                color: white;
-                                opacity: 0.7;       
-                            }}
-
-                            /* Style lists */
-                            ol {{
-                                padding-left: 1em;
-                                margin-left: 3.5em;
-                                margin-top: 0.5em;
-                                margin-bottom: 0.5em;
-                            }}
-                            
-                            ul {{
-                                padding-left: 1em;
-                                margin-left: 3.5em;
-                                margin-top: 0.5em;
-                                margin-bottom: 0.5em;
-                            }}
-
-                            li {{
-                                margin-bottom: 0.25em;
-                            }}
-
-                            /* Style links */
-                            a {{
-                                color: #007bff;
-                                text-decoration: none;
-                            }}
-
-                            a:hover {{
-                                text-decoration: underline;
-                            }}
-
-                            p {{
-                                font-size: 1.1rem;
-                                margin-top: 0.5em;
-                                margin-bottom: 1em;
-                                margin-left: 2em;
-                                margin-right: 1em;
-
-                            }}
-
-                            .plot-container {{
-                                display: flex;
-                                justify-content: center;
-                                margin-top: 2em;
-                                margin-left: 2em;
-                                margin-right: 2em;
-                                margin-bottom: 0.5em;
-                                padding: 1em;
-                            }}
-
-                            .intro-text {{
-                                font-size: 1.4rem;
-                                margin-top: 0.5em;
-                                margin-bottom: 0.5em;
-                                margin-left: 1.5em;
-                                margin-right: 1.5em;
-                            }}
-
-                            .intro-text ul {{
-                                font-size: 1.3rem;
-                                margin-left: 3.5em;
-                                margin-top: 0.5em;
-                                margin-bottom: 0.5em;
-                            }}
-
-                            .table-box {{
-                                margin: 2em;
-                                border: 1px solid #ccc;
-                                overflow-x: auto; /* Enable horizontal scrolling */
-                            }}
-
-                            table {{
-                                width: 100%;
-                                border-collapse: collapse;
-                                border: 1px solid black;
-                                font-family: Arial, sans-serif;
-                            }}
-
-                            th, td {{
-                                border: 1px solid #ccc;
-                                padding: 8px;
-                                text-align: center;
-
-                            }}
-
-                            thead {{
-                                background-color: #333;
-                                color: white;
-                                font-size: 0.875rem;
-                                text-transform: uppercase;
-                                letter-spacing: 2%;
-                            }}
-
-                            tbody tr:nth-child(odd) {{
-                                background-color: #fff;
-                            }}
-
-                            tbody tr:nth-child(even) {{
-                                background-color: #eee;
-                            }}
-                        </style>
+                        <style>{css_string}</style>
                     </head>
 
                     <body>
-                        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-
+                        <script>{plotly_js_string}</script>
+                        
                         <header>
                             <h1>Position extractor summary</h1>
                             <p>Produced by <a href="https://github.com/dietvin/neet">Neet</a> on <b>{time}</b></p>
@@ -700,32 +506,55 @@ class PositionExtractor:
                         </section>
 
                         <section>
-                            <h2 class="collapsible-header">General information</h2>
-                            <h3>Count table</h3>
-                            <p>
-                                Positions are only regarded if they are present in all replicates of a sample. The count table displays the number of individual genomic positions for different groups in each row. These groups are: 
-                                <ol>
-                                    <li><i>{self.label_a}</i> + <i>{self.label_b}</i>:       Positions that are shared between samples {self.label_a} and {self.label_b}</li>
-                                    <li><i>{self.label_a}</i> excl.:              Positions that are exclusive to sample {self.label_a}</li>
-                                    <li><i>{self.label_b}</i> excl.:              Positions that are exclusive to sample {self.label_b}</li>
-                                </ol>
-                            </p>
-                            <div class="table-box">
-                                {count_table}
+                            <button class="collapsible">General information</button>
+                            <div class="collapsible-content">
+                                <h2 class="hiddentitle" id="general_information"></h2>
+                                <h3>Count table</h3>
+                                <p>
+                                    Positions are only regarded if they are present in all replicates of a sample. The count table displays the number of individual genomic positions for different groups in each row. These groups are: 
+                                    <ol>
+                                        <li><i>{self.label_a}</i> + <i>{self.label_b}</i>:       Positions that are shared between samples {self.label_a} and {self.label_b}</li>
+                                        <li><i>{self.label_a}</i> excl.:              Positions that are exclusive to sample {self.label_a}</li>
+                                        <li><i>{self.label_b}</i> excl.:              Positions that are exclusive to sample {self.label_b}</li>
+                                    </ol>
+                                </p>
+                                <div class="table-box">
+                                    {count_table}
+                                </div>
                             </div>
                         </section>
 
                         <section>
-                            <h2 class="collapsible-header">Genome map</h2>
-                            <h3>Genome map displaying shared and exclusive positions between samples <i>{self.label_a}</i> and <i>{self.label_b}</i></h3>
-                            <div class="plot-container">
-                                {plot}
+                            <button class="collapsible">Genome map</button>
+                            <div class="collapsible-content">
+                                <h2 class="hiddentitle" id="genome_map"></h2>
+                                <h3>Genome map displaying shared and exclusive positions between samples <i>{self.label_a}</i> and <i>{self.label_b}</i></h3>
+                                <div class="plot-container">
+                                    {plot}
+                                </div>
+                                <p>
+                                    Genome map displaying the positions that are present in both samples, only in sample <i>{self.label_a}</i> and only in sample <i>{self.label_b}</i>.
+                                    Only chromosomes that contain extracted position(s) are shown.  
+                                </p>
                             </div>
-                            <p>
-                                Genome map displaying the positions that are present in both samples, only in sample <i>{self.label_a}</i> and only in sample <i>{self.label_b}</i>.
-                                Only chromosomes that contain extracted position(s) are shown.  
-                            </p>
                         </section>
+
+                        <script>
+                            var coll = document.getElementsByClassName("collapsible");
+                            var i;
+
+                            for (i = 0; i < coll.length; i++) {{
+                            coll[i].addEventListener("click", function() {{
+                                this.classList.toggle("active");
+                                var content = this.nextElementSibling;
+                                if (content.style.display === "none") {{
+                                content.style.display = "block";
+                                }} else {{
+                                content.style.display = "none";
+                                }}
+                            }});
+                            }}
+                        </script>
                     </body>
                     <footer></footer>
                     </html> 
