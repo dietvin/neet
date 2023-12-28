@@ -524,6 +524,12 @@ class PositionSummary:
         
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         files_a, files_b = self.get_file_paths()
+        
+        with open("/home/vincent/projects/neet_project/neet/summary/style.css", "r") as css:
+            css_string = css.read()
+        with open("/home/vincent/projects/neet_project/neet/summary/plotly_js.js", "r") as plotly_js:
+            plotly_js_string = plotly_js.read()
+
         template = f"""
             <!DOCTYPE html>
             <html lang="en">
@@ -533,11 +539,11 @@ class PositionSummary:
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>Neet - Position extractor summary</title>
                 <link rel="stylesheet" type="text/css" href="/home/vincent/projects/neet_project/neet/summary/style.css">
+                <style>{css_string}</style>
             </head>
 
             <body>
-                <script type="text/javascript" src="/home/vincent/projects/neet_project/neet/summary/plotly_js.js"></script>
-
+                <script>{plotly_js_string}</script>
                 <header>
                     <h1>Position extractor summary</h1>
                     <p>Produced by <a href="https://github.com/dietvin/neet">Neet</a> on <b>{time}</b></p>

@@ -34,7 +34,7 @@ class SummaryCreator:
     output_path: str
     n_bins: int | None
     perc_mis_col: str
-    data: 
+    data: Dict[str, List[str|int|float]]
     export_svg: bool
 
     dtypes = {'chr': str, 'site': int, 'n_reads': int, 'ref_base': str, 'majority_base': str, 'n_a': int, 'n_c': int,
@@ -125,20 +125,20 @@ class SummaryCreator:
                 warnings.warn(f"Given output file has extension '{file_extension}'. Note that the output file will be of type '.tsv'.")
             return out
       
-def load_data(self):
-    cols = ["chr", "n_reads", "ref_base", "majority_base", "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "perc_mismatch", "q_mean", "motif"]
+    def load_data(self):
+        cols = ["chr", "n_reads", "ref_base", "majority_base", "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "perc_mismatch", "q_mean", "motif"]
 
-    col_idx = {'chr': 0, 'site': 1, 'n_reads': 2, 'ref_base': 3, 'majority_base': 4, 'n_a': 5, 'n_c': 6, 'n_g': 7, 'n_t': 8, 'n_del': 9, 'n_ins': 10, 'n_ref_skip': 11, 'n_a_rel': 12, 'n_c_rel': 13, 'n_g_rel': 14, 'n_t_rel': 15, 'n_del_rel': 16, 'n_ins_rel': 17, 'n_ref_skip_rel': 18, 'perc_mismatch': 19, 'perc_mismatch_alt': 20, 'motif': 21, 'q_mean': 22, 'q_std': 23, 'neighbour_error_pos': 24}
-    dtypes = {'chr': str, 'site': int, 'n_reads': int, 'ref_base': str, 'majority_base': str, 'n_a': int, 'n_c': int, 'n_g': int, 'n_t': int, 'n_del': int, 'n_ins': int, 'n_ref_skip': int, 'n_a_rel': float, 'n_c_rel': float, 'n_g_rel': float, 'n_t_rel': float, 'n_del_rel': float, 'n_ins_rel': float, 'n_ref_skip_rel': float, 'perc_mismatch': float, 'perc_mismatch_alt': float, 'motif': str, 'q_mean': float, 'q_std': float, 'neighbour_error_pos': str}
-    
-    with open(self.in_path, "r") as file:
-        next(file)
-        data = dict(zip(cols, [[] for _ in cols]))
-        for line in file:
-            line = line.strip().split("\t")
-            for col in cols: 
-                data[col].append(dtypes[col](line[col_idx[col]]))
-        self.data = data
+        col_idx = {'chr': 0, 'site': 1, 'n_reads': 2, 'ref_base': 3, 'majority_base': 4, 'n_a': 5, 'n_c': 6, 'n_g': 7, 'n_t': 8, 'n_del': 9, 'n_ins': 10, 'n_ref_skip': 11, 'n_a_rel': 12, 'n_c_rel': 13, 'n_g_rel': 14, 'n_t_rel': 15, 'n_del_rel': 16, 'n_ins_rel': 17, 'n_ref_skip_rel': 18, 'perc_mismatch': 19, 'perc_mismatch_alt': 20, 'motif': 21, 'q_mean': 22, 'q_std': 23, 'neighbour_error_pos': 24}
+        dtypes = {'chr': str, 'site': int, 'n_reads': int, 'ref_base': str, 'majority_base': str, 'n_a': int, 'n_c': int, 'n_g': int, 'n_t': int, 'n_del': int, 'n_ins': int, 'n_ref_skip': int, 'n_a_rel': float, 'n_c_rel': float, 'n_g_rel': float, 'n_t_rel': float, 'n_del_rel': float, 'n_ins_rel': float, 'n_ref_skip_rel': float, 'perc_mismatch': float, 'perc_mismatch_alt': float, 'motif': str, 'q_mean': float, 'q_std': float, 'neighbour_error_pos': str}
+        
+        with open(self.input_path, "r") as file:
+            next(file)
+            data = dict(zip(cols, [[] for _ in cols]))
+            for line in file:
+                line = line.strip().split("\t")
+                for col in cols: 
+                    data[col].append(dtypes[col](line[col_idx[col]]))
+            self.data = data
 
     ######################################################################################################################
     #                                               Main processing method                                               #
@@ -161,7 +161,7 @@ def load_data(self):
         hs.print_update("  - loading data... ", line_break=False)
         self.load_data()
         n_positions = len(self.data["chr"])
-        n_chromosomes = len(self.data["chr"].unique())
+        n_chromosomes = len(set(self.data["chr"]))
 
         hs.print_update(f"Done. Found {n_positions} sites along {n_chromosomes} sequences.", with_time=False)
 
@@ -186,10 +186,10 @@ def load_data(self):
         hs.print_update("  - creating motif summary... ", line_break=False)
         plots.append(self.create_motif_plot())
         hs.print_update(f"Done.", with_time=False)
-        
-        hs.print_update(f"  - creating HTML summary file at {self.output_path}", line_break=False)
+
+        hs.print_update(f"  - creating HTML summary file at {self.output_path}")
         self.write_to_html(n_positions, n_chromosomes, plots)
-        hs.print_update("Finished.", with_time=False)
+        hs.print_update("Finished.")
     
 
     ################################################################################################################
@@ -378,7 +378,7 @@ def load_data(self):
                     err_type_data = [mis_error_rates[err_type][i] for i in range(len(mask)) if mask[i]]
 
                     if len(err_type_data) > self.n_bins:
-                        error_rates_by_type[mis_type][err_type] = self.bin_data(err_type_data, num_segments=n_bins)
+                        error_rates_by_type[mis_type][err_type] = self.bin_data(err_type_data)
                     else:
                         error_rates_by_type[mis_type][err_type] = err_type_data
             error_rates_by_type = dict(error_rates_by_type)
@@ -422,8 +422,8 @@ def load_data(self):
         motif_error_rates = defaultdict(lambda: {"mismatch_rate": [], "deletion_rate": [], "insertion_rate": [], "refskip_rate": []})
 
         # extract the data for each 3 base-pair motif; store error rates in dict by motifs
-        motif_center_idx = len(data["motif"][0]) // 2
-        for motif, *error_rates in zip(data["motif"], data["perc_mismatch"], data["n_del_rel"], data["n_ins_rel"], data["n_ref_skip_rel"]):
+        motif_center_idx = len(self.data["motif"][0]) // 2
+        for motif, *error_rates in zip(self.data["motif"], self.data["perc_mismatch"], self.data["n_del_rel"], self.data["n_ins_rel"], self.data["n_ref_skip_rel"]):
             motif_3bp = motif[motif_center_idx-1:motif_center_idx+2]
             for i, err_type in enumerate(["mismatch_rate", "deletion_rate", "insertion_rate", "refskip_rate"]):
                 motif_error_rates[motif_3bp][err_type].append(error_rates[i])
@@ -460,7 +460,7 @@ def load_data(self):
         Creates a placeholder plot in case there is an error during creation.
         Displays the error message.
         """
-        hs.print_update(f"An error occured: {str(e)}. Replacing plot with empty placeholder.")
+        hs.print_update(f"An error occured: {str(e)}. Replacing plot with empty placeholder. ", with_time=False, line_break=False)
         fig = self.update_plot(make_subplots(rows=1, cols=1))
         fig.add_trace(go.Scatter(x=[0], y=[0], mode='text', text=[f"An error occured: {str(e)}"]))
         fig.update_layout(
@@ -473,7 +473,7 @@ def load_data(self):
 
     def create_general_plot(self) -> go.Figure:
         try:
-            n_reads_data, quality_data = prepare_data_general()
+            n_reads_data, quality_data = self.prepare_data_general()
 
             fig = make_subplots(rows=1, cols=2, 
                                 subplot_titles=["Total coverage distribution", "Total quality distribtion"], 
@@ -662,7 +662,7 @@ def load_data(self):
             x_order = {"A": ["CAC", "CAG", "CAU", "GAC", "GAG", "GAU", "UAC", "UAG", "UAU"], 
                     "C": ["ACA", "ACG", "ACU", "GCA", "GCG", "GCU", "UCA", "UCG", "UCU"],
                     "G": ["AGA", "AGC", "AGU", "CGA", "CGC", "CGU", "UGA", "UGC", "UGU"],
-                    "T": ["AUA", "AUC", "AUG", "CUA", "CUC", "CUG", "GUA", "GUC", "GUG"]}
+                    "U": ["AUA", "AUC", "AUG", "CUA", "CUC", "CUG", "GUA", "GUC", "GUG"]}
             
             fig = make_subplots(rows=2, cols=2, 
                                 specs=[[{"type": "box"}, {"type": "box"}], [{"type": "box"}, {"type": "box"}]], 
@@ -670,9 +670,9 @@ def load_data(self):
                                 vertical_spacing=0.1, horizontal_spacing=0.05)
             fig = self.update_plot(fig, height=900, width=1400)
 
-            motif_data = prepare_data_motifs()
+            motif_data = self.prepare_data_motifs()
 
-            for center_base, row, col in zip(["A", "C", "G", "T"], [1,1,2,2], [1,2,1,2]):
+            for center_base, row, col in zip(["A", "C", "G", "U"], [1,1,2,2], [1,2,1,2]):
                 d = motif_data[center_base]
                 traces = []
                 for i, (err_type, name, color) in enumerate(zip(["mismatch_rate", "deletion_rate", "insertion_rate", "refskip_rate"], ["Mismatch", "Deletion", "Insertion", "Reference skip"], ["#55a868", "#c44e52", "#8172b3", "#937860"])):
@@ -729,6 +729,11 @@ def load_data(self):
                 self.write_svg(fig, name)
         plots = self.figs_to_str(plot_figs)
 
+        with open("/home/vincent/projects/neet_project/neet/summary/style.css", "r") as css:
+            css_string = css.read()
+        with open("/home/vincent/projects/neet_project/neet/summary/plotly_js.js", "r") as plotly_js:
+            plotly_js_string = plotly_js.read()
+
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         data_point_descr = f"Each data point corresponds to the average value along all positions in one of {self.n_bins} bins" if self.n_bins else "Each data point corresponds to one extracted position"
         template = f"""
@@ -738,162 +743,12 @@ def load_data(self):
                         <meta charset="UTF-8">
                         <meta http-equiv="X-UA-Compatible" content="IE=edge">
                         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                        <title>Neet summary</title>
-                        <style>
-                            /* Reset some default browser styles */
-                            body, h1, h2, h3, h4, p, ul, li {{
-                                margin: 0;
-                                padding: 0;
-                            }}
-
-                            /* Apply modern font and line height */
-                            body {{
-                                font-family: 'Arial', sans-serif;
-                                line-height: 1.6;
-                            }}
-
-                            /* Style the header */
-                            header {{
-                                background-color: #333;
-                                color: white;
-                                padding: 1em 0;
-                                text-align: center;
-                                width: 100%; /* Make the header span the full width */
-                                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                            }}
-
-                            header h1 {{
-                                font-size: 2.5em;
-                                margin-bottom: 0.3em;
-                            }}
-
-                            header p {{
-                                font-size: 1.2em;
-                                opacity: 0.8;
-                            }}
-
-
-                            footer {{
-                                background-color: #333;
-                                color: white;
-                                padding: 1em 0;
-                                text-align: center;
-                                width: 100%; /* Make the header span the full width */
-                                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                            }}
-
-
-                            /* Center the content */
-                            body {{
-                                display: flex;
-                                justify-content: center;
-                                align-items: center;
-                                min-height: 100vh;
-                                flex-direction: column;
-                                background-color: #f5f5f5;
-                            }}
-
-                            /* Style sections */
-                            section {{
-                                background-color: white;
-                                border-radius: 15px;
-                                border-style: solid;
-                                border-color: #333;
-                                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                                margin: 1em 0;
-                                max-width: 1420px;
-                                width: 90%;
-                                text-align: left;
-                            }}
-
-                            section h2 {{
-                                background-color: #333;
-                                border-radius: 10px 10px 0 0;
-                                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                                text-align: center;
-                                color: white;
-                                opacity: 0.9;       
-                            }}
-
-                            section h3 {{
-                                background-color: #333;
-                                border-radius: 5px;
-                                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                                text-align: center;
-                                margin-top: 0.5em;
-                                margin-left: 0.5em;
-                                margin-right: 0.5em;
-                                color: white;
-                                opacity: 0.8;
-                            }}
-
-                            section h4 {{
-                                background-color: #333;
-                                border-radius: 5px;
-                                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                                text-align: center;
-                                margin-top: 0.5em;
-                                margin-left: 1.5em;
-                                margin-right: 1.5em;
-                                color: white;
-                                opacity: 0.7;       
-                            }}
-
-                            /* Style lists */
-                            ul {{
-                                list-style-type: disc;
-                                padding-left: 1em;
-                                margin-left: 2.5em;
-                                margin-top: 1em;
-                                margin-bottom: 1em;
-                            }}
-
-                            li {{
-                                margin-bottom: 0.25em;
-                            }}
-
-                            /* Style links */
-                            a {{
-                                color: #007bff;
-                                text-decoration: none;
-                            }}
-
-                            a:hover {{
-                                text-decoration: underline;
-                            }}
-
-                            p {{
-                                font-size: 1.1rem;
-                                margin-top: 0.5em;
-                                margin-bottom: 2em;
-                                margin-left: 2em;
-                                margin-right: 1em;
-
-                            }}
-
-                            .plot-container {{
-                                display: flex;
-                                justify-content: center;
-                                margin-top: 2em;
-                                margin-left: 2em;
-                                margin-right: 2em;
-                                margin-bottom: 0.5em;
-                                padding: 1em;
-                            }}
-
-                            .intro-text {{
-                                font-size: 1.4rem;
-                                margin-top: 1.5em;
-                                margin-bottom: 1.5em;
-                                margin-left: 1.5em;
-                                margin-right: 1.5em;
-                            }}
-
-                        </style>
+                        <title>Neet - Position extractor summary</title>
+                        <style>{css_string}</style>
                     </head>
 
                     <body>
-                        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+                        <script>{plotly_js_string}</script>
 
                         <header>
                             <h1>Pileup extractor summary</h1>
@@ -910,84 +765,109 @@ def load_data(self):
                         </section>
 
                         <section>
-                            <h2 class="collapsible-header">General statistics</h2>
+                            <button class="collapsible">General statistics</button>
+                            <div class="collapsible-content">
+                                <h2 class="hiddentitle" id="general_statistics"></h2>
 
-                            <h3>Over all extracted position</h3>
-                            <div class="plot-container">
-                                {plots[0]}
-                            </div>
-                            <p>
-                                Distribution of the coverage (<b>left</b>) and mean quality (<b>right</b>) of those positions.  
-                                The mean quality at a given position x is calculated from the quality scores from all mapped reads
-                                at this position. {data_point_descr}.
-                            </p>
+                                <h3>Over all extracted position</h3>
+                                <div class="plot-container">
+                                    {plots[0]}
+                                </div>
+                                <p>
+                                    Distribution of the coverage (<b>left</b>) and mean quality (<b>right</b>) of those positions.  
+                                    The mean quality at a given position x is calculated from the quality scores from all mapped reads
+                                    at this position. {data_point_descr}.
+                                </p>
 
-                            <h3>Split by each chromosome</h3>        
-                            <div class="plot-container">
-                                {plots[1]}
+                                <h3>Split by each chromosome</h3>        
+                                <div class="plot-container">
+                                    {plots[1]}
+                                </div>
+                                <p>
+                                    <b>Top</b>: Number of positions that were extracted on each chromosome. <b>Middle</b>: Distribution of the number of reads on a chromosome. 
+                                    Each data point corresponds to one position. <b>Bottom</b>: Distribution of the quality scores averaged over all reads mapped
+                                    at a given position. {data_point_descr}.
+                                </p>
                             </div>
-                            <p>
-                                <b>Top</b>: Number of positions that were extracted on each chromosome. <b>Middle</b>: Distribution of the number of reads on a chromosome. 
-                                Each data point corresponds to one position. <b>Bottom</b>: Distribution of the quality scores averaged over all reads mapped
-                                at a given position. {data_point_descr}.
-                            </p>
                         </section>
 
                         <section>
-                            <h2>Mismatch statistics</h2>
+                            <button class="collapsible">Mismatch statistics</button>
+                            <div class="collapsible-content">
+                                <h2 class="hiddentitle" id="mismatch_statistics"></h2>
 
-                            <h3>Mismatch, deletetion and insertion rates for matched and mismatched positions</h3>
-                            <div class="plot-container">
-                                {plots[2]}
-                            </div>
-                            <p>
-                                Overview of the number of mismatches and what types of errors contribute to them. Match refers to the positions where the correct base was called. 
-                                Mismatch refers to the positions where the wrong base was called. The pie chart on the right shows the number of matched and mismatched positions
-                                along all chromosomes. The boxplots on the left show the distributions of the mismatch (<b>leftmost</b>), deletion (<b>second from left</b>), insertion (<b>second from right</b>)
-                                and reference skip (<b>right</b>) rates at matched and mismatched positions. {data_point_descr}.
-                            </p>
+                                <h3>Mismatch, deletetion and insertion rates for matched and mismatched positions</h3>
+                                <div class="plot-container">
+                                    {plots[2]}
+                                </div>
+                                <p>
+                                    Overview of the number of mismatches and what types of errors contribute to them. Match refers to the positions where the correct base was called. 
+                                    Mismatch refers to the positions where the wrong base was called. The pie chart on the right shows the number of matched and mismatched positions
+                                    along all chromosomes. The boxplots on the left show the distributions of the mismatch (<b>leftmost</b>), deletion (<b>second from left</b>), insertion (<b>second from right</b>)
+                                    and reference skip (<b>right</b>) rates at matched and mismatched positions. {data_point_descr}.
+                                </p>
 
-                            <h3>Abundances of different type of mismatches</h3>
+                                <h3>Abundances of different type of mismatches</h3>
 
-                            <h4>As confusion matrix</h4>
-                            <div class="plot-container">
-                                {plots[3]}
-                            </div>
-                            <p>
-                                Abundance of matches by base (diagonal) and all types of mismatches <i>from Reference base to Called base</i>. Warmer colors indicate higher counts.
-                            </p>
-                        
-                            <h4>As pie chart</h4>
-                            <div class="plot-container">
-                                {plots[4]}
-                            </div>
-                            <p>
-                                Relative abundances of mismatch types (<i>[FROM] - [TO]</i>). Section labels show absolute count. Relative count is shown on hovering.
-                            </p>
-
-                            <h3>Mismatch, deletion and insertion rates by type of mismatch</h3>
-                            <div class="plot-container">
-                                {plots[5]}
-                            </div>
-                            <p>
-                                Distribtions of Mismatch, Deletion, Insertion and Refernce skip rates for each observed mismatch type (<i>[FROM] - [TO]</i>). 
-                                Each data point corresponds to one position.
-                            </p>
-                        </section>
-                        
-                        <section>
-                            <h2>Error rate by motifs</h2>
+                                <h4>As confusion matrix</h4>
+                                <div class="plot-container">
+                                    {plots[3]}
+                                </div>
+                                <p>
+                                    Abundance of matches by base (diagonal) and all types of mismatches <i>from Reference base to Called base</i>. Warmer colors indicate higher counts.
+                                </p>
                             
-                            <h3>Mismatch, insertion and deletion rates for 3bp motifs</h3>
-                            <div class="plot-container">
-                                {plots[6]}
-                            </div>
-                            <p>
-                                Distributions of Mismatch, deletion and insertion rates for different three base motifs with center A (<b>top left</b>), C (<b>top right</b>),
-                                G (<b>bottom left</b>) and T (<b>bottom right</b>). {data_point_descr}.
-                            </p>
+                                <h4>As pie chart</h4>
+                                <div class="plot-container">
+                                    {plots[4]}
+                                </div>
+                                <p>
+                                    Relative abundances of mismatch types (<i>[FROM] - [TO]</i>). Section labels show absolute count. Relative count is shown on hovering.
+                                </p>
 
+                                <h3>Mismatch, deletion and insertion rates by type of mismatch</h3>
+                                <div class="plot-container">
+                                    {plots[5]}
+                                </div>
+                                <p>
+                                    Distribtions of Mismatch, Deletion, Insertion and Refernce skip rates for each observed mismatch type (<i>[FROM] - [TO]</i>). 
+                                    Each data point corresponds to one position.
+                                </p>
+                            </div>
                         </section>
+
+                        <section>
+                            <button class="collapsible">Error rate by motifs</button>
+                            <div class="collapsible-content">
+                                <h2 class="hiddentitle" id="error_motif"></h2>
+
+                                <h3>Mismatch, insertion, deletion and reference skip rates for 3bp motifs</h3>
+                                <div class="plot-container">
+                                    {plots[6]}
+                                </div>
+                                <p>
+                                    Distributions of Mismatch, deletion and insertion rates for different three base motifs with center A (<b>top left</b>), C (<b>top right</b>),
+                                    G (<b>bottom left</b>) and U (<b>bottom right</b>). {data_point_descr}.
+                                </p>
+                            </div>
+                        </section>
+
+                        <script>
+                            var coll = document.getElementsByClassName("collapsible");
+                            var i;
+
+                            for (i = 0; i < coll.length; i++) {{
+                            coll[i].addEventListener("click", function() {{
+                                this.classList.toggle("active");
+                                var content = this.nextElementSibling;
+                                if (content.style.display === "none") {{
+                                content.style.display = "block";
+                                }} else {{
+                                content.style.display = "none";
+                                }}
+                            }});
+                            }}
+                        </script>
                     </body>
                     <footer></footer>
                     </html> 
@@ -1028,6 +908,6 @@ if __name__=="__main__":
     args = parser.parse_args()
     
     sc = SummaryCreator(args.input, args.output, args.n_bins, args.plot_alt, export_svg=args.export_svg)
-    sc.create_summary()
+    sc.main()
 
     # sc = SummaryCreator("/home/vincent/masterthesis/data/45s_rrna/processed/45s_cytoplasm_extracted.tsv", "/home/vincent/masterthesis/data/45s_rrna/processed/", None)
