@@ -423,7 +423,7 @@ class FeatureExtractor:
         summary_creator = SummaryCreator(file_path, out_path, n_bins=self.n_bins_summary, 
                                          use_perc_mismatch_alt=self.use_alt_summary,
                                          export_svg=self.export_svg_summary)
-        summary_creator.create_summary()
+        summary_creator.main()
 
     def process_position(self, line_str: str) -> str:
         """
