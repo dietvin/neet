@@ -1,12 +1,11 @@
-import pandas as pd
-import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 from plotly.io import to_html
 import helper_functions as hs
-
 import os, warnings, sys, datetime, argparse
+from statistics import mean
+from collections import defaultdict
 from typing import List, Tuple, Dict
 
 class SummaryCreator:
@@ -35,7 +34,7 @@ class SummaryCreator:
     output_path: str
     n_bins: int | None
     perc_mis_col: str
-    data: pd.DataFrame
+    data: 
     export_svg: bool
 
     dtypes = {'chr': str, 'site': int, 'n_reads': int, 'ref_base': str, 'majority_base': str, 'n_a': int, 'n_c': int,
@@ -126,13 +125,25 @@ class SummaryCreator:
                 warnings.warn(f"Given output file has extension '{file_extension}'. Note that the output file will be of type '.tsv'.")
             return out
       
-    def load_data(self) -> None:
-        self.data = pd.read_csv(self.input_path, sep="\t", dtype=self.dtypes)
+def load_data(self):
+    cols = ["chr", "n_reads", "ref_base", "majority_base", "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "perc_mismatch", "q_mean", "motif"]
+
+    col_idx = {'chr': 0, 'site': 1, 'n_reads': 2, 'ref_base': 3, 'majority_base': 4, 'n_a': 5, 'n_c': 6, 'n_g': 7, 'n_t': 8, 'n_del': 9, 'n_ins': 10, 'n_ref_skip': 11, 'n_a_rel': 12, 'n_c_rel': 13, 'n_g_rel': 14, 'n_t_rel': 15, 'n_del_rel': 16, 'n_ins_rel': 17, 'n_ref_skip_rel': 18, 'perc_mismatch': 19, 'perc_mismatch_alt': 20, 'motif': 21, 'q_mean': 22, 'q_std': 23, 'neighbour_error_pos': 24}
+    dtypes = {'chr': str, 'site': int, 'n_reads': int, 'ref_base': str, 'majority_base': str, 'n_a': int, 'n_c': int, 'n_g': int, 'n_t': int, 'n_del': int, 'n_ins': int, 'n_ref_skip': int, 'n_a_rel': float, 'n_c_rel': float, 'n_g_rel': float, 'n_t_rel': float, 'n_del_rel': float, 'n_ins_rel': float, 'n_ref_skip_rel': float, 'perc_mismatch': float, 'perc_mismatch_alt': float, 'motif': str, 'q_mean': float, 'q_std': float, 'neighbour_error_pos': str}
+    
+    with open(self.in_path, "r") as file:
+        next(file)
+        data = dict(zip(cols, [[] for _ in cols]))
+        for line in file:
+            line = line.strip().split("\t")
+            for col in cols: 
+                data[col].append(dtypes[col](line[col_idx[col]]))
+        self.data = data
 
     ######################################################################################################################
     #                                               Main processing method                                               #
     ######################################################################################################################
-    def create_summary(self) -> None:
+    def main(self) -> None:
         """
         Generate a summary report containing various plots and statistics based on the provided data.
 
@@ -147,26 +158,38 @@ class SummaryCreator:
                 to the specified output path.
         """
         hs.print_update(f"Starting creation of summary from file '{self.input_path}'.")
-        hs.print_update("  - loading data")
+        hs.print_update("  - loading data... ", line_break=False)
         self.load_data()
-        hs.print_update("  - creating general summary")
-
-        n_positions = self.data.shape[0]
+        n_positions = len(self.data["chr"])
         n_chromosomes = len(self.data["chr"].unique())
+
+        hs.print_update(f"Done. Found {n_positions} sites along {n_chromosomes} sequences.", with_time=False)
+
         plots = []
         
+        hs.print_update("  - creating general summary... ", line_break=False)
         plots.append(self.create_general_plot())
-        hs.print_update("  - creating chromosome-wise summary")
+        hs.print_update(f"Done.", with_time=False)
+
+        hs.print_update("  - creating chromosome-wise summary... ", line_break=False)
         plots.append(self.create_chr_plot())
-        hs.print_update("  - creating general mismatch summary")
+        hs.print_update(f"Done.", with_time=False)
+
+        hs.print_update("  - creating general mismatch summary... ", line_break=False)
         plots.append(self.create_mism_general_plot())
-        hs.print_update("  - creating specific mismatch type summary")
+        hs.print_update(f"Done.", with_time=False)
+
+        hs.print_update("  - creating specific mismatch type summary... ", line_break=False)
         plots += self.create_mism_types_plots()
-        hs.print_update("  - creating motif summary")
+        hs.print_update(f"Done.", with_time=False)
+
+        hs.print_update("  - creating motif summary... ", line_break=False)
         plots.append(self.create_motif_plot())
-        hs.print_update(f"  - creating HTML summary file at {self.output_path}")
+        hs.print_update(f"Done.", with_time=False)
+        
+        hs.print_update(f"  - creating HTML summary file at {self.output_path}", line_break=False)
         self.write_to_html(n_positions, n_chromosomes, plots)
-        hs.print_update("Finished.")
+        hs.print_update("Finished.", with_time=False)
     
 
     ################################################################################################################
@@ -202,154 +225,232 @@ class SummaryCreator:
 
         return fig
 
-    def bin_data(self, data: np.ndarray|pd.Series, num_segments: int = 5000) -> np.ndarray:
-        """
-        Bins input data into segments and calculates the mean value of each segment.
+    def bin_data(self, data: List[int|str|float]) -> List[int|float]:
+        total_length = len(data)
+        num_segments = self.n_bins
 
-        Args:
-            data (np.ndarray|pd.Series): Input data to be binned and summarized.
-            num_segments (int): Number of segments to divide the data into (default: 5000).
+        if total_length == num_segments:
+            return data
+        elif total_length < num_segments:
+            raise Exception(f"Number of bins too large (={num_segments}). Must be smaller than the data length (={total_length})")
+        segment_length = segment_length = total_length // num_segments
+        remainder = total_length % num_segments
+        
+        start_index = 0
+        end_index = 0
+        segments = []
+        for i in range(num_segments):
+            end_index = start_index + segment_length + (1 if i < remainder else 0)
+            segments.append(data[start_index:end_index])
+            start_index = end_index
 
-        Returns:
-            np.ndarray: Array of mean values for each segment.
-        """
-        # Calculate the length of each segment
-        data_len = len(data)
-        segment_length = data_len // num_segments
-        remainder = data_len % num_segments
-        
-        # Split the array into segments with adjusted lengths
-        segments = np.split(data, [segment_length * i + min(i, remainder) for i in range(1, num_segments)])
-        # Calculate the mean value of each segment using numpy.mean()
-        segment_means = np.array([segment.mean() for segment in segments])
-        
-        return segment_means
+        return [mean(segment) for segment in segments]
 
     ################################################################################################################
     #                                           Data preparation methods                                           #
     ################################################################################################################
 
-    def prepare_data_general(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Prepares data for the general summary plot.
-
-        Returns:
-            Tuple[np.ndarray, np.ndarray]: Processed data arrays for total coverage and mean quality.
-        """
-        data = self.data
-        n_reads = data["n_reads"].to_numpy()
-        quality = data["q_mean"].to_numpy()
-        if self.n_bins:
-            n_reads = self.bin_data(n_reads, self.n_bins)
-            quality = self.bin_data(quality, self.n_bins)
-        return n_reads, quality
-
-    def prepare_data_chr(self):
-        """
-        Prepares data for the chromosome-specific summary plot.
-
-        Returns:
-            Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]: Processed data arrays for the plot.
-        """        
-        data = self.data
-        def bin_two_cols(d_group: Tuple[str,pd.DataFrame]):
-            chr_val = d_group[0]
-            d = d_group[1]
-            del(d_group)
-            return np.full(shape=self.n_bins, fill_value=chr_val), self.bin_data(d["n_reads"], self.n_bins), self.bin_data(d["q_mean"], self.n_bins)
-
-        data = data[["chr", "n_reads", "q_mean"]]
-        data_grouped = data.groupby("chr")
-
-        n_pos = data_grouped.size()
-        n_pos_x, n_pos_y = n_pos.index, n_pos.values
-        del(n_pos)
-
-        if self.n_bins:
-            chrom_data = []
-            n_reads_data = []
-            quality_data = []
-            
-            for subset in data_grouped:
-                # get the binned information for one chromosome
-                tmp = bin_two_cols(subset)  
-                # append it to the information from other chromosomes
-                chrom_data.append(tmp[0])
-                n_reads_data.append(tmp[1])
-                quality_data.append(tmp[2])
-
-            # concat information from all chromosomes to one array
-            chrom_data = np.concatenate(chrom_data)
-            n_reads_data = np.concatenate(n_reads_data)
-            quality_data = np.concatenate(quality_data)
+    def prepare_data_general(self) -> Tuple[List[int|float], List[float]]:
+        if self.n_bins is not None:
+            n_reads = self.bin_data(self.data["n_reads"])
+            quality = self.bin_data(self.data["q_mean"])
+            return n_reads, quality
         else:
-            chrom_data = data["chr"].to_numpy()
-            n_reads_data = data["n_reads"].to_numpy()
-            quality_data = data["q_mean"].to_numpy()
+            return self.data["n_reads"], self.data["q_mean"]
 
-        return n_pos_x, n_pos_y, chrom_data, n_reads_data, quality_data
+    def prepare_data_chr(self) :
+        data_grouped = defaultdict(lambda: {"n_reads": [], "q_mean": []})
 
-    def prepare_data_mism_general(self) -> Dict[str, Tuple[np.ndarray, np.ndarray]]:
-        """
-        Prepares data for the general mismatch summary plot.
+        for chr_val, n_reads, q_mean in zip(self.data['chr'],
+                                            self.data['n_reads'],
+                                            self.data['q_mean']):
+            data_grouped[chr_val]['n_reads'].append(n_reads)
+            data_grouped[chr_val]['q_mean'].append(q_mean)
+        data_grouped = dict(data_grouped)
 
-        Returns:
-            Dict[str, Tuple[np.ndarray, np.ndarray]]: Processed data for mismatch summary.
-        """
-        data = self.data[["ref_base", "majority_base", self.perc_mis_col, "n_del_rel", "n_ins_rel", "n_ref_skip_rel"]]
-        data_mis = data.loc[data["ref_base"]!=data["majority_base"]]
-        data_mat = data.loc[data["ref_base"]==data["majority_base"]]
-        del(data)
+        n_sites_x = list(data_grouped.keys())
+        n_sites_y = [len(chr_data["n_reads"]) for chr_data in data_grouped.values()]
+
+        chroms = []
+        n_reads = []
+        q_mean = []
+
+        for chrom, chrom_data in data_grouped.items():
+            if (self.n_bins is not None) & (len(chrom_data["n_reads"]) > self.n_bins):
+                n_reads += self.bin_data(chrom_data["n_reads"])
+                q_mean += self.bin_data(chrom_data["q_mean"])
+                chroms += [chrom] * self.n_bins
+            else:
+                n_reads += chrom_data["n_reads"]
+                q_mean += chrom_data["q_mean"]
+                chroms += [chrom] * len(chrom_data["n_reads"])
+
+        return n_sites_x, n_sites_y, chroms, n_reads, q_mean
+
+    def prepare_data_mism_general(self) -> Dict[str, Tuple[int|List[float], int|List[float]]]:
+        data_mis = {"perc_mismatch": [], "n_del_rel": [], "n_ins_rel": [], "n_ref_skip_rel": []}
+        data_mat = {"perc_mismatch": [], "n_del_rel": [], "n_ins_rel": [], "n_ref_skip_rel": []}
+
+        for d in zip(self.data["ref_base"], 
+                     self.data["majority_base"], 
+                     self.data["perc_mismatch"], 
+                     self.data["n_del_rel"], 
+                     self.data["n_ins_rel"],
+                     self.data["n_ref_skip_rel"]):
+            if d[0] == d[1]:
+                data_mat["perc_mismatch"].append(d[2])
+                data_mat["n_del_rel"].append(d[3])
+                data_mat["n_ins_rel"].append(d[4])
+                data_mat["n_ref_skip_rel"].append(d[5])
+            else:
+                data_mis["perc_mismatch"].append(d[2])
+                data_mis["n_del_rel"].append(d[3])
+                data_mis["n_ins_rel"].append(d[4])
+                data_mis["n_ref_skip_rel"].append(d[5])
 
         data_dict = {}
-        data_dict["overall"] = (data_mat.shape[0], data_mis.shape[0])
-        for i, j in zip(["mis_rate", "del_rate", "ins_rate", "ref_skip_rate"], [self.perc_mis_col, "n_del_rel", "n_ins_rel", "n_ref_skip_rel"]):
-            data_dict[i] = (self.bin_data(data_mat[j], self.n_bins), self.bin_data(data_mis[j], self.n_bins)) if self.n_bins else (data_mat[j].to_numpy(), data_mis[j].to_numpy())
+        data_dict["overall"] = (len(data_mat["perc_mismatch"]), len(data_mis["perc_mismatch"]))
+        for mismatch_type in ["perc_mismatch", "n_del_rel", "n_ins_rel", "n_ref_skip_rel"]:
+            if self.n_bins is not None:
+                if len(data_mat[mismatch_type]) > self.n_bins:
+                    data_mat[mismatch_type] = self.bin_data(data_mat[mismatch_type])
+                if len(data_mis[mismatch_type]) > self.n_bins:
+                    data_mis[mismatch_type] = self.bin_data(data_mis[mismatch_type])
+            data_dict[mismatch_type] = (data_mat[mismatch_type], data_mis[mismatch_type])
 
         return data_dict
     
-    def prepare_data_mism_types(self) -> Tuple[pd.DataFrame, pd.DataFrame, int, np.ndarray, np.ndarray, pd.DataFrame]:
-        """
-        Prepares data for the mismatch types summary plots.
-
-        Returns:
-            Tuple[pd.DataFrame, pd.DataFrame, int, np.ndarray, np.ndarray, pd.DataFrame]: Processed data for different mismatch types.
-        """   
+    def prepare_data_mism_matrix(self, mis_count: Dict[str, int]) -> Tuple[List[List[int]], List[List[str]], int]:
         # prepare data for the confusion matrix
-        matrix_data = self.data.loc[(self.data["ref_base"] != "N") & (self.data["majority_base"] != "N"),["ref_base", "majority_base"]]
-        matrix_data = pd.crosstab(matrix_data['ref_base'], matrix_data['majority_base'])
-        matrix_labels = matrix_data.copy()
-        for i in range(matrix_data.shape[0]):
-            matrix_labels.iloc[i,i] = None
-        matrix_max_mism = matrix_labels.max().max()
-        matrix_labels = np.round(matrix_labels / matrix_labels.sum().sum() * 100, 2).astype(str)
-        matrix_labels = (matrix_labels + "%").replace("nan%", "")
+        matrix_data = [[None]*4 for _ in range(4)]
+        matrix_labels = [[None]*4 for _ in range(4)]
+        bases = ["A", "C", "G", "U"]
+        # fill count matrix
+        for i in range(4): 
+            for j in range(4):
+                count = mis_count[f"{bases[i]} - {bases[j]}"]
+                matrix_data[i][j] = count
+                if i != j:
+                    matrix_labels[i][j] = count
+        # fill the matrix containing corresponding labels
+        vals_flat = [element for sublist in matrix_labels for element in sublist if (element is not None)]
+        vals_sum = sum(vals_flat)
+        for i in range(4): 
+            for j in range(4):
+                if matrix_labels[i][j]:
+                    matrix_labels[i][j] = f"{round(matrix_labels[i][j] / vals_sum * 100, 2)}%"
+                else: 
+                    matrix_labels[i][j] = ""
+        # get the max value
+        val_max = max(vals_flat)
 
+        return matrix_data, matrix_labels, val_max
+
+    def prepare_data_mism_pie(self, mis_count: Dict[str, int]) -> Tuple[List[int], List[str]]:
         # prepare data for the pie chart
-        pie_data = matrix_data.reset_index().melt(id_vars="ref_base", value_name="count").sort_values("count", ascending=False)
-        pie_data = pie_data.loc[pie_data["ref_base"] != pie_data["majority_base"]].reset_index(drop=True)
-        pie_labels = np.array([f"{a} - {b}" for a,b in zip(pie_data["ref_base"], pie_data["majority_base"])])
-        pie_data = pie_data["count"].to_numpy()
+        pie_data = list(mis_count.values())
+        pie_labels = list(mis_count.keys())
+        pie_data = []
+        pie_labels = []
+        # remove values for matches 
+        for label, data in mis_count.items():
+            if label not in ["A - A", "C - C", "G - G", "U - U"]:
+                pie_data.append(data)
+                pie_labels.append(label)
+        return pie_data, pie_labels
+    
+    def prepare_data_mism_box(self, mis_error_rates: Dict[str, List[str|float]]) -> Dict[str, List[str|float]]:
+        if self.n_bins is not None:
+            # group the data by mismatch type and if more samples than n_bins are present in a group, 
+            # subset the data to n_bins data points
+            error_rates_by_type = defaultdict(lambda: {"mismatch_rate": [], 
+                                                    "deletion_rate": [], 
+                                                    "insertion_rate": [], 
+                                                    "refskip_rate": []})
+            mismatch_types = ["A - C","A - G","A - U",
+                            "C - A","C - G","C - U",
+                            "G - A","G - C","G - U",
+                            "U - A","U - C","U - G"]
+            for mis_type in mismatch_types:
+                mask = [mis_type == m for m in mis_error_rates["mismatch_type"]]
+                for err_type in ["mismatch_rate", "deletion_rate", "insertion_rate", "refskip_rate"]:
+                    # use mask to filter data corresponding to err_type
+                    err_type_data = [mis_error_rates[err_type][i] for i in range(len(mask)) if mask[i]]
 
-        # prepare data for error type distributions boxplots
-        box_data = self.data.loc[(self.data["ref_base"] != self.data["majority_base"]) & (self.data["ref_base"] != "N")].rename(columns={self.perc_mis_col: "Mismatch", "n_del_rel": "Deletion", "n_ins_rel": "Insertion", "n_ref_skip_rel": "Reference skip"})
-        box_data = box_data.melt(value_vars=["Mismatch", "Deletion", "Insertion", "Reference skip"], var_name="Error type", id_vars=["ref_base", "majority_base"])
-        box_data["mismatch_type"] = [f"{i} - {j}" for i,j in zip(box_data["ref_base"], box_data["majority_base"])]
+                    if len(err_type_data) > self.n_bins:
+                        error_rates_by_type[mis_type][err_type] = self.bin_data(err_type_data, num_segments=n_bins)
+                    else:
+                        error_rates_by_type[mis_type][err_type] = err_type_data
+            error_rates_by_type = dict(error_rates_by_type)
 
-        return matrix_data, matrix_labels, matrix_max_mism, pie_data, pie_labels, box_data
+            # transform the data into the initial format
+            mis_error_rates = {"mismatch_type": [], "mismatch_rate": [], "deletion_rate": [], "insertion_rate": [], "refskip_rate": []}
+            for err_type, err_data in error_rates_by_type.items():
+                mis_error_rates["mismatch_type"] += [err_type] * len(err_data["mismatch_rate"])
+                mis_error_rates["mismatch_rate"] += err_data["mismatch_rate"]
+                mis_error_rates["deletion_rate"] += err_data["deletion_rate"]
+                mis_error_rates["insertion_rate"] += err_data["insertion_rate"]
+                mis_error_rates["refskip_rate"] += err_data["refskip_rate"]   
+            return mis_error_rates
+        return mis_error_rates
 
-    def prepare_data_motifs(self):
-        """
-        Prepares data for the motif summary plot.
+    def prepare_data_mism_types(self) -> Tuple[List[List[int]], List[List[str]], int, List[int], List[str], Dict[str, List[str|float]]]:
+        mis_types = [f"{f} - {t}" for f in ["A", "C", "G", "U"] for t in ["A", "C", "G", "U"]]
+        mis_count = dict(zip(mis_types, [0]*len(mis_types)))
 
-        Returns:
-            pd.DataFrame: Processed data for motif summary.
-        """
-        data = self.data[["ref_base", "motif", self.perc_mis_col, "n_del_rel", "n_ins_rel", "n_ref_skip_rel"]]
-        motif_center_idx = len(data.motif[0]) // 2
-        data.loc[:, "motif_3b"] = data["motif"].map(lambda x: x[motif_center_idx-1:motif_center_idx+2])
-        return data
+        mis_error_rates = {"mismatch_type": [],"mismatch_rate": [], "deletion_rate": [], "insertion_rate": [], "refskip_rate": []}
 
+        for ref, maj, *error_rates in zip(self.data["ref_base"], 
+                                          self.data["majority_base"], 
+                                          self.data["perc_mismatch"], 
+                                          self.data["n_del_rel"], 
+                                          self.data["n_ins_rel"], 
+                                          self.data["n_ref_skip_rel"]):
+            if (ref != "N") & (maj != "N"):
+                mis_count[f"{ref} - {maj}"] += 1
+                # prepare error rate data for distribution plots by each error type
+                if ref != maj:
+                    mis_error_rates["mismatch_type"].append(f"{ref} - {maj}")
+                    mis_error_rates["mismatch_rate"].append(error_rates[0])
+                    mis_error_rates["deletion_rate"].append(error_rates[1])
+                    mis_error_rates["insertion_rate"].append(error_rates[2])
+                    mis_error_rates["refskip_rate"].append(error_rates[3])
+
+        return *self.prepare_data_mism_matrix(mis_count), *self.prepare_data_mism_pie(mis_count), self.prepare_data_mism_box(mis_error_rates)
+
+    def prepare_data_motifs(self) -> Dict[str, Dict[str, List[str|float]]]:
+        motif_error_rates = defaultdict(lambda: {"mismatch_rate": [], "deletion_rate": [], "insertion_rate": [], "refskip_rate": []})
+
+        # extract the data for each 3 base-pair motif; store error rates in dict by motifs
+        motif_center_idx = len(data["motif"][0]) // 2
+        for motif, *error_rates in zip(data["motif"], data["perc_mismatch"], data["n_del_rel"], data["n_ins_rel"], data["n_ref_skip_rel"]):
+            motif_3bp = motif[motif_center_idx-1:motif_center_idx+2]
+            for i, err_type in enumerate(["mismatch_rate", "deletion_rate", "insertion_rate", "refskip_rate"]):
+                motif_error_rates[motif_3bp][err_type].append(error_rates[i])
+        motif_error_rates = dict(motif_error_rates)
+
+        # subsample data for each error rate for each motif
+        if self.n_bins is not None:
+            for motif in motif_error_rates.keys():
+                if len(motif_error_rates[motif]["mismatch_rate"]) > self.n_bins:
+                    for err_type in ["mismatch_rate", "deletion_rate", "insertion_rate", "refskip_rate"]:
+                        motif_error_rates[motif][err_type] = self.bin_data(motif_error_rates[motif][err_type])
+
+        # sort dict by motif
+        motif_error_rates = dict(sorted(motif_error_rates.items()))
+
+        # set up data for each subplot (i.e. center A, C, G, U)
+        center_base_error_rates = defaultdict(lambda: {"motif": [], "mismatch_rate": [], "deletion_rate": [], "insertion_rate": [], "refskip_rate": []})
+        for motif, error_rates in motif_error_rates.items():
+            center_base = motif[1]
+            if center_base == "N": continue # only subplots for center A, C, G, U
+            num_sites = len(error_rates["mismatch_rate"])
+            center_base_error_rates[center_base]["motif"] += [motif] * num_sites
+            for i, err_type in enumerate(["mismatch_rate", "deletion_rate", "insertion_rate", "refskip_rate"]):
+                center_base_error_rates[center_base][err_type] += error_rates[err_type]
+
+        return dict(center_base_error_rates)
+    
     ##############################################################################################################
     #                                             Plotting functions                                             #
     ##############################################################################################################
@@ -371,14 +472,8 @@ class SummaryCreator:
 
 
     def create_general_plot(self) -> go.Figure:
-        """
-        Creates and returns an HTML representation of the general summary plot.
-
-        Returns:
-            str: HTML representation of the plot.
-        """
         try:
-            n_reads_data, quality_data = self.prepare_data_general()
+            n_reads_data, quality_data = prepare_data_general()
 
             fig = make_subplots(rows=1, cols=2, 
                                 subplot_titles=["Total coverage distribution", "Total quality distribtion"], 
@@ -400,6 +495,7 @@ class SummaryCreator:
             fig = self.create_error_placeholder(e)
 
         return fig
+    
     def create_chr_plot(self) -> go.Figure:
         """
         Creates and returns an HTML representation of the chromosome-specific summary plot.
@@ -418,7 +514,7 @@ class SummaryCreator:
 
             fig = make_subplots(rows=3, cols=1, 
                                 specs=[[{"type": "bar"}], [{"type": "box"}], [{"type": "box"}]], 
-                                shared_xaxes=True)
+                                shared_xaxes=True, vertical_spacing=0.02)
             fig = self.update_plot(fig, height=1000, width=1400)
 
             fig.add_trace(go.Bar(x=n_pos_x, y=n_pos_y))
@@ -429,6 +525,9 @@ class SummaryCreator:
             fig.update_traces(marker=dict(color="black", outliercolor="black", size=2), fillcolor="lightgrey", selector=dict(type='box'))
             
             fig.update_xaxes(categoryorder='array', categoryarray=sorted(n_pos_x, key=custom_sort_key))
+            for i in range(1, 3):
+                fig.update_xaxes(tickvals=[], ticktext=[], row=i, col=1)
+
             fig.update_xaxes(title_text="Chromosome", row=3, col=1)
             fig.update_yaxes(title_text="Number of positions", row=1, col=1)
             fig.update_yaxes(title_text="Number of reads", row=2, col=1)
@@ -448,7 +547,7 @@ class SummaryCreator:
             str: HTML representation of the plot.
         """
         try:
-            def boxplot(data: np.ndarray, group: str = "match", showlegend: bool = False):
+            def boxplot(data, group: str = "match", showlegend: bool = False):
                 if group == "match":
                     name = "Match"
                     fillcolor = "#4c72b0"
@@ -469,7 +568,7 @@ class SummaryCreator:
                                 column_titles=("Mismatch frequency", "Deletion frequency", "Insertion frequency", "Reference skip frequ.", None))
             fig = self.update_plot(fig, height=600, width=1400)
 
-            for i, (dname, legend) in enumerate(zip(["mis_rate", "del_rate", "ins_rate", "ref_skip_rate"], [True, False, False, False]), start=1):
+            for i, (dname, legend) in enumerate(zip(["perc_mismatch", "n_del_rel", "n_ins_rel", "n_ref_skip_rel"], [True, False, False, False]), start=1):
                 box_mat = boxplot(data_processed[dname][0], group="match", showlegend=legend)
                 box_mis = boxplot(data_processed[dname][1], group="mismatch", showlegend=legend)
                 fig.add_traces([box_mat, box_mis], rows=1, cols=i)
@@ -489,7 +588,7 @@ class SummaryCreator:
             fig.update_yaxes(showticklabels=False, ticks=None, row=1, col=2)
             fig.update_yaxes(showticklabels=False, ticks=None, row=1, col=3)
             fig.update_yaxes(showticklabels=False, ticks=None, row=1, col=4)
-    
+
         except Exception as e:
             fig = self.create_error_placeholder(e)
 
@@ -513,8 +612,8 @@ class SummaryCreator:
             fig = px.imshow(matrix_data, labels=dict(x="Called base", y="Reference base", color="Count"), zmin=0, zmax=1.2*matrix_max_mism, color_continuous_scale="portland")
             fig = self.update_plot(fig, None, "Called base", "Reference base", width=800)
             fig.update_traces(text=matrix_labels, texttemplate="%{text}")
-            fig.update_xaxes(fixedrange=True)
-            fig.update_yaxes(fixedrange=True)
+            fig.update_xaxes(fixedrange=True, tickvals=[0,1,2,3], ticktext=["A", "C", "G", "U"])
+            fig.update_yaxes(fixedrange=True, tickvals=[0,1,2,3], ticktext=["A", "C", "G", "U"])
             matrix = fig
         except Exception as e:
             fig = self.create_error_placeholder(e)
@@ -535,9 +634,10 @@ class SummaryCreator:
             fig = go.Figure()
             fig = self.update_plot(fig, ylab="Error rate", height=600, width=1400)
 
-            for err_type, c in zip(["Mismatch", "Deletion", "Insertion", "Reference skip"], ["#55a868", "#c44e52", "#8172b3", "#937860"]):
-                d = box_data.loc[box_data["Error type"] == err_type]
-                fig.add_trace(go.Box(x=d["mismatch_type"], y=d["value"], name=err_type, 
+            x = box_data["mismatch_type"]
+            for err_type, c in zip(["mismatch_rate", "deletion_rate", "insertion_rate", "refskip_rate"], ["#55a868", "#c44e52", "#8172b3", "#937860"]):
+                y = box_data[err_type]
+                fig.add_trace(go.Box(x=x, y=y, name=err_type, 
                                     line=dict(color="black"), 
                                     marker=dict(outliercolor="black", size=2), 
                                     fillcolor=c))
@@ -559,83 +659,44 @@ class SummaryCreator:
             str: HTML representation of the plot.
         """
         try:
-            def create_motif_trace(data: pd.DataFrame, center_base: str, showlegend: bool = False):
-                data = data.loc[(data.ref_base == center_base) & (~data.motif_3b.isin(["AAA", "AAC", "AAG", "AAU", "CAA", "GAA", "UAA", "CCC", "CCA", "CCG", "CCU", "ACC", "GCC", "UCC", "GGG", "GGA", "GGC", "GGU", "AGG", "CGG", "UGG", "UU", "UUA", "UUC", "UUG", "AUU", "CUU", "GUU"]))]
-                data = data.melt(value_vars=[self.perc_mis_col, "n_del_rel", "n_ins_rel"], var_name="Error type", id_vars=["ref_base","motif_3b"])
-
-                d = []
-                for motif in data["motif_3b"].unique():
-                    if self.n_bins:
-                        d_m_tmp = pd.DataFrame({"value": self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]==self.perc_mis_col), "value"], num_segments=self.n_bins),
-                                                "motif": motif,
-                                                "Error type": "Mismatch"})
-                        d_d_tmp = pd.DataFrame({"value": self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_del_rel"), "value"], num_segments=self.n_bins),
-                                                "motif": motif,
-                                                "Error type": "Deletion"}) 
-                        d_i_tmp = pd.DataFrame({"value": self.bin_data(data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_ins_rel"), "value"], num_segments=self.n_bins),
-                                                "motif": motif,
-                                                "Error type": "Insertion"}) 
-                    else:
-                        d_m_tmp = pd.DataFrame({"value": data.loc[(data["motif_3b"]==motif) & (data["Error type"]==self.perc_mis_col), "value"],
-                                                "motif": motif,
-                                                "Error type": "Mismatch"})
-                        d_d_tmp = pd.DataFrame({"value": data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_del_rel"), "value"],
-                                                "motif": motif,
-                                                "Error type": "Deletion"}) 
-                        d_i_tmp = pd.DataFrame({"value": data.loc[(data["motif_3b"]==motif) & (data["Error type"]=="n_ins_rel"), "value"],
-                                                "motif": motif,
-                                                "Error type": "Insertion"}) 
-                    d += [d_m_tmp, d_d_tmp, d_i_tmp]
-                
-                d = pd.concat(d)
-                
-                traces = []
-                fillcolors = ["#55a868", "#c44e52", "#8172b3", "#937860"]
-                for i, er_type in enumerate(d["Error type"].unique()):
-                    d_err = d.loc[d["Error type"] == er_type]
-                    trace = go.Box(x=d_err["motif"], y=d_err["value"], name=er_type, 
-                                line=dict(color="black", width=1), 
-                                marker=dict(outliercolor="black", size=1), 
-                                fillcolor=fillcolors[i],
-                                legendgroup=i,
-                                showlegend=showlegend,
-                                offsetgroup=i)
-                    traces.append(trace)
-
-                return traces
-
-            data = self.prepare_data_motifs()
-            
             x_order = {"A": ["CAC", "CAG", "CAU", "GAC", "GAG", "GAU", "UAC", "UAG", "UAU"], 
                     "C": ["ACA", "ACG", "ACU", "GCA", "GCG", "GCU", "UCA", "UCG", "UCU"],
                     "G": ["AGA", "AGC", "AGU", "CGA", "CGC", "CGU", "UGA", "UGC", "UGU"],
-                    "U": ["AUA", "AUC", "AUG", "CUA", "CUC", "CUG", "GUA", "GUC", "GUG"]}
-
+                    "T": ["AUA", "AUC", "AUG", "CUA", "CUC", "CUG", "GUA", "GUC", "GUG"]}
+            
             fig = make_subplots(rows=2, cols=2, 
                                 specs=[[{"type": "box"}, {"type": "box"}], [{"type": "box"}, {"type": "box"}]], 
                                 shared_yaxes=True, 
-                                vertical_spacing=0.05, horizontal_spacing=0.05)
+                                vertical_spacing=0.1, horizontal_spacing=0.05)
             fig = self.update_plot(fig, height=900, width=1400)
 
-            fig.add_traces(create_motif_trace(data, "A", showlegend=True), rows=1, cols=1)
-            fig.add_traces(create_motif_trace(data, "C"), rows=1, cols=2)
-            fig.add_traces(create_motif_trace(data, "G"), rows=2, cols=1)
-            fig.add_traces(create_motif_trace(data, "U"), rows=2, cols=2)
+            motif_data = prepare_data_motifs()
+
+            for center_base, row, col in zip(["A", "C", "G", "T"], [1,1,2,2], [1,2,1,2]):
+                d = motif_data[center_base]
+                traces = []
+                for i, (err_type, name, color) in enumerate(zip(["mismatch_rate", "deletion_rate", "insertion_rate", "refskip_rate"], ["Mismatch", "Deletion", "Insertion", "Reference skip"], ["#55a868", "#c44e52", "#8172b3", "#937860"])):
+                    trace = go.Box(x=d["motif"], y=d[err_type], name=name, 
+                                line=dict(color="black", width=1), 
+                                marker=dict(outliercolor="black", size=1), 
+                                fillcolor=color,
+                                legendgroup=i,
+                                showlegend=True if center_base == "A" else False,
+                                offsetgroup=i)
+                    traces.append(trace)
+
+                fig.add_traces(traces, rows=row, cols=col)
+                fig.update_xaxes(categoryorder='array', categoryarray=x_order[center_base], row=row, col=col)
 
             fig.update_layout(boxmode="group", boxgroupgap=0, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, bgcolor='#f5f5f5', bordercolor='#000000', borderwidth=2))
-
-            fig.update_xaxes(categoryorder='array', categoryarray=x_order["A"], row=1, col=1)
-            fig.update_xaxes(categoryorder='array', categoryarray=x_order["C"], row=1, col=2)
-            fig.update_xaxes(title = "3bp Motif", categoryorder='array', categoryarray=x_order["G"], row=2, col=1)
-            fig.update_xaxes(title = "3bp Motif", categoryorder='array', categoryarray=x_order["T"], row=2, col=2)
-
+            fig.update_xaxes(title = "3bp Motif", row=2, col=1)
+            fig.update_xaxes(title = "3bp Motif", row=2, col=2)
             fig.update_yaxes(title = "Error rate", row=1, col=1)
             fig.update_yaxes(title = "Error rate", row=2, col=1)
 
         except Exception as e:
             fig = self.create_error_placeholder(e)            
         return fig
-
 
     ################################################################################################################
     #                                               Create HTML file                                               #

@@ -532,11 +532,11 @@ class PositionSummary:
                 <meta http-equiv="X-UA-Compatible" content="IE=edge">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <title>Neet - Position extractor summary</title>
-                <link rel="stylesheet" type="text/css" href="/home/vincent/projects/neet_project/neet/style.css">
+                <link rel="stylesheet" type="text/css" href="/home/vincent/projects/neet_project/neet/summary/style.css">
             </head>
 
             <body>
-                <script type="text/javascript" src="/home/vincent/projects/neet_project/neet/plotly_js.js"></script>
+                <script type="text/javascript" src="/home/vincent/projects/neet_project/neet/summary/plotly_js.js"></script>
 
                 <header>
                     <h1>Position extractor summary</h1>
