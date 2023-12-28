@@ -9,27 +9,6 @@ from collections import defaultdict
 from typing import List, Tuple, Dict
 
 class SummaryCreator:
-    """
-    A class for creating summary outputs based on input data.
-
-    Attributes:
-        input_path (str): Path to the input data file.
-        output_path (str): Path to the output summary file.
-        n_bins (int|None): Number of bins for summarization (optional).
-        data (pd.DataFrame): Loaded input data as a pandas DataFrame.
-
-    Methods:
-        __init__(self, in_path: str, out_path: str, n_bins: int|None) -> None:
-            Initializes the SummaryCreator object.
-        process_path(self, in_path: str, out_path: str) -> None:
-            Processes input and output paths.
-        check_path(self, path: str, extensions: List[str]) -> None:
-            Checks if the given path exists and has expected extensions.
-        process_outpath(self, out: str) -> str:
-            Processes the output path or filename.
-        load_data(self) -> None:
-            Loads data from the input path into the DataFrame.
-    """
     input_path: str
     output_path: str
     n_bins: int | None
@@ -37,21 +16,7 @@ class SummaryCreator:
     data: Dict[str, List[str|int|float]]
     export_svg: bool
 
-    dtypes = {'chr': str, 'site': int, 'n_reads': int, 'ref_base': str, 'majority_base': str, 'n_a': int, 'n_c': int,
-            'n_g': int, 'n_t': int, 'n_del': int, 'n_ins': int, 'n_ref_skip': int, 'n_a_rel': float, 'n_c_rel': float,
-            'n_g_rel': float, 'n_t_rel': float, 'n_del_rel': float, 'n_ins_rel': float, 'n_ref_skip_rel': float,
-            'perc_mismatch': float, 'perc_mismatch_alt': float, 'motif': str, 'q_mean': float, 'q_std': float,
-            'neighbour_error_pos': str}
-
     def __init__(self, in_path: str, out_path: str, n_bins: int|None = 5000, use_perc_mismatch_alt: bool = False, export_svg: bool = False) -> None:
-        """
-        Initializes a SummaryCreator object.
-
-        Args:
-            in_path (str): Path to the input data file.
-            out_path (str): Path to the output summary file.
-            n_bins (int|None): Number of bins for summarization (optional).
-        """
         self.process_path(in_path, out_path)
         self.n_bins = n_bins
         self.perc_mis_col = "perc_mismatch_alt" if use_perc_mismatch_alt else "perc_mismatch"
@@ -63,11 +28,18 @@ class SummaryCreator:
 
     def process_path(self, in_path: str, out_path: str) -> None:
         """
-        Processes input and output path.
+        Process the input and output paths for the SummaryCreator instance.
 
-        Args:
-            in_path (str): Path to the input data file.
-            out_path (str): Path to the output summary file.
+        Parameters:
+        - in_path (str): The input file path.
+        - out_path (str): The output file path or directory.
+
+        Raises:
+        - FileNotFoundError: If the specified input file path does not exist or if the specified output directory does not exist.
+        - Warning: If the output file has an extension other than '.html'. A warning is issued, but the function continues execution.
+
+        Returns:
+        - None
         """
         # process input path
         self.check_path(in_path, [".tsv"])
@@ -77,15 +49,18 @@ class SummaryCreator:
 
     def check_path(self, path: str, extensions: List[str]) -> None:
         """
-        Checks if the given path exists and has expected extensions.
+        Check the validity of the given file path.
 
-        Args:
-            path (str): Path to check.
-            extensions (List[str]): List of valid file extensions.
+        Parameters:
+        - path (str): The file path to be checked.
+        - extensions (List[str]): List of valid file extensions.
 
         Raises:
-            FileNotFoundError: If the file does not exist.
-            Warning: If the file extension is unexpected.
+        - FileNotFoundError: If the specified file path does not exist.
+        - Warning: If the file extension is not in the expected list. The warning is issued, but the function continues execution.
+
+        Returns:
+        - None
         """
         if not os.path.exists(path): # does file exist?
             raise FileNotFoundError(f"Input file not found. File '{path}' does not exist.")
@@ -95,17 +70,17 @@ class SummaryCreator:
 
     def process_outpath(self, out: str) -> str:
         """
-        Processes the output path or filename.
+        Process the output path and return a valid output file path.
 
-        Args:
-            out (str): Output path or filename.
-
-        Returns:
-            str: Processed output path.
+        Parameters:
+        - out (str): The specified output path.
 
         Raises:
-            FileNotFoundError: If the directory does not exist.
-            Warning: If the output file extension is unexpected.
+        - FileNotFoundError: If the specified output directory does not exist.
+        - Warning: If the output file has an extension other than '.html'. A warning is issued, but the function continues execution.
+
+        Returns:
+        - str: The processed output file path.
         """
         if os.path.isdir(out): # check if outpath is directory, if the directory exists and create output file path(s) according to input file name(s)
             if not os.path.exists(out):
@@ -126,6 +101,15 @@ class SummaryCreator:
             return out
       
     def load_data(self):
+        """
+        Load data from the specified input file into the SummaryCreator instance.
+
+        Reads the data from a tab-separated values (tsv) file as created by the PileupExtractor module
+        and stores it in the 'data' attribute of the class.
+
+        Returns:
+        - None
+        """
         cols = ["chr", "n_reads", "ref_base", "majority_base", "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "perc_mismatch", "q_mean", "motif"]
 
         col_idx = {'chr': 0, 'site': 1, 'n_reads': 2, 'ref_base': 3, 'majority_base': 4, 'n_a': 5, 'n_c': 6, 'n_g': 7, 'n_t': 8, 'n_del': 9, 'n_ins': 10, 'n_ref_skip': 11, 'n_a_rel': 12, 'n_c_rel': 13, 'n_g_rel': 14, 'n_t_rel': 15, 'n_del_rel': 16, 'n_ins_rel': 17, 'n_ref_skip_rel': 18, 'perc_mismatch': 19, 'perc_mismatch_alt': 20, 'motif': 21, 'q_mean': 22, 'q_std': 23, 'neighbour_error_pos': 24}
@@ -145,17 +129,22 @@ class SummaryCreator:
     ######################################################################################################################
     def main(self) -> None:
         """
-        Generate a summary report containing various plots and statistics based on the provided data.
+        Orchestrates the creation of a summary report from the input data file.
 
-        This method orchestrates the creation of multiple types of plots and summary visualizations, such
-        as coverage distributions, chromosome-specific statistics, mismatch statistics, error type distributions,
-        motif-related statistics, and more. The generated plots and statistics are combined into an HTML report.
+        This function performs the following steps:
+        1. Loads data from the input file.
+        2. Creates various summary plots including general statistics, chromosome-wise information,
+        general mismatch statistics, specific mismatch type summaries, and motif summaries.
+        3. Writes an HTML summary file containing the generated plots.
 
-        The final HTML report is saved to the specified output path.
+        Note: The function includes print statements to provide updates on the progress of each step.
+
+        Raises:
+            Exception: If any error occurs during the execution, an exception is raised with an
+                    accompanying error message.
 
         Returns:
-            None: The method generates and writes an HTML report containing summary plots and statistics
-                to the specified output path.
+            None
         """
         hs.print_update(f"Starting creation of summary from file '{self.input_path}'.")
         hs.print_update("  - loading data... ", line_break=False)
@@ -198,18 +187,18 @@ class SummaryCreator:
 
     def update_plot(self, fig, title: str|None = None, xlab: str|None = None, ylab: str|None = None, height: int = 500, width: int = 800):
         """
-        Updates the layout of a Plotly figure.
+        Update the layout of the given Plotly figure.
 
-        Args:
-            fig (go.Figure): The Plotly figure to be updated.
-            title (str|None): Title of the plot (optional).
-            xlab (str|None): Label for the x-axis (optional).
-            ylab (str|None): Label for the y-axis (optional).
-            height (int): Height of the plot (default: 500).
-            width (int): Width of the plot (default: 800).
+        Parameters:
+        - fig (plotly.graph_objs.Figure): The Plotly figure to be updated.
+        - title (str|None): Title for the plot.
+        - xlab (str|None): Label for the x-axis.
+        - ylab (str|None): Label for the y-axis.
+        - height (int): Height of the figure.
+        - width (int): Width of the figure.
 
         Returns:
-            go.Figure: The updated Plotly figure.
+        - plotly.graph_objs.Figure: The updated Plotly figure.
         """
         fig.update_layout(template="seaborn",
                     title = title,
@@ -226,6 +215,18 @@ class SummaryCreator:
         return fig
 
     def bin_data(self, data: List[int|str|float]) -> List[int|float]:
+        """
+        Bin the input data into segments and return the mean value of each segment.
+
+        Parameters:
+        - data (List[int|str|float]): The input data to be binned.
+
+        Raises:
+        - Exception: If the number of bins is larger than the length of the data.
+
+        Returns:
+        - List[int|float]: List of mean values for each bin.
+        """
         total_length = len(data)
         num_segments = self.n_bins
 
@@ -251,6 +252,12 @@ class SummaryCreator:
     ################################################################################################################
 
     def prepare_data_general(self) -> Tuple[List[int|float], List[float]]:
+        """
+        Prepare the data for plotting general information.
+
+        Returns:
+        - Tuple[List[int|float], List[float]]: Tuple containing binned or original 'n_reads' and 'q_mean' data.
+        """
         if self.n_bins is not None:
             n_reads = self.bin_data(self.data["n_reads"])
             quality = self.bin_data(self.data["q_mean"])
@@ -288,6 +295,12 @@ class SummaryCreator:
         return n_sites_x, n_sites_y, chroms, n_reads, q_mean
 
     def prepare_data_mism_general(self) -> Dict[str, Tuple[int|List[float], int|List[float]]]:
+        """
+        Prepare mismatch data for plotting general mismatch information.
+
+        Returns:
+        - Dict[str, Tuple[int|List[float], int|List[float]]]: Dictionary containing binned or original mismatch data.
+        """
         data_mis = {"perc_mismatch": [], "n_del_rel": [], "n_ins_rel": [], "n_ref_skip_rel": []}
         data_mat = {"perc_mismatch": [], "n_del_rel": [], "n_ins_rel": [], "n_ref_skip_rel": []}
 
@@ -321,6 +334,15 @@ class SummaryCreator:
         return data_dict
     
     def prepare_data_mism_matrix(self, mis_count: Dict[str, int]) -> Tuple[List[List[int]], List[List[str]], int]:
+        """
+        Prepare data for a confusion matrix based on mismatch counts.
+
+        Parameters:
+        - mis_count (Dict[str, int]): Dictionary containing mismatch counts for each base pair combination.
+
+        Returns:
+        - Tuple[List[List[int]], List[List[str]], int]: Tuple containing matrix data, matrix labels, and the maximum value in the matrix.
+        """
         # prepare data for the confusion matrix
         matrix_data = [[None]*4 for _ in range(4)]
         matrix_labels = [[None]*4 for _ in range(4)]
@@ -347,6 +369,15 @@ class SummaryCreator:
         return matrix_data, matrix_labels, val_max
 
     def prepare_data_mism_pie(self, mis_count: Dict[str, int]) -> Tuple[List[int], List[str]]:
+        """
+        Prepare data for a pie chart based on mismatch counts.
+
+        Parameters:
+        - mis_count (Dict[str, int]): Dictionary containing mismatch counts for each base pair combination.
+
+        Returns:
+        - Tuple[List[int], List[str]]: Tuple containing pie chart data and labels.
+        """
         # prepare data for the pie chart
         pie_data = list(mis_count.values())
         pie_labels = list(mis_count.keys())
@@ -360,6 +391,15 @@ class SummaryCreator:
         return pie_data, pie_labels
     
     def prepare_data_mism_box(self, mis_error_rates: Dict[str, List[str|float]]) -> Dict[str, List[str|float]]:
+        """
+        Prepare data for box plots based on mismatch error rates by mismatch types.
+
+        Parameters:
+        - mis_error_rates (Dict[str, List[str|float]]): Dictionary containing mismatch error rates.
+
+        Returns:
+        - Dict[str, List[str|float]]: Dictionary containing the prepared data for the box plot.
+        """
         if self.n_bins is not None:
             # group the data by mismatch type and if more samples than n_bins are present in a group, 
             # subset the data to n_bins data points
@@ -395,6 +435,13 @@ class SummaryCreator:
         return mis_error_rates
 
     def prepare_data_mism_types(self) -> Tuple[List[List[int]], List[List[str]], int, List[int], List[str], Dict[str, List[str|float]]]:
+        """
+        Prepare general data for mismatch type plots.
+
+        Returns:
+        - Tuple[List[List[int]], List[List[str]], int, List[int], List[str], Dict[str, List[str|float]]]: 
+        Tuple containing data for confusion matrix, pie chart, and box plot for mismatch types analysis.
+        """
         mis_types = [f"{f} - {t}" for f in ["A", "C", "G", "U"] for t in ["A", "C", "G", "U"]]
         mis_count = dict(zip(mis_types, [0]*len(mis_types)))
 
@@ -419,6 +466,12 @@ class SummaryCreator:
         return *self.prepare_data_mism_matrix(mis_count), *self.prepare_data_mism_pie(mis_count), self.prepare_data_mism_box(mis_error_rates)
 
     def prepare_data_motifs(self) -> Dict[str, Dict[str, List[str|float]]]:
+        """
+        Prepare data for motif-wise error rate plotting.
+
+        Returns:
+        - Dict[str, Dict[str, List[str|float]]]: Dictionary containing error rates for each motif.
+        """
         motif_error_rates = defaultdict(lambda: {"mismatch_rate": [], "deletion_rate": [], "insertion_rate": [], "refskip_rate": []})
 
         # extract the data for each 3 base-pair motif; store error rates in dict by motifs
@@ -457,8 +510,13 @@ class SummaryCreator:
 
     def create_error_placeholder(self, e: Exception):
         """
-        Creates a placeholder plot in case there is an error during creation.
-        Displays the error message.
+        Create a placeholder plot with an error message.
+
+        Parameters:
+        - e (Exception): The exception that occurred.
+
+        Returns:
+        - fig: Plotly Figure: Placeholder figure with an error message.
         """
         hs.print_update(f"An error occured: {str(e)}. Replacing plot with empty placeholder. ", with_time=False, line_break=False)
         fig = self.update_plot(make_subplots(rows=1, cols=1))
@@ -472,6 +530,12 @@ class SummaryCreator:
 
 
     def create_general_plot(self) -> go.Figure:
+        """
+        Create a general plot displaying total coverage and total quality distributions.
+
+        Returns:
+        - go.Figure: Plotly Figure for general plot.
+        """
         try:
             n_reads_data, quality_data = self.prepare_data_general()
 
@@ -498,10 +562,10 @@ class SummaryCreator:
     
     def create_chr_plot(self) -> go.Figure:
         """
-        Creates and returns an HTML representation of the chromosome-specific summary plot.
+        Create a chromosome plot displaying the number of positions, number of reads, and mean quality.
 
         Returns:
-            str: HTML representation of the plot.
+        - go.Figure: Plotly Figure for chromosome plot.
         """
         try:
             def custom_sort_key(item):
@@ -541,10 +605,12 @@ class SummaryCreator:
 
     def create_mism_general_plot(self) -> go.Figure:
         """
-        Creates and returns an HTML representation of the general mismatch summary plot.
+        Create a general plot displaying mismatch frequencies, deletion frequencies, 
+        insertion frequencies and reference skip frequencies at matched and mismatched sites, 
+        and an overall pie chart.
 
         Returns:
-            str: HTML representation of the plot.
+        - go.Figure: Plotly Figure for general mismatch plot.
         """
         try:
             def boxplot(data, group: str = "match", showlegend: bool = False):
@@ -596,10 +662,10 @@ class SummaryCreator:
 
     def create_mism_types_plots(self) -> List[go.Figure]:
         """
-        Creates and returns HTML representations of mismatch types summary plots.
+        Create mismatch type plots including a confusion matrix, a pie chart, and a box plot.
 
         Returns:
-            List[str]: List of HTML representations of the plots.
+        - List[go.Figure]: List of Plotly Figures for mismatch type plots.
         """
         try:
             matrix_data, matrix_labels, matrix_max_mism, pie_data, pie_labels, box_data = self.prepare_data_mism_types()
@@ -653,10 +719,10 @@ class SummaryCreator:
 
     def create_motif_plot(self) -> go.Figure:
         """
-        Creates and returns an HTML representation of the motif summary plot.
+        Create a plot showing error rates for different motifs.
 
         Returns:
-            str: HTML representation of the plot.
+        - go.Figure: Plotly Figure for the motif plot.
         """
         try:
             x_order = {"A": ["CAC", "CAG", "CAU", "GAC", "GAG", "GAU", "UAC", "UAG", "UAU"], 
@@ -702,25 +768,50 @@ class SummaryCreator:
     #                                               Create HTML file                                               #
     ################################################################################################################
     def write_svg(self, fig: go.Figure, name: str) -> None:
+        """
+        Write the Plotly Figure to an SVG file.
+
+        Args:
+        - fig (go.Figure): Plotly Figure.
+        - name (str): Name to include in the output SVG file.
+
+        Returns:
+        - None
+        """
         outpath = f"{os.path.splitext(self.output_path)[0]}_{name}.svg"
         fig.write_image(outpath)
 
     def figs_to_str(self, plot_figs: List[go.Figure]) -> List[str]:
+        """
+        Convert a list of Plotly Figures to their HTML string representation.
+
+        Args:
+        - plot_figs (List[go.Figure]): List of Plotly Figures.
+
+        Returns:
+        - List[str]: List of HTML strings representing the Plotly Figures.
+        """
         plot_str = list(map(lambda x: to_html(x, include_plotlyjs=False), plot_figs))
         return plot_str
 
     def write_to_html(self, n_positions, n_chr, plot_figs: List[go.Figure]) -> None:
         """
-        Generate an HTML document containing summary information and plots created from extracted data.
+        Generate an HTML summary page with collapsible sections for different types of analysis.
+        
+        Parameters:
+        - n_positions (int): Total number of positions extracted.
+        - n_chr (int): Total number of chromosomes.
+        - plot_figs (List[go.Figure]): List of Plotly figures for different analyses.
 
-        Args:
-            n_positions (int): Total number of extracted positions.
-            n_chr (int): Total number of sequences (chromosomes) analyzed.
-            plots (List[str]): List of HTML strings containing plot visualizations.
+        The function exports SVG versions of the Plotly figures if `export_svg` is True.
+
+        The HTML template includes collapsible sections for general statistics, mismatch statistics,
+        error rates by motifs, and more. Each section contains relevant Plotly charts and informative text.
+
+        The final HTML template is written to the specified `output_path`.
 
         Returns:
-            None: The method generates an HTML file based on the provided template and plots,
-                and writes it to the specified output path.
+        None
         """
         if self.export_svg:
             for fig, name in zip(plot_figs, ["summary_general_info", "summary_chr_info", "summary_mismatch_stats", 
