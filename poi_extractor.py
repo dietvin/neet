@@ -200,10 +200,6 @@ class POIAnalyzer():
         """
         Add BED information to a DataFrame based on a BED file.
 
-        Args:
-            data (pd.DataFrame): The DataFrame containing genomic data to enrich with BED information.
-            bed_path (str): The path to the BED file containing genomic intervals and associated names.
-
         Returns:
             pd.DataFrame: The DataFrame with an additional 'bed_name' column containing BED information.
 
@@ -348,7 +344,7 @@ class POIAnalyzer():
 
     def process_category(self, category: str, corresponding_base: str|None) -> None:
         """
-        Process and analyze the data for a specific category and corresponding base.
+        Process and analyze the data for a specific category and (optionally) corresponding base.
 
         This method generates multiple plots and saves them along with a summary HTML template. Optionally, it also
         writes the processed data to a TSV file.
@@ -400,13 +396,32 @@ class POIAnalyzer():
             hs.print_update(f"  - creating updated feature table at {self.in_path}... ", line_break=False)
             self.write_tsv()
             hs.print_update("Done", with_time=False)
-        hs.print_update("Finished.")
+        hs.print_update(f"Finished processing {category}.")
 
     ##############################################################################################################
     #                                          Data preparation methods                                          #
     ##############################################################################################################
         
     def subset_category_data(self, category: str, counterpart: str|None) -> None:
+        """
+        Subset the data based on the given category and counterpart (if provided).
+
+        Parameters:
+        - category (str): The category to filter the data by.
+        - counterpart (str|None): The counterpart to filter the data by. If None, counterpart filtering is skipped.
+
+        Returns:
+        None
+
+        The method filters the internal data based on the provided category and counterpart values,
+        creating two subsets: one for the specified category and another for the counterpart (if provided).
+
+        It updates the following attributes:
+        - self.category_data (dict): A dictionary containing subsets of data for the specified category.
+        - self.counterpart_data (dict): A dictionary containing subsets of data for the specified counterpart.
+        - self.current_category (str): The currently selected category.
+        - self.current_counterpart (str|None): The currently selected counterpart.
+        """
         bed_name_idx = list(self.data.keys()).index("bed_name")
         ref_base_idx = list(self.data.keys()).index("ref_base")
         data_keys = self.data.keys()
@@ -430,7 +445,24 @@ class POIAnalyzer():
         self.current_category = category
         self.current_counterpart = counterpart
 
-    def prepate_data_map(self) -> Tuple[List[str], List[int]]:
+    def prepare_data_map(self) -> Tuple[List[str], List[int]]:
+        """
+        Prepare the data for the sequence map based on references and category data.
+
+        Returns:
+        Tuple[List[str], List[int]]:
+            A tuple containing two lists:
+            - List of chromosome names present in both references and category data.
+            - List of corresponding chromosome lengths.
+
+        The method reads a fasta file specified by 'ref_path' and extracts the sequences
+        along with their chromosome names. It then compares the unique chromosome names in
+        the category data with those in the references, ensuring only common ones are considered.
+
+        The resulting tuple contains:
+        - List of common chromosome names sorted numerically and alphabetically.
+        - List of corresponding lengths of the chromosomes.
+        """
         def get_references(path: str) -> Dict[str, str]:
             """
             Reads a fasta file and stores the sequences in a dictionary (values) with the 
@@ -524,6 +556,27 @@ class POIAnalyzer():
         return matrix_data, matrix_labels, val_max
 
     def prepare_data_composition(self) -> Tuple[Dict[str, Tuple[float,float]|Tuple[float,float,float,float]], Dict[str, Tuple[float,float]|Tuple[float,float,float,float]], Tuple[int,int]|Tuple[int,int,int,int]]:
+        """
+        Prepare data for composition analysis, including base rates, medians, and scaled medians.
+
+        Returns:
+        Tuple[Dict[str, Tuple[float, float] | Tuple[float, float, float, float]],
+            Dict[str, Tuple[float, float] | Tuple[float, float, float, float]],
+            Tuple[int, int] | Tuple[int, int, int, int]]:
+            A tuple containing three elements:
+            1. Dictionary with scaled median rates for each base.
+            2. Dictionary with un-scaled median rates for each base.
+            3. Tuple with counts of matches and mismatches.
+
+        The method processes base rates in the category data, calculates medians,
+        and scales the medians to represent proportions. If a counterpart is specified,
+        the same process is applied, and the results are combined for further analysis.
+
+        The returned tuple includes:
+        1. Scaled median rates for each base.
+        2. Un-scaled median rates for each base.
+        3. Counts of matches and mismatches (category-match, counterpart-match, category-mismatch, counterpart-mismatch).
+        """
         cols = ["ref_base", "majority_base", "n_a_rel", "n_c_rel", "n_g_rel", "n_u_rel"]
 
         def get_rates(data: Dict[str, List[str|int|float]]) -> Tuple[Dict[str, Tuple[List[float], List[float]]], Tuple[int]]:
@@ -583,6 +636,30 @@ class POIAnalyzer():
                                         Dict[str, List[float]], 
                                         Dict[str, List[float]],
                                         List[str]]:
+        """
+        Prepare error rates data for analysis.
+
+        Returns:
+        Tuple[Dict[str, List[float]], 
+            Dict[str, List[float]], 
+            Dict[str, List[float]], 
+            Dict[str, List[float]], 
+            Dict[str, List[float]],
+            List[str]]:
+            A tuple containing five dictionaries representing different error rates and a list of x-axis labels.
+
+        The method processes error rates in the category data, including mismatch,
+        deletion rate, insertion rate, reference skip rate, and mean quality score.
+        If a counterpart is specified, the same process is applied, and the results are combined for further analysis.
+
+        The returned tuple includes:
+        1. Percentage mismatch rates.
+        2. Relative deletion rates.
+        3. Relative insertion rates.
+        4. Relative reference skip rates.
+        5. Mean quality scores.
+        6. List of x-axis labels representing different conditions.
+        """
         def get_rates(data: Dict[str, List[str|int|float]], x_mat: int, x_mis: int) -> Dict[str, Dict[str, List[float]]]:
             rate_dict = defaultdict(lambda: {"x": [], "y": []})
             cols = ["ref_base", "majority_base", "perc_mismatch", "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "q_mean"]
@@ -673,6 +750,25 @@ class POIAnalyzer():
     #                                            p-val table methods                                             #
     ##############################################################################################################
     def perform_test(self, set1: List[float], set2: List[float], alpha: float = 0.05) -> str:
+        """
+        Perform a statistical test to compare two sets of data.
+
+        Parameters:
+        - set1 (List[float]): The first set of data.
+        - set2 (List[float]): The second set of data.
+        - alpha (float): The significance level for the tests (default is 0.05).
+
+        Returns:
+        str:
+            A string representing the result of the statistical test.
+
+        The method performs a series of tests to compare two sets of data. It checks for normality
+        in both samples and equal variances using normaltest and bartlett tests. If the conditions
+        are met, it performs an independent t-test (TT), otherwise, it performs a Mann-Whitney U test (MWU).
+
+        The returned string includes the p-value of the test and the abbreviation of the test method.
+        In case of an exception during the test, it returns "ERROR".
+        """
         try:
             if (normaltest(set1)[1] >= alpha) & (normaltest(set2)[1] >= alpha) & (bartlett(set1, set2)[1] >= alpha): # normal distributions in both samples + equal variances
                 return f"{ttest_ind(a=set1, b=set2)[1]:.5e} (TT)"
@@ -681,17 +777,43 @@ class POIAnalyzer():
         except:
             return "ERROR"
 
-    # TODO: add a second table for statistical evaluation of the base compositions
-
     def get_table_header(self) -> str:
+        """
+        Generate an HTML table header based on the current category and counterpart.
+
+        Returns:
+        str:
+            A string containing the HTML table header.
+
+        The method generates an HTML table header with column labels based on the current
+        category and counterpart (if applicable). It returns a string formatted as an HTML table row.
+        """
         if self.current_counterpart:
             header = f"<th></th><th>{self.current_category} match vs. {self.current_counterpart} match</th><th>{self.current_category} mismatch vs. {self.current_counterpart} mismatch</th><th>{self.current_category} match vs. {self.current_category} mismatch</th><th>{self.current_counterpart} match vs. {self.current_counterpart} mismatch</th>"
         else: 
             header = f"<th></th><th>{self.current_category} match vs. {self.current_category} mismatch</th>"
         return "<tr>" + header + "</tr>"
 
-    def create_test_overview(self, datasets: List[Dict[str, List[float]]]) -> str:
+    # TODO: add a second table for statistical evaluation of the base compositions
 
+    def create_test_overview(self, datasets: List[Dict[str, List[float]]]) -> str:
+        """
+        Create an HTML table summarizing statistical tests for multiple datasets.
+
+        Parameters:
+        - datasets (List[Dict[str, List[float]]]): A list of datasets, each containing 'x' and 'y' lists.
+
+        Returns:
+        str:
+            A string containing the HTML table with test results.
+
+        The method generates an HTML table summarizing statistical tests for multiple datasets.
+        Each dataset should include 'x' and 'y' lists. The table includes rows for different data types
+        (Mismatch rate, Deletion rate, Insertion rate, Reference skip rate, Mean quality) and columns
+        for various comparisons based on the current category and counterpart.
+
+        The returned string contains the complete HTML table.
+        """
         table = f"<table>" + self.get_table_header()
 
         for data_type, data in zip(["Mismatch rate", "Deletion rate", "Insertion rate", "Reference skip rate", "Mean quality"], datasets):
@@ -743,23 +865,20 @@ class POIAnalyzer():
 
         return fig
 
-    def create_map_plot(self,) -> go.Figure: 
+    def create_map_plot(self) -> go.Figure: 
         """
-        Create a map plot for a specified modification type.
-
-        Args:
-            mod_type (str): The modification type for which the map plot should be created.
+        Create a map plot visualizing chromosome lengths and category sites.
 
         Returns:
-            str: HTML code representing the map plot.
+        go.Figure:
+            A Plotly figure representing the map plot.
 
-        Note:
-            This method creates a map plot for a specified modification type. It reads reference sequences from a FASTA file,
-            extracts relevant data from the DataFrame, and plots chromosome lengths as bars and modification sites as markers.
-            The resulting map plot is converted to HTML code.
-
+        The method generates a map plot that visualizes chromosome lengths as bars and
+        category sites as markers. The x-axis represents chromosomes, and the y-axis represents
+        coordinates. The plot is customized for clear visualization, including bar width,
+        scatter marker size, and layout adjustments.
         """
-        present_chr, chr_lens = self.prepate_data_map()
+        present_chr, chr_lens = self.prepare_data_map()
 
         width = 1200
         bargap = 0.9
@@ -777,15 +896,15 @@ class POIAnalyzer():
 
     def create_mism_types_plot(self) -> go.Figure:
         """
-        Create a mismatch types plot for a specified modification type.
+        Create a heatmap plot visualizing mismatch types.
 
         Returns:
-            str: Plotly imshow plot.
+        go.Figure:
+            A Plotly figure representing the mismatch types heatmap.
 
-        Note:
-            This method creates a mismatch types plot for a specified modification type. It prepares data
-            for the plot, generates a heatmap using Plotly Express, and returns the resulting plot as HTML code.
-
+        The method generates a heatmap plot that visualizes mismatch types between called and reference bases.
+        The x-axis represents the called bases, the y-axis represents the reference bases, and the color
+        represents the count of occurrences for each mismatch type. The plot is customized for clear visualization.
         """
         matrix_data, matrix_labels, matrix_max_mism = self.prepare_data_mism_types()
 
@@ -799,16 +918,16 @@ class POIAnalyzer():
 
     def create_composition_plot(self) -> go.Figure:
         """
-        Create a composition plot for a specified category type and if provided canonical counterpart.
+        Create a stacked bar plot visualizing composition rates for different bases.
 
         Returns:
-            str: HTML code representing the composition plot.
+        go.Figure:
+            A Plotly figure representing the composition rates stacked bar plot.
 
-        Note:
-            This method creates a composition plot for a specified modification type and canonical sequence.
-            It prepares data for the plot, generates a stacked bar chart using Plotly, and returns the resulting
-            plot as HTML code.
-
+        The method generates a stacked bar plot that visualizes the composition rates
+        for different bases in various conditions. The x-axis represents different conditions,
+        and the y-axis represents the relative abundance of each base. The plot is customized
+        for clear visualization, including colors, tooltips, and layout adjustments.
         """
         median_base_rates_scaled, median_base_rates, x_vals = self.prepare_data_composition()
 
@@ -826,20 +945,17 @@ class POIAnalyzer():
     
     def create_error_rate_plot(self) -> Tuple[go.Figure, str]:
         """
-        Create an error rate plot for a specified modification type and canonical sequence.
-
-        Args:
-            mod (str): The modification type for which the error rate plot should be created.
-            canonical (str): The canonical sequence for comparison.
+        Create a grouped box plot visualizing error rates and quality scores.
 
         Returns:
-            str: HTML code representing the error rate plot.
+        Tuple[go.Figure, str]:
+            A tuple containing the Plotly figure representing the box plot and a string
+            with a table summarizing statistical test results.
 
-        Note:
-            This method creates an error rate plot for a specified modification type and canonical sequence.
-            It prepares data for the plot, generates box plots for mismatch rate, deletion rate, insertion rate,
-            reference skip rate, and mean quality score using Plotly, and returns the resulting plot as HTML code.
-
+        The method generates a grouped box plot that visualizes error rates and quality scores
+        for different conditions. The x-axis represents different conditions, and the y-axis represents
+        the error rate or quality score. The plot includes statistical tests and a table summarizing
+        p-values for various comparisons.
         """
         data_mismatch, data_deletion, data_insertion, data_ref_skip, data_quality, x_ticks = self.prepare_data_errorrates()
 
@@ -867,13 +983,12 @@ class POIAnalyzer():
         Create a neighbor position plot for a specified modification type.
 
         Returns:
-            str: HTML code representing the neighbor position plot.
+            go.Figure: A Plotly figure representing the bar and pie plot.
 
-        Note:
-            This method creates a neighbor position plot for a specified modification type. It prepares data for
-            the plot, generates stacked bar charts for neighbor positions with and without modification errors,
-            as well as a pie chart showing the distribution of surrounding errors, using Plotly, and returns the
-            resulting plot as HTML code.
+        This method creates a neighbor position plot for a specified modification type. It prepares data for
+        the plot, generates stacked bar charts for neighbor positions with and without modification errors,
+        as well as a pie chart showing the distribution of surrounding errors, using Plotly, and returns the
+        resulting plot as HTML code.
 
         """
         x_vals, y_vals, x_vals_mod, y_vals_mod, pie_labs, pie_vals = self.prepare_nb_counts()
@@ -898,23 +1013,54 @@ class POIAnalyzer():
     #                                               Output methods                                               #
     ##############################################################################################################
     def write_svg(self, fig: go.Figure, name: str) -> None:
+        """
+        Write a Plotly figure to an SVG file.
+
+        Parameters:
+        - fig (go.Figure): Plotly figure to be saved.
+        - name (str): Name to be used for the output SVG file.
+
+        Returns:
+        None
+
+        The method takes a Plotly figure and a name as input and writes the figure to an SVG file.
+        The output file will be saved with a name based on the provided 'name' parameter and the
+        instance's 'output_path'.
+        """
         outpath = f"{self.output_path}_{name}.svg"
         fig.write_image(outpath)
 
     def figs_to_str(self, plot_figs: List[go.Figure]) -> List[str]:
+        """
+        Convert a list of Plotly figures to a list of HTML strings.
+
+        Parameters:
+        - plot_figs (List[go.Figure]): List of Plotly figures to be converted.
+
+        Returns:
+        List[str]: List of HTML strings representing the Plotly figures.
+
+        The method takes a list of Plotly figures as input and converts each figure
+        to its corresponding HTML representation. The resulting list contains HTML strings
+        for each figure, suitable for embedding in a web page or displaying in an HTML environment.
+        """
         return list(map(lambda x: to_html(x, include_plotlyjs=False), plot_figs))
 
     def write_template(self, plot_figs: List[go.Figure], tables: List[str]) -> None:
         """
-        Generate an HTML report template with interactive plots.
+        Write a summary HTML report with interactive plots and tables.
 
-        Args:
-            plots (List[str]): A list of HTML code representing interactive plots.
-            category (str): The category or modification type for which the report is generated.
-            corresponding_base (str): The corresponding base associated with the category.
+        Parameters:
+        - plot_figs (List[go.Figure]): List of Plotly figures to be included in the report.
+        - tables (List[str]): List of HTML tables to be included in the report.
 
         Returns:
-            None: The template is written to an HTML file.
+        None
+
+        The method takes a list of Plotly figures and HTML tables, and generates an HTML report
+        containing interactive plots and tables. The report includes sections for mapping positions,
+        mismatch types, base compositions, error rates, and neighboring errors. If specified, SVG files
+        of individual plots are also saved.
         """
         name = f"<i>{self.current_category}</i>"
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -1086,12 +1232,21 @@ class POIAnalyzer():
 
     def write_tsv(self) -> None:
         """
-        Write the current DataFrame to a TSV (tab-separated values) file with additional bed information.
+        Write the processed data to a tab-separated values (TSV) file.
 
-        The output filename is derived from the input filename by appending "_w_bed_info.tsv".
+        The method writes the processed data, stored in the class attribute 'data', to a TSV file.
+        The file will be named based on the input file path, and the suffix '_w_bed_info.tsv' will
+        be added to indicate that bed information has been appended to the original data.
+
+        Parameters:
+        None
 
         Returns:
-            None: The DataFrame is saved as a TSV file.
+        None
+
+        Example:
+        If self.in_path = "input_folder/example.txt", the output TSV file will be named
+        "input_folder/example_w_bed_info.tsv".
         """
         with open(f"{os.path.splitext(self.in_path)[0]}_w_bed_info.tsv", "w") as out:
             out.write("\t".join(self.data.keys())+"\n")
