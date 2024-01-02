@@ -1,14 +1,15 @@
-from typing import List, Dict, Tuple, Any
+from typing import List, Dict, Tuple
 import os, sys, warnings
-import numpy as np
-import pandas as pd
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 from plotly.io import to_html
 from intervaltree import IntervalTree
-import collections, datetime, argparse
+import datetime, argparse
+from collections import defaultdict
+from statistics import median
 from scipy.stats import normaltest, bartlett, ttest_ind, mannwhitneyu
+import helper_functions as hs
 
 class POIAnalyzer():
 
@@ -21,10 +22,15 @@ class POIAnalyzer():
     output_tsv: bool
     export_svg: bool
 
-    data: pd.DataFrame
+    data: Dict[str, List[str|int|float]]
     bed_categories: List[str]
-    bed_categories_canoncial_bases: List[str]
+    bed_categories_canoncial_bases: List[str] | None
 
+    category_data: Dict[str, List[str|int|float]]
+    counterpart_data: Dict[str, List[str|int|float]] | None
+    current_category: str
+    current_counterpart: str | None 
+    
     dtypes = {'chr': str, 'site': int, 'n_reads': int, 'ref_base': str, 'majority_base': str, 'n_a': int, 'n_c': int,
             'n_g': int, 'n_u': int, 'n_del': int, 'n_ins': int, 'n_ref_skip': int, 'n_a_rel': float, 'n_c_rel': float,
             'n_g_rel': float, 'n_u_rel': float, 'n_del_rel': float, 'n_ins_rel': float, 'n_ref_skip_rel': float,
@@ -33,7 +39,7 @@ class POIAnalyzer():
     
     def __init__(self, in_path: str, out_path: str, bed_path: str, ref_path: str,
                  categories: str,
-                 canonical_counterpart: str,
+                 canonical_counterpart: str | None,
                  output_tsv: bool = True, 
                  use_perc_mismatch_alt: bool = False,
                  export_svg: bool = False) -> None:
@@ -60,6 +66,7 @@ class POIAnalyzer():
         """
         self.process_path(in_path, out_path, bed_path, ref_path)
         self.load_data()
+        self.add_bed_info()
         self.perc_mismatch_col = "perc_mismatch_alt" if use_perc_mismatch_alt else "perc_mismatch"
         self.get_bed_categories(categories)
         self.get_corrensponding_base(canonical_counterpart)
@@ -162,28 +169,34 @@ class POIAnalyzer():
 
     def load_data(self) -> None:
         """
-        Load data from a CSV file with specified data types and add BED information.
+        Load data from the specified input file into the SummaryCreator instance.
 
-        Reads a CSV file from the specified input path using pandas. The data is loaded with tab ('\t') as
-        the separator, and custom data types specified in 'dtypes' attribute are applied to columns. After
-        loading the data, it can optionally be enriched with information from a BED file specified by 'bed_path'
-        attribute.
+        Reads the data from a tab-separated values (tsv) file as created by the PileupExtractor module
+        and stores it in the 'data' attribute of the class.
 
         Returns:
-            None
-
-        Note:
-            This method reads data from a CSV file located at 'in_path' attribute using pandas library.
-            It also applies custom data types from the 'dtypes' attribute to columns during data loading.
-            If 'bed_path' is provided and not None, it invokes the 'add_bed_info' method to add additional
-            information from a BED file to the loaded data. This method operates in-place and updates
-            the 'data' attribute of the class with the loaded and potentially enriched data.
-
+        - None
         """
-        data = pd.read_csv(self.in_path, sep="\t", dtype=self.dtypes)
-        self.data = self.add_bed_info(data, self.bed_path)
+        cols = ["chr", "site", "n_reads", "ref_base", "majority_base", "n_a_rel", "n_c_rel", "n_g_rel", "n_u_rel", "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "perc_mismatch", "q_mean", "motif", "neighbour_error_pos"]
+
+        col_idx = {'chr': 0, 'site': 1, 'n_reads': 2, 'ref_base': 3, 'majority_base': 4, 'n_a': 5, 'n_c': 6, 'n_g': 7, 'n_t': 8, 'n_del': 9, 'n_ins': 10, 'n_ref_skip': 11, 'n_a_rel': 12, 'n_c_rel': 13, 'n_g_rel': 14, 'n_u_rel': 15, 'n_del_rel': 16, 'n_ins_rel': 17, 'n_ref_skip_rel': 18, 'perc_mismatch': 19, 'perc_mismatch_alt': 20, 'motif': 21, 'q_mean': 22, 'q_std': 23, 'neighbour_error_pos': 24}
+        dtypes = {'chr': str, 'site': int, 'n_reads': int, 'ref_base': str, 'majority_base': str, 'n_a': int, 'n_c': int, 'n_g': int, 'n_t': int, 'n_del': int, 'n_ins': int, 'n_ref_skip': int, 'n_a_rel': float, 'n_c_rel': float, 'n_g_rel': float, 'n_u_rel': float, 'n_del_rel': float, 'n_ins_rel': float, 'n_ref_skip_rel': float, 'perc_mismatch': float, 'perc_mismatch_alt': float, 'motif': str, 'q_mean': float, 'q_std': float, 'neighbour_error_pos': str}
+        
+        with open(self.in_path, "r") as file:
+            next(file)
+            data = dict(zip(cols, [[] for _ in cols]))
+            for line in file:
+                line = line.strip().split("\t")
+                for col in cols[:-1]:
+                    data[col].append(dtypes[col](line[col_idx[col]]))
+                if len(line) < 25:
+                    data["neighbour_error_pos"].append(None)
+                else:
+                    data["neighbour_error_pos"].append(line[24])
+
+            self.data = data
     
-    def add_bed_info(self, data: pd.DataFrame, bed_path: str):
+    def add_bed_info(self) -> None:
         """
         Add BED information to a DataFrame based on a BED file.
 
@@ -200,11 +213,10 @@ class POIAnalyzer():
             specified 'bed_path' for each row in the DataFrame. The method returns the enriched DataFrame.
 
         """
-        tree = self.build_interval_tree(bed_path)
-        data["bed_name"] = data.apply(lambda x: self.get_name_for_position((x[0], x[1]), tree), axis=1)
-        return data
+        tree = self.build_interval_tree(self.bed_path)
+        self.data["bed_name"] = [self.get_name_for_position(chrom, site, tree) for chrom, site in zip(self.data["chr"], self.data["site"])]
 
-    def get_name_for_position(self, position, interval_tree) -> str|None:
+    def get_name_for_position(self, chrom: str, site: int, interval_tree: IntervalTree) -> str|None:
         """
         Retrieve the name associated with a given genomic position from an interval tree.
 
@@ -222,14 +234,14 @@ class POIAnalyzer():
             name is returned. If no matching interval is found, None is returned.
 
         """
-        results = interval_tree[position[1]:position[1]+1]  # Query the interval tree
+        results = interval_tree[site:site+1]  # Query the interval tree
         for interval in results:
             chromosome, name = interval.data
-            if chromosome == position[0]:
+            if chromosome == chrom:
                 return name
         return None
 
-    def build_interval_tree(self, bed_file):
+    def build_interval_tree(self, bed_file: str) -> IntervalTree:
         """
         Build an IntervalTree data structure from a BED file.
 
@@ -280,7 +292,7 @@ class POIAnalyzer():
 
         """
         categories = cat_str.split(",")
-        unique_cat = list(self.data.bed_name.unique())
+        unique_cat = list(sorted([i for i in set(self.data["bed_name"]) if i]))
 
         for category in categories:
             if category not in unique_cat:
@@ -308,162 +320,301 @@ class POIAnalyzer():
             the corresponding bases are stored in the 'bed_categories_canonical_bases' attribute for later use.
 
         """        
-        counterparts = base_str.split(",")
-        if len(counterparts) != len(self.bed_categories):
-            raise Exception(f"For the {len(self.bed_categories)} categories {len(counterparts)} corresponding bases were given. Each category must have a base it corresponds to.")
-        self.bed_categories_canoncial_bases = counterparts
+        if base_str:
+            base_str = base_str.upper()
+            counterparts = base_str.split(",")
+            if len(counterparts) != len(self.bed_categories):
+                raise Exception(f"For the {len(self.bed_categories)} categories {len(counterparts)} corresponding bases were given. Each category must have a base it corresponds to.")
+            self.bed_categories_canoncial_bases = counterparts
+        else:
+            self.bed_categories_canoncial_bases = [None for _ in self.bed_categories]
+
+    ##############################################################################################################
+    #                                           Main processing methods                                          #
+    ##############################################################################################################
+
+    def main(self):
+        """
+        Main entry point of the script.
+
+        This method iterates through the bed categories and their corresponding bases, processing each category using
+        the `process_category` method.
+
+        Returns:
+            None: The script performs the desired processing and saves the output files.
+        """
+        for category, corr_base in zip(self.bed_categories, self.bed_categories_canoncial_bases):
+            self.process_category(category, corr_base)
+
+    def process_category(self, category: str, corresponding_base: str|None) -> None:
+        """
+        Process and analyze the data for a specific category and corresponding base.
+
+        This method generates multiple plots and saves them along with a summary HTML template. Optionally, it also
+        writes the processed data to a TSV file.
+
+        Parameters:
+            category (str): The category of interest.
+            corresponding_base (str): The corresponding base for the category.
+
+        Returns:
+            None: The plots and summary are saved to files, and optionally, the data is saved in TSV format.
+        """
+        hs.print_update(f"Processing {category} sites.")
+
+        hs.print_update("   - subsetting data... ", line_break=False)
+        self.subset_category_data(category, corresponding_base)
+        if corresponding_base:
+            hs.print_update(f"Done. Found {len(self.category_data['chr'])} {category} and {len(self.counterpart_data['chr'])} {corresponding_base} sites.", with_time=False)
+        else:
+            hs.print_update(f"Done. Found {len(self.category_data['chr'])} {category} sites.", with_time=False)
+
+        hs.print_update("   - creating position overview... ", line_break=False)
+        plot_mod_map = self.create_map_plot()
+        hs.print_update("Done", with_time=False)
+
+        hs.print_update(f"   - creating overview of mismatch types at {category} sites... ", line_break=False)
+        plot_mism_types = self.create_mism_types_plot()
+        hs.print_update("Done", with_time=False)
+
+        hs.print_update(f"   - creating base composition plots at {category} and {corresponding_base} sites... ", line_break=False)
+        plot_comp = self.create_composition_plot()
+        hs.print_update("Done", with_time=False)
+
+        hs.print_update(f"   - creating overview of error rates at {category} and {corresponding_base} sites... ", line_break=False)
+        plot_err_rate, p_val_table = self.create_error_rate_plot()
+        hs.print_update("Done", with_time=False)
+        
+        hs.print_update(f"   - creating overview of neighbouring mismatches around {category} sites... ", line_break=False)
+        plot_nb = self.create_nb_plot()
+        hs.print_update("Done", with_time=False)
+
+        plots = [plot_mod_map, plot_mism_types, plot_comp, plot_err_rate, plot_nb]
+        tables = [p_val_table]
+
+        hs.print_update(f"  - creating HTML summary file at {self.output_path}... ", line_break=False)
+        self.write_template(plots, tables)
+        hs.print_update("Done", with_time=False)
+
+        if self.output_tsv:
+            hs.print_update(f"  - creating updated feature table at {self.in_path}... ", line_break=False)
+            self.write_tsv()
+            hs.print_update("Done", with_time=False)
+        hs.print_update("Finished.")
 
     ##############################################################################################################
     #                                          Data preparation methods                                          #
     ##############################################################################################################
-
-    def prepare_data_mism_types(self, data: pd.DataFrame):
-        """
-        Prepare data for mismatch types analysis.
-
-        Args:
-            data (pd.DataFrame): The DataFrame containing genomic data.
-
-        Returns:
-            Tuple[pd.DataFrame, pd.DataFrame, float]: A tuple containing:
-                - matrix_data (pd.DataFrame): A matrix representing mismatch types.
-                - matrix_labels (pd.DataFrame): Labels for the mismatch types matrix.
-                - matrix_max_mism (float): The maximum value in the mismatch types matrix.
-
-        Note:
-            This method prepares data for mismatch types analysis. It filters data to include only rows where
-            both 'ref_base' and 'majority_base' are not 'N'. It then computes a cross-tabulation matrix ('matrix_data')
-            of 'ref_base' and 'majority_base' columns. Labels for the matrix are stored in 'matrix_labels', with
-            diagonal elements set to None. The 'matrix_max_mism' value is the maximum value in the matrix.
-            The matrix values are also transformed into percentages.
-
-        """
-        matrix_data = data.loc[(data["ref_base"] != "N") & (data["majority_base"] != "N"),["ref_base", "majority_base"]]
-        matrix_data = pd.crosstab(matrix_data['ref_base'], matrix_data['majority_base'])
-        matrix_labels = matrix_data.copy()
-        for i in range(matrix_data.shape[0]):
-            matrix_labels.iloc[i,i] = None
-        matrix_max_mism = matrix_labels.max().max()
-        matrix_labels = np.round(matrix_labels / matrix_labels.sum().sum() * 100, 2).astype(str)
-        matrix_labels = (matrix_labels + "%").replace("nan%", "")
-
-        return matrix_data, matrix_labels, matrix_max_mism
-
-    def prepare_data_composition(self, data: pd.DataFrame, mod: str, canonical: str) -> Tuple[Dict[str, List[float]], Dict[str, int]]:
-        """
-        Prepare data for composition analysis based on modification and canonical sequences.
-
-        Args:
-            data (pd.DataFrame): The DataFrame containing genomic data.
-            mod (str): The name of the modified sequence category.
-            canonical (str): The canonical sequence category.
-
-        Returns:
-            Tuple[Dict[str, List[float]], Dict[str, int]]: A tuple containing:
-                - composition_data (Dict[str, List[float]]): A dictionary containing composition values for A, C, G, and U.
-                - composition_counts (Dict[str, int]): A dictionary containing counts of modification and canonical sequences for A, C, G, and U.
-
-        Note:
-            This method prepares data for composition analysis based on modification and canonical sequences.
-            It filters data to extract relevant sequences for 'mod' and 'canonical' categories, both matching
-            and mismatching. Median values are computed for each category, and the relative composition of A, C, G, and U
-            is calculated. The resulting data is returned in dictionaries for composition values and sequence counts.
-
-        """
-        mod_match = data.loc[(data.bed_name==mod) & (data.ref_base==data.majority_base), ["n_a_rel", "n_c_rel", "n_g_rel", "n_u_rel"]]
-        mod_mismatch = data.loc[(data.bed_name==mod) & (data.ref_base!=data.majority_base), ["n_a_rel", "n_c_rel", "n_g_rel", "n_u_rel"]]
-        unm_match = data.loc[(data.ref_base == canonical) & (data.bed_name.isna()) & (data.ref_base==data.majority_base), ["n_a_rel", "n_c_rel", "n_g_rel", "n_u_rel"]]
-        unm_mismatch = data.loc[(data.ref_base == canonical) & (data.bed_name.isna()) & (data.ref_base!=data.majority_base), ["n_a_rel", "n_c_rel", "n_g_rel", "n_u_rel"]]
-
-        n_mod_match = mod_match.shape[0]
-        n_mod_mismatch = mod_mismatch.shape[0]
-        n_unm_match = unm_match.shape[0]
-        n_unm_mismatch = unm_mismatch.shape[0]
-
-        mod_match = mod_match.median() 
-        mod_mismatch = mod_mismatch.median()
-        unm_match = unm_match.median()
-        unm_mismatch = unm_mismatch.median()
-
-        mod_match = mod_match / sum(mod_match)
-        mod_mismatch = mod_mismatch / sum(mod_mismatch)
-        unm_match = unm_match / sum(unm_match)
-        unm_mismatch = unm_mismatch / sum(unm_mismatch)
-
-        a_vals = [mod_match["n_a_rel"], unm_match["n_a_rel"], mod_mismatch["n_a_rel"], unm_mismatch["n_a_rel"]]
-        c_vals = [mod_match["n_c_rel"], unm_match["n_c_rel"], mod_mismatch["n_c_rel"], unm_mismatch["n_c_rel"]]
-        g_vals = [mod_match["n_g_rel"], unm_match["n_g_rel"], mod_mismatch["n_g_rel"], unm_mismatch["n_g_rel"]]
-        t_vals = [mod_match["n_t_rel"], unm_match["n_t_rel"], mod_mismatch["n_t_rel"], unm_mismatch["n_t_rel"]]
-
-        return {"A": a_vals, "C": c_vals, "G": g_vals, "U": t_vals}, {"A": n_mod_match, "C": n_mod_mismatch, "G": n_unm_match, "U": n_unm_mismatch}
-    
-    def prepare_data_errorrates(self, data: pd.DataFrame, mod: str, canonical: str) -> Tuple[Tuple[List[float], List[float]], 
-                                                                                    Tuple[List[float], List[float]], 
-                                                                                    Tuple[List[float], List[float]], 
-                                                                                    Tuple[List[float], List[float]], 
-                                                                                    Tuple[List[float], List[float]]]:
-        """
-        Prepare data for error rates analysis based on modification and canonical sequences.
-
-        Args:
-            data (pd.DataFrame): The DataFrame containing genomic data.
-            mod (str): The name of the modified sequence category.
-            canonical (str): The canonical sequence category.
-
-        Returns:
-            Tuple[Tuple[List[float], List[float]],
-                Tuple[List[float], List[float]],
-                Tuple[List[float], List[float]],
-                Tuple[List[float], List[float]],
-                Tuple[List[float], List[float]]]:
-            A tuple containing five sub-tuples, each with two lists:
-            - data_mismatch (Tuple[List[float], List[float]]): Mismatch percentage data for different categories.
-            - data_deletion (Tuple[List[float], List[float]]): Deletion percentage data for different categories.
-            - data_insertion (Tuple[List[float], List[float]]): Insertion percentage data for different categories.
-            - data_ref_skip (Tuple[List[float], List[float]]): Reference skip percentage data for different categories.
-            - data_quality (Tuple[List[float], List[float]]): Quality mean data for different categories.
-
-        Note:
-            This method prepares data for error rates analysis based on modification and canonical sequences.
-            It filters data to extract relevant sequences for 'mod' and 'canonical' categories, both matching
-            and mismatching. Various error rate-related columns are selected for analysis, and data is organized
-            into sub-tuples containing lists for each category. The resulting data is returned in the specified
-            tuple format for plotting.
-
-        """
-        cols = [self.perc_mismatch_col, "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "q_mean"]
-        mod_match = data.loc[(data.bed_name==mod) & (data.ref_base==data.majority_base), cols]
-        unm_match = data.loc[(data.ref_base == canonical) & (data.bed_name.isna()) & (data.ref_base==data.majority_base), cols]
-        mod_mismatch = data.loc[(data.bed_name==mod) & (data.ref_base!=data.majority_base), cols]
-        unm_mismatch = data.loc[(data.ref_base == canonical) & (data.bed_name.isna()) & (data.ref_base!=data.majority_base), cols]
         
-        datasets = [mod_match, unm_match, mod_mismatch, unm_mismatch]
-        x_values = [f"<i>{mod}</i> match", f"{canonical} match", f"<i>{mod}</i> mismatch", f"{canonical} mismatch"]
+    def subset_category_data(self, category: str, counterpart: str|None) -> None:
+        bed_name_idx = list(self.data.keys()).index("bed_name")
+        ref_base_idx = list(self.data.keys()).index("ref_base")
+        data_keys = self.data.keys()
+        key_idx = dict(zip([i for i in range(len(data_keys))], data_keys))
 
-        def get_x_y_vals(col: str) -> Tuple[List[float], List[float]]: 
-            y_vals = []
-            x_vals = []
-            for dataset, x_val in zip(datasets, x_values):
-                y = list(dataset[col])
-                x = [x_val] * len(y)
-                y_vals += y
-                x_vals += x
-            return x_vals, y_vals
+        subset_category = dict(zip(data_keys, [[] for _ in range(len(data_keys))]))
+        subset_counterpart = dict(zip(data_keys, [[] for _ in range(len(data_keys))]))
+        
+        for elements in zip(*(self.data[key] for key in data_keys)):
+            if elements[bed_name_idx] == category:
+                for i, element in enumerate(elements):
+                    subset_category[key_idx[i]].append(element)
+            if counterpart:
+                if elements[ref_base_idx] == counterpart:
+                    for i, element in enumerate(elements):
+                        subset_counterpart[key_idx[i]].append(element)
+        
+        self.category_data = subset_category
+        self.counterpart_data = subset_counterpart
 
-        data_mismatch = get_x_y_vals(self.perc_mismatch_col)
-        data_deletion = get_x_y_vals("n_del_rel")
-        data_insertion = get_x_y_vals("n_ins_rel")
-        data_ref_skip = get_x_y_vals("n_ref_skip_rel")
-        data_quality = get_x_y_vals("q_mean")
-        return (data_mismatch, data_deletion, data_insertion, data_ref_skip, data_quality)
+        self.current_category = category
+        self.current_counterpart = counterpart
 
-    def prepare_nb_counts(self, data: pd.DataFrame, bed_category: str) -> Tuple[List[int], List[int], List[int], List[int], List[str], List[int]]:
+    def prepate_data_map(self) -> Tuple[List[str], List[int]]:
+        def get_references(path: str) -> Dict[str, str]:
+            """
+            Reads a fasta file and stores the sequences in a dictionary (values) with the 
+            corresponding chromosome names (keys).
+
+            Parameters
+            ----------
+            path : str
+                filepath to a fasta file
+
+            Returns
+            -------
+            dict[str]
+                Dictionary where the key is the chromosome name and the value is the sequence
+            """
+            with open(path, "r") as ref:
+                refs = {}
+                line = next(ref)
+                if not line.startswith(">"):
+                    raise Exception(f"Fasta format error. The first line of fasta file '{path}' does not contain a header (starting with '>').")
+                
+                chr_name = line[1:].strip().split(" ")[0]
+                seq = ""
+                for line in ref:
+                    if line.startswith(">"):
+                        refs[chr_name] = seq
+                        chr_name = line[1:].strip().split(" ")[0]
+                        seq = ""
+                    else:
+                        seq += line.strip()
+                        
+                refs[chr_name] = seq # add the last dict entry
+                sys.stdout.write("\n")
+            return refs
+
+        def custom_sort_key(item):
+            if item.isdigit():  # Check if the item is a digit
+                return (int(item),)  # Convert to integer and sort numerically
+            else:
+                return (float('inf'), item)  # Place non-digits at the end
+
+        ref_dict = get_references(self.ref_path)
+
+        all_keys = ref_dict.keys()
+        present_chr = list(sorted(set(self.category_data["chr"]).intersection(all_keys), key=custom_sort_key))
+        chr_lens = [len(ref_dict[x]) for x in present_chr]
+
+        return present_chr, chr_lens
+
+    def prepare_data_mism_types(self) -> Tuple[List[List[int]], List[List[str]], int]:
+        """
+        Prepare data for a confusion matrix based on mismatch counts.
+
+        Parameters:
+        - mis_count (Dict[str, int]): Dictionary containing mismatch counts for each base pair combination.
+
+        Returns:
+        - Tuple[List[List[int]], List[List[str]], int]: Tuple containing matrix data, matrix labels, and the maximum value in the matrix.
+        """
+
+        mis_types = [f"{f} - {t}" for f in ["A", "C", "G", "U"] for t in ["A", "C", "G", "U"]]
+        mis_count = dict(zip(mis_types, [0]*len(mis_types)))
+
+        for ref, maj in zip(self.category_data["ref_base"], self.category_data["majority_base"]):
+            if (ref != "N") & (maj != "N"):
+                mis_count[f"{ref} - {maj}"] += 1
+
+        # prepare data for the confusion matrix
+        matrix_data = [[None]*4 for _ in range(4)]
+        matrix_labels = [[None]*4 for _ in range(4)]
+        bases = ["A", "C", "G", "U"]
+        # fill count matrix
+        for i in range(4): 
+            for j in range(4):
+                count = mis_count[f"{bases[i]} - {bases[j]}"]
+                matrix_data[i][j] = count
+                if i != j:
+                    matrix_labels[i][j] = count
+        # fill the matrix containing corresponding labels
+        vals_flat = [element for sublist in matrix_labels for element in sublist if (element is not None)]
+        vals_sum = sum(vals_flat)
+        for i in range(4): 
+            for j in range(4):
+                if matrix_labels[i][j]:
+                    matrix_labels[i][j] = f"{round(matrix_labels[i][j] / vals_sum * 100, 2)}%"
+                else: 
+                    matrix_labels[i][j] = ""
+        # get the max value
+        val_max = max(vals_flat)
+
+        return matrix_data, matrix_labels, val_max
+
+    def prepare_data_composition(self) -> Tuple[Dict[str, Tuple[float,float]|Tuple[float,float,float,float]], Dict[str, Tuple[float,float]|Tuple[float,float,float,float]], Tuple[int,int]|Tuple[int,int,int,int]]:
+        cols = ["ref_base", "majority_base", "n_a_rel", "n_c_rel", "n_g_rel", "n_u_rel"]
+
+        def get_rates(data: Dict[str, List[str|int|float]]) -> Tuple[Dict[str, Tuple[List[float], List[float]]], Tuple[int]]:
+            rate_dict = defaultdict(lambda: ([], [])) # first sublist -> match; second sublist -> mismatch
+            counts = [0, 0]
+            for ref, maj, *base_rates in zip(*(data[col] for col in cols)):
+                i = 0 if ref == maj else 1
+                counts[i] += 1
+                for j, base in enumerate(["A", "C", "G", "U"]):
+                    rate_dict[base][i].append(base_rates[j])
+
+            return dict(rate_dict), tuple(counts)
+
+        def get_median_rates(rate_dict: Dict[str, Tuple[List[float], List[float]]]) -> Dict[str, Tuple[float, float]|Tuple[float,float,float,float]]:
+            median_rate_dict = {}
+            for key in rate_dict.keys():
+                median_rate_dict[key] = (median(rate_dict[key][0]), median(rate_dict[key][1]))
+            return median_rate_dict
+
+        def get_scaled_median_rates(median_rate_dict: Dict[str, Tuple[float, float]|Tuple[float,float,float,float]]) -> Dict[str, Tuple[float, float]|Tuple[float,float,float,float]]:
+            scaled_rate_dict = {}
+            # calculate the sum of the A-, C-, G- and U-rates for each x-value
+            totals = [sum(median_rates) for median_rates in zip(*(median_rate_dict[key] for key in median_rate_dict.keys()))]
+            for key, medians in median_rate_dict.items():
+                # scale each value by the corresponding x-value (rates should add up to 1)
+                scaled_rate_dict[key] = tuple(med/total for med, total in zip(medians, totals))
+            return scaled_rate_dict
+
+        rates, counts = get_rates(self.category_data)
+        median_rates = get_median_rates(rates)
+
+        if self.current_counterpart:
+            rates_cou, counts_cou = get_rates(self.counterpart_data)
+            median_rates_cou = get_median_rates(rates_cou)
+            # combine count_dict and count_dict_counterpart to have the x-axis order:
+            # category-match, counterpart-match, category-mismatch, counterpart-mismatch 
+            rate_tmp = {}
+            for (base, rate), (_, rate_cou) in zip(median_rates.items(), median_rates_cou.items()):
+                rate_tmp[base] = (rate[0], rate_cou[0], rate[1], rate_cou[1])
+            median_rates = rate_tmp
+
+            counts = (counts[0], counts_cou[0], counts[1], counts_cou[1])
+
+            x_vals = [f"<i>{self.current_category}</i> match<br>(n = {counts[0]})", 
+                    f"{self.current_counterpart} match<br>(n = {counts[1]})", 
+                    f"<i>{self.current_category}</i> mismatch<br>(n = {counts[2]})", 
+                    f"{self.current_counterpart} mismatch<br>(n = {counts[3]})"]
+        else:
+            x_vals = [f"<i>{self.current_category}</i> match<br>(n = {counts[0]})", 
+                    f"<i>{self.current_category}</i> mismatch<br>(n = {counts[1]})"]
+
+        return get_scaled_median_rates(median_rates), median_rates, x_vals
+    
+    def prepare_data_errorrates(self) -> Tuple[Dict[str, List[float]], 
+                                        Dict[str, List[float]], 
+                                        Dict[str, List[float]], 
+                                        Dict[str, List[float]], 
+                                        Dict[str, List[float]],
+                                        List[str]]:
+        def get_rates(data: Dict[str, List[str|int|float]], x_mat: int, x_mis: int) -> Dict[str, Dict[str, List[float]]]:
+            rate_dict = defaultdict(lambda: {"x": [], "y": []})
+            cols = ["ref_base", "majority_base", "perc_mismatch", "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "q_mean"]
+            cols_idxs = dict(zip(cols[2:], range(len(cols))))
+            for ref, maj, *rates in zip(*(data[col] for col in cols)):
+                x = x_mat if ref == maj else x_mis
+                for rate in ["perc_mismatch", "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "q_mean"]:
+                    rate_dict[rate]["x"].append(x)
+                    rate_dict[rate]["y"].append(rates[cols_idxs[rate]])
+            return dict(rate_dict)
+
+        x_mis = 2 if self.current_counterpart else 1
+        rates = get_rates(self.category_data, x_mat=0, x_mis=x_mis)
+
+        if self.current_counterpart:
+            rates_cou = get_rates(self.counterpart_data, x_mat=1, x_mis=3)
+            for key in rates.keys():
+                rates[key]["x"] += rates_cou[key]["x"]
+                rates[key]["y"] += rates_cou[key]["y"]
+            x_vals = [f"<i>{self.current_category}</i>", 
+                    f"{self.current_counterpart} match", 
+                    f"<i>{self.current_category}</i> mismatch", 
+                    f"{self.current_counterpart} mismatch"]
+        else:
+            x_vals = [f"<i>{self.current_category}</i> match", 
+                    f"<i>{self.current_category}</i> mismatch"]
+
+        return *rates.values(), x_vals
+
+    def prepare_nb_counts(self) -> Tuple[List[int], List[int], List[int], List[int], List[str], List[int]]:
         """
         Prepare data for analyzing neighboring error positions in a specified bed category.
-
-        Args:
-            data (pd.DataFrame): The DataFrame containing genomic data.
-            bed_category (str): The bed category for which neighboring error positions should be analyzed.
 
         Returns:
             Tuple[List[int], List[int], List[int], List[int], List[str], List[int]]:
@@ -484,96 +635,78 @@ class POIAnalyzer():
 
         """
         def to_numeric(pos_str: str) -> List[int]:
-            if type(pos_str) == float: # in case the value is nan
-                return []
-            else:
+            if len(pos_str) > 0:
                 if pos_str.endswith(","): 
                     pos_str = pos_str[:-1] 
                 return list(map(int, pos_str.split(",")))
+            return []
 
-        def extract_neighbour_mod(df: pd.DataFrame) -> Tuple[List[int], List[int]]:
-            """
-            Receives a pd.DataFrame containing columns chr, site and neighbour_error_pos (with neighbour errors in List[int] format)
-            For each row, check each in the neighbour_error_pos list if the corresponding coordinate is also in a modified one. 
-            E.g.: At chr1:215 [-1,2] --> check if chr1:214 and chr1:217 is also a modified position (just checking the same mod. type)
-            """
-            positions = []
-            positions_mod = []
-            for _, row in df.iterrows():
-                chrom = row[0]
-                site = row[1]
-                distances = row[2]
-                for distance in distances:
-                    if ((df.chr==chrom) & (df.site == site+distance)).any():
-                        positions.append(distance)
+        sites = [(c, s) for c, s in zip(self.category_data["chr"], self.category_data["site"])]
+
+        n_no_nb = 0
+        n_has_nb = 0
+        n_has_nb_mod = 0
+
+        counts = defaultdict(lambda: 0)
+        counts_mod = defaultdict(lambda: 0)
+
+        for site, nb_info in zip(sites, self.category_data["neighbour_error_pos"]):
+            if nb_info:
+                nb_info = to_numeric(nb_info)
+                for distance in nb_info:
+                    # check if pos + distance corresponds to another mod site
+                    if (site[0], site[1]+distance) in sites:
+                        n_has_nb_mod += 1
+                        counts_mod[distance] += 1
                     else:
-                        positions_mod.append(distance)
-            return positions, positions_mod
+                        n_has_nb += 1
+                        counts[distance] += 1
+            else:
+                n_no_nb += 1
 
-        
-        subset = data.loc[data["bed_name"]==bed_category, ["chr", "site", "neighbour_error_pos"]]
-        n_no_nb = subset["neighbour_error_pos"].isna().sum()
-
-        subset["neighbour_error_pos"] = subset["neighbour_error_pos"].apply(to_numeric)
-        dist_vals, dist_vals_mod = extract_neighbour_mod(subset)
-        
-        value_counts = dict(collections.Counter(dist_vals))
-        value_counts_mod = dict(collections.Counter(dist_vals_mod))
-
-        x_vals = list(value_counts.keys())
-        y_vals = list(value_counts.values())
-        n_has_nb = sum(y_vals)
-
-        x_vals_mod = list(value_counts_mod.keys())
-        y_vals_mod = list(value_counts_mod.values())
-        n_has_nb_mod = sum(y_vals_mod)
-
-        
         pie_labs = ["No surrounding errors", "Has surrounding errors", "Has surrounding error due to mod."]
         pie_vals = [n_no_nb, n_has_nb, n_has_nb_mod]
-        
-        return x_vals, y_vals, x_vals_mod, y_vals_mod, pie_labs, pie_vals
 
+        return list(counts.keys()), list(counts.values()), list(counts_mod.keys()), list(counts_mod.values()), pie_labs, pie_vals
+
+    ##############################################################################################################
+    #                                            p-val table methods                                             #
+    ##############################################################################################################
     def perform_test(self, set1: List[float], set2: List[float], alpha: float = 0.05) -> str:
         try:
             if (normaltest(set1)[1] >= alpha) & (normaltest(set2)[1] >= alpha) & (bartlett(set1, set2)[1] >= alpha): # normal distributions in both samples + equal variances
-                return f"{ttest_ind(a=set1, b=set2)[1]} (TT)"
+                return f"{ttest_ind(a=set1, b=set2)[1]:.5e} (TT)"
             else: # normal distribution in both samples and equal variances
-                return f"{mannwhitneyu(x=set1, y=set2)[1]} (MWU)"
+                return f"{mannwhitneyu(x=set1, y=set2)[1]:.5e} (MWU)"
         except:
             return "ERROR"
 
-    def test_type(self, data: Tuple[List[float], List[float]],
-                  category: str, 
-                  corresponding_base: str) -> Dict[str, str]:
-        d = pd.DataFrame(data).T
-        mod_mat = list(d.loc[d[0]==f"<i>{category}</i> match",1])
-        unm_mat = list(d.loc[d[0]==f"{corresponding_base} match",1])
-        mod_mis = list(d.loc[d[0]==f"<i>{category}</i> mismatch",1])
-        unm_mis = list(d.loc[d[0]==f"{corresponding_base} mismatch",1])
-        res = {}
-        
-        res["mod_mat_unm_mat"] = self.perform_test(mod_mat, unm_mat)
-        res["mod_mis_unm_mis"] = self.perform_test(mod_mis, unm_mis)
-        res["mod_mat_mod_mis"] = self.perform_test(mod_mat, mod_mis)
-        res["unm_mat_unm_mis"] = self.perform_test(unm_mat, unm_mis)
-        
-        return res
+    def get_table_header(self) -> str:
+        if self.current_counterpart:
+            header = f"<th></th><th>{self.current_category} match vs. {self.current_counterpart} match</th><th>{self.current_category} mismatch vs. {self.current_counterpart} mismatch</th><th>{self.current_category} match vs. {self.current_category} mismatch</th><th>{self.current_counterpart} match vs. {self.current_counterpart} mismatch</th>"
+        else: 
+            header = f"<th></th><th>{self.current_category} match vs. {self.current_category} mismatch</th>"
+        return "<tr>" + header + "</tr>"
 
-    def create_test_overview(self, datasets: List[Tuple[List[float], List[float]]], 
-                             category: str, 
-                             corresponding_base: str) -> str:
-        results = []
-        for data in datasets:
-            results.append(self.test_type(data, category, corresponding_base))
+    def create_test_overview(self, datasets: List[Dict[str, List[float]]]) -> str:
 
-        r = pd.DataFrame(results)
-        r.columns = [f"{category} match vs. {corresponding_base} match", 
-                    f"{category} mismatch vs. {corresponding_base} mismatch", 
-                    f"{category} match vs. {category} mismatch", 
-                    f"{corresponding_base} match vs. {corresponding_base} mismatch"]
-        r.index = pd.Index(["Mismatch rate", "Deletion rate", "Insertion rate","Ref. skip rate", "Mean quality scores"])
-        return r.to_html()
+        table = f"<table>" + self.get_table_header()
+
+        for data_type, data in zip(["Mismatch rate", "Deletion rate", "Insertion rate", "Reference skip rate", "Mean quality"], datasets):
+        # split data by groups ("x" entry in data dict)
+            row_data = defaultdict(lambda: [])
+            for x, y in zip(data["x"], data["y"]):
+                row_data[x].append(y)
+            row_data = dict(row_data)
+
+            if self.current_counterpart:
+                row = f"<tr><td>{data_type}</td><td>{self.perform_test(row_data[0], row_data[1])}</td><td>{self.perform_test(row_data[2], row_data[3])}</td><td>{self.perform_test(row_data[0], row_data[2])}</td><td>{self.perform_test(row_data[1], row_data[3])}</td></tr>"
+            else:
+                row = f"<tr><td>{data_type}</td><td>{self.perform_test(row_data[0], row_data[1])}</td></tr>"
+
+            table += row
+
+        return table + "</table>"
 
     ##############################################################################################################
     #                                              Plotting methods                                              #
@@ -608,7 +741,7 @@ class POIAnalyzer():
 
         return fig
 
-    def create_map_plot(self, mod_type: str) -> go.Figure: 
+    def create_map_plot(self,) -> go.Figure: 
         """
         Create a map plot for a specified modification type.
 
@@ -624,67 +757,7 @@ class POIAnalyzer():
             The resulting map plot is converted to HTML code.
 
         """
-        def get_references(path: str) -> Dict[str, str]:
-            """
-            Reads a fasta file and stores the sequences in a dictionary (values) with the 
-            corresponding chromosome names (keys).
-
-            Parameters
-            ----------
-            path : str
-                filepath to a fasta file
-
-            Returns
-            -------
-            dict[str]
-                Dictionary where the key is the chromosome name and the value is the sequence
-            """
-
-            def stdout_progress(n: int):
-                sys.stdout.write(f"\rSequences found: {n}")
-                sys.stdout.flush()
-
-            with open(path, "r") as ref:
-                refs = {}
-                line = next(ref)
-                if not line.startswith(">"):
-                    raise Exception(f"Fasta format error. The first line of fasta file '{path}' does not contain a header (starting with '>').")
-                
-                chr_name = line[1:].strip().split(" ")[0]
-                seq = ""
-
-                chr_found = 1
-                stdout_progress(chr_found)
-
-                for line in ref:
-                    if line.startswith(">"):
-                        refs[chr_name] = seq
-                        chr_name = line[1:].strip().split(" ")[0]
-                        seq = ""
-
-                        chr_found += 1
-                        stdout_progress(chr_found)
-
-                    else:
-                        seq += line.strip()
-                        
-                refs[chr_name] = seq # add the last dict entry
-                sys.stdout.write("\n")
-            return refs
-
-        def custom_sort_key(item):
-            if item.isdigit():  # Check if the item is a digit
-                return (int(item),)  # Convert to integer and sort numerically
-            else:
-                return (float('inf'), item)  # Place non-digits at the end
-
-        data = self.data.loc[self.data.bed_name==mod_type] 
-        ref_dict = get_references(self.ref_path)
-
-        all_keys = ref_dict.keys()
-        present_chr = set(all_keys & data["chr"].unique())
-        present_chr = np.array(sorted(present_chr, key=custom_sort_key))
-        chr_lens = np.array([len(ref_dict[x]) for x in present_chr])
+        present_chr, chr_lens = self.prepate_data_map()
 
         width = 1200
         bargap = 0.9
@@ -695,45 +768,36 @@ class POIAnalyzer():
         fig = self.update_plot(go.Figure(), height = 1000, width = width, ylab="Coordinate")
         fig.add_trace(go.Bar(x=list(present_chr), y=list(chr_lens), marker=dict(color="lightgrey", line=dict(color="black", width=2)), name="Chromosomes", showlegend=False))
         fig.update_layout(bargap=0.5, yaxis=dict(range=[0,max(chr_lens)+0.1*max(chr_lens)]))
-
-        fig.add_trace(go.Scatter(x=list(data["chr"]), y=list(data["site"]), mode='markers', marker=dict(symbol='line-ew', color="#1f77b4", size=scatter_size, line=dict(width=1.1, color="#1f77b4")), name=f"{mod_type} sites", hovertemplate="Chr%{x}:%{y}"))
+        fig.add_trace(go.Scatter(x=self.category_data["chr"], y=self.category_data["site"], mode='markers', marker=dict(symbol='line-ew', color="#1f77b4", size=scatter_size, line=dict(width=1.1, color="#1f77b4")), name=f"{self.current_category} sites", hovertemplate="Chr%{x}:%{y}"))
         fig.update_xaxes(fixedrange=True)
 
         return fig
 
-    def create_mism_types_plot(self, mod: str) -> go.Figure:
+    def create_mism_types_plot(self) -> go.Figure:
         """
         Create a mismatch types plot for a specified modification type.
 
-        Args:
-            mod (str): The modification type for which the mismatch types plot should be created.
-
         Returns:
-            str: HTML code representing the mismatch types plot.
+            str: Plotly imshow plot.
 
         Note:
             This method creates a mismatch types plot for a specified modification type. It prepares data
             for the plot, generates a heatmap using Plotly Express, and returns the resulting plot as HTML code.
 
         """
-        data = self.data.loc[self.data.bed_name == mod]
-        matrix_data, matrix_labels, matrix_max_mism = self.prepare_data_mism_types(data)
+        matrix_data, matrix_labels, matrix_max_mism = self.prepare_data_mism_types()
 
         fig = px.imshow(matrix_data, labels=dict(x="Called base", y="Reference base", color="Count"), zmin=0, zmax=1.2*matrix_max_mism, color_continuous_scale="portland")
         fig = self.update_plot(fig, None, "Called base", "Reference base", width=800)
         fig.update_traces(text=matrix_labels, texttemplate="%{text}")
-        fig.update_xaxes(fixedrange=True)
-        fig.update_yaxes(fixedrange=True)
+        fig.update_xaxes(fixedrange=True, tickvals=[0,1,2,3],ticktext=["A", "C", "G", "U"])
+        fig.update_yaxes(fixedrange=True, tickvals=[0,1,2,3],ticktext=["A", "C", "G", "U"])
         
         return fig
 
-    def create_composition_plot(self, mod: str, canonical: str) -> go.Figure:
+    def create_composition_plot(self) -> go.Figure:
         """
-        Create a composition plot for a specified modification type and canonical sequence.
-
-        Args:
-            mod (str): The modification type for which the composition plot should be created.
-            canonical (str): The canonical sequence for comparison.
+        Create a composition plot for a specified category type and if provided canonical counterpart.
 
         Returns:
             str: HTML code representing the composition plot.
@@ -744,25 +808,21 @@ class POIAnalyzer():
             plot as HTML code.
 
         """
-        y_data, category_count = self.prepare_data_composition(self.data, mod, canonical)
-        x_vals = [f"<i>{mod}</i> match<br>(n = {category_count['A']})", 
-                f"{canonical} match<br>(n = {category_count['G']})", 
-                f"<i>{mod}</i> mismatch<br>(n = {category_count['C']})", 
-                f"{canonical} mismatch<br>(n = {category_count['U']})"]
+        median_base_rates_scaled, median_base_rates, x_vals = self.prepare_data_composition()
 
-        bar_a = go.Bar(x=x_vals, y=y_data["A"], name="A", marker=dict(color="#2ca02c"), hovertemplate="%{y}")
-        bar_c = go.Bar(x=x_vals, y=y_data["C"], name="C", marker=dict(color="#1f77b4"), hovertemplate="%{y}")
-        bar_g = go.Bar(x=x_vals, y=y_data["G"], name="G", marker=dict(color="#ff7f0e"), hovertemplate="%{y}")
-        bar_t = go.Bar(x=x_vals, y=y_data["U"], name="U", marker=dict(color="#d62728"), hovertemplate="%{y}")
+        bar_a = go.Bar(x=x_vals, y=median_base_rates_scaled["A"], name="A", marker=dict(color="#2ca02c"), customdata=median_base_rates["A"], hovertemplate="Scaled median rate: %{y}<br>Unscaled median rate: %{customdata}")
+        bar_c = go.Bar(x=x_vals, y=median_base_rates_scaled["C"], name="C", marker=dict(color="#1f77b4"), customdata=median_base_rates["C"], hovertemplate="Scaled median rate: %{y}<br>Unscaled median rate: %{customdata}")
+        bar_g = go.Bar(x=x_vals, y=median_base_rates_scaled["G"], name="G", marker=dict(color="#ff7f0e"), customdata=median_base_rates["G"], hovertemplate="Scaled median rate: %{y}<br>Unscaled median rate: %{customdata}")
+        bar_u = go.Bar(x=x_vals, y=median_base_rates_scaled["U"], name="U", marker=dict(color="#d62728"), customdata=median_base_rates["U"], hovertemplate="Scaled median rate: %{y}<br>Unscaled median rate: %{customdata}")
         
         fig = self.update_plot(go.Figure(), ylab="Relative abundance", height=600, width=1000)
-        fig.add_traces([bar_a, bar_c, bar_g, bar_t])
+        fig.add_traces([bar_a, bar_c, bar_g, bar_u])
         fig.update_layout(barmode="stack")
         fig.update_traces(marker=dict(line=dict(color="black", width=1.5)))
 
         return fig
-
-    def create_error_rate_plot(self, mod: str, canonical: str) -> Tuple[go.Figure, str]:
+    
+    def create_error_rate_plot(self) -> Tuple[go.Figure, str]:
         """
         Create an error rate plot for a specified modification type and canonical sequence.
 
@@ -779,16 +839,16 @@ class POIAnalyzer():
             reference skip rate, and mean quality score using Plotly, and returns the resulting plot as HTML code.
 
         """
-        data_mismatch, data_deletion, data_insertion, data_ref_skip, data_quality = self.prepare_data_errorrates(self.data, mod, canonical)
+        data_mismatch, data_deletion, data_insertion, data_ref_skip, data_quality, x_ticks = self.prepare_data_errorrates()
 
-        p_val_table = self.create_test_overview([data_mismatch, data_deletion, data_insertion, data_ref_skip, data_quality], mod, canonical)
+        p_val_table = self.create_test_overview([data_mismatch, data_deletion, data_insertion, data_ref_skip, data_quality])
 
-        box_mismatch = go.Box(x=data_mismatch[0], y=data_mismatch[1], name="Mismatch rate", offsetgroup=0, line=dict(color="black"), marker=dict(outliercolor="black", size=2), fillcolor="#8c564b")
-        box_deletion = go.Box(x=data_deletion[0], y=data_deletion[1], name="Deletion rate", offsetgroup=1, line=dict(color="black"), marker=dict(outliercolor="black", size=2), fillcolor="#e377c2")
-        box_insertion = go.Box(x=data_insertion[0], y=data_insertion[1], name="Insertion rate", offsetgroup=2, line=dict(color="black"), marker=dict(outliercolor="black", size=2), fillcolor="#7f7f7f")
-        box_ref_skip = go.Box(x=data_ref_skip[0], y=data_ref_skip[1], name="Reference skip", offsetgroup=3, line=dict(color="black"), marker=dict(outliercolor="black", size=2), fillcolor="#bcbd22")
+        box_mismatch = go.Box(x=data_mismatch["x"], y=data_mismatch["y"], name="Mismatch rate", offsetgroup=0, line=dict(color="black"), marker=dict(outliercolor="black", size=2), fillcolor="#8c564b")
+        box_deletion = go.Box(x=data_deletion["x"], y=data_deletion["y"], name="Deletion rate", offsetgroup=1, line=dict(color="black"), marker=dict(outliercolor="black", size=2), fillcolor="#e377c2")
+        box_insertion = go.Box(x=data_insertion["x"], y=data_insertion["y"], name="Insertion rate", offsetgroup=2, line=dict(color="black"), marker=dict(outliercolor="black", size=2), fillcolor="#7f7f7f")
+        box_ref_skip = go.Box(x=data_ref_skip["x"], y=data_ref_skip["y"], name="Reference skip", offsetgroup=3, line=dict(color="black"), marker=dict(outliercolor="black", size=2), fillcolor="#bcbd22")
         
-        box_quality = go.Box(x=data_quality[0], y=data_quality[1], name="Mean quality", offsetgroup=0, line=dict(color="black"), marker=dict(outliercolor="black", size=2), fillcolor="#17becf")
+        box_quality = go.Box(x=data_quality["x"], y=data_quality["y"], name="Mean quality", offsetgroup=0, line=dict(color="black"), marker=dict(outliercolor="black", size=2), fillcolor="#17becf")
 
         fig = self.update_plot(make_subplots(rows=1, cols=2, column_widths=[0.75, 0.25]), height=800, width=1200)
         fig.add_traces([box_mismatch, box_deletion, box_insertion, box_ref_skip], rows=[1,1,1,1], cols=[1,1,1,1])
@@ -796,15 +856,13 @@ class POIAnalyzer():
         fig.update_layout(boxmode="group")
         fig.update_yaxes(title_text="Error rate", row = 1, col = 1)
         fig.update_yaxes(title_text="Quality score", row = 1, col = 2)
+        fig.update_xaxes(tickvals=[0,1,2,3],ticktext=x_ticks)
 
         return fig, p_val_table
-
-    def create_nb_plot(self, mod: str) -> go.Figure:
+    
+    def create_nb_plot(self) -> go.Figure:
         """
         Create a neighbor position plot for a specified modification type.
-
-        Args:
-            mod (str): The modification type for which the neighbor position plot should be created.
 
         Returns:
             str: HTML code representing the neighbor position plot.
@@ -816,24 +874,23 @@ class POIAnalyzer():
             resulting plot as HTML code.
 
         """
-        x_vals, y_vals, x_vals_mod, y_vals_mod, pie_labs, pie_vals = self.prepare_nb_counts(self.data, mod)
+        x_vals, y_vals, x_vals_mod, y_vals_mod, pie_labs, pie_vals = self.prepare_nb_counts()
 
         fig = self.update_plot(make_subplots(rows=1, cols=2, column_widths=[0.75, 0.25], specs=[[{"type": "bar"}, {"type": "pie"}]]), width=1200)
 
-        fig.add_trace(go.Bar(x=x_vals_mod, y=y_vals_mod, marker=dict(color="#d62728", line=dict(color='#000000', width=1.5)), name="nb. mod error"), row=1, col=1)
-        fig.add_trace(go.Bar(x=x_vals, y=y_vals, marker=dict(color="#dd8452", line=dict(color='#000000', width=1.5)), name="nb. error"), row=1, col=1)
+        fig.add_trace(go.Bar(x=x_vals, y=y_vals, marker=dict(color="#d62728", line=dict(color='#000000', width=1.5)), name="nb. error"), row=1, col=1)
+        fig.add_trace(go.Bar(x=x_vals_mod, y=y_vals_mod, marker=dict(color="#dd8452", line=dict(color='#000000', width=1.5)), name="nb. mod error"), row=1, col=1)
         fig.update_layout(barmode="stack")
 
-        fig.update_xaxes(title = f"Relative position to {mod} positions", row=1, col=1)
+        fig.update_xaxes(title = f"Relative position to {self.current_category} positions", row=1, col=1)
         fig.update_yaxes(title = "Count", row=1, col=1)
 
         fig.add_trace(go.Pie(labels=pie_labs, values=pie_vals, name="", 
-                            marker=dict(colors=["#4c72b0", "#dd8452", "#d62728"], line=dict(color='#000000', width=1.5))), row=1, col=2)
+                            marker=dict(colors=["#4c72b0", "#d62728", "#dd8452"], line=dict(color='#000000', width=1.5))), row=1, col=2)
 
         fig.update_layout(showlegend=False)
         
-        return fig
-    
+        return fig    
     
     ##############################################################################################################
     #                                               Output methods                                               #
@@ -843,10 +900,9 @@ class POIAnalyzer():
         fig.write_image(outpath)
 
     def figs_to_str(self, plot_figs: List[go.Figure]) -> List[str]:
-        plot_str = list(map(lambda x: to_html(x, include_plotlyjs=False), plot_figs))
-        return plot_str
+        return list(map(lambda x: to_html(x, include_plotlyjs=False), plot_figs))
 
-    def write_template(self, plot_figs: List[go.Figure], tables: List[str], category: str, corresponding_base: str) -> None:
+    def write_template(self, plot_figs: List[go.Figure], tables: List[str]) -> None:
         """
         Generate an HTML report template with interactive plots.
 
@@ -858,7 +914,7 @@ class POIAnalyzer():
         Returns:
             None: The template is written to an HTML file.
         """
-        name = f"<i>{category}</i>"
+        name = f"<i>{self.current_category}</i>"
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         if self.export_svg:
@@ -869,7 +925,12 @@ class POIAnalyzer():
         plots = self.figs_to_str(plot_figs)
 
         basename = os.path.splitext(os.path.basename(self.in_path))[0]
-        out_path = f"{self.output_path}{category}_{basename}_summary.html"
+        out_path = f"{self.output_path}{self.current_category}_{basename}_summary.html"
+
+        with open("/home/vincent/projects/neet_project/neet/summary/style.css", "r") as css:
+            css_string = css.read()
+        with open("/home/vincent/projects/neet_project/neet/summary/plotly_js.js", "r") as plotly_js:
+            plotly_js_string = plotly_js.read()
 
         template = f"""
             <!DOCTYPE html>
@@ -878,186 +939,12 @@ class POIAnalyzer():
                 <meta charset="UTF-8">
                 <meta http-equiv="X-UA-Compatible" content="IE=edge">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <title>Neet summary</title>
-                <style>
-                    /* Reset some default browser styles */
-                    body, h1, h2, h3, h4, p, ul, li {{
-                        margin: 0;
-                        padding: 0;
-                    }}
-
-                    /* Apply modern font and line height */
-                    body {{
-                        font-family: 'Arial', sans-serif;
-                        line-height: 1.6;
-                    }}
-
-                    /* Style the header */
-                    header {{
-                        background-color: #333;
-                        color: white;
-                        padding: 1em 0;
-                        text-align: center;
-                        width: 100%; /* Make the header span the full width */
-                        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                    }}
-
-                    header h1 {{
-                        font-size: 2.5em;
-                        margin-bottom: 0.3em;
-                    }}
-
-                    header p {{
-                        font-size: 1.2em;
-                        opacity: 0.8;
-                    }}
-
-
-                    footer {{
-                        background-color: #333;
-                        color: white;
-                        padding: 1em 0;
-                        text-align: center;
-                        width: 100%; /* Make the header span the full width */
-                        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                    }}
-
-
-                    /* Center the content */
-                    body {{
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                        min-height: 100vh;
-                        flex-direction: column;
-                        background-color: #f5f5f5;
-                    }}
-
-                    /* Style sections */
-                    section {{
-                        background-color: white;
-                        border-radius: 15px;
-                        border-style: solid;
-                        border-color: #333;
-                        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                        margin: 1em 0;
-                        max-width: 1420px;
-                        width: 90%;
-                        text-align: left;
-                    }}
-
-                    section h2 {{
-                        background-color: #333;
-                        border-radius: 10px 10px 0 0;
-                        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                        text-align: center;
-                        color: white;
-                        opacity: 0.9;       
-                    }}
-
-                    section h3 {{
-                        background-color: #333;
-                        border-radius: 5px;
-                        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                        text-align: center;
-                        margin-top: 0.5em;
-                        margin-left: 0.5em;
-                        margin-right: 0.5em;
-                        color: white;
-                        opacity: 0.8;
-                    }}
-
-                    section h4 {{
-                        background-color: #333;
-                        border-radius: 5px;
-                        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-                        text-align: center;
-                        margin-top: 0.5em;
-                        margin-left: 1.5em;
-                        margin-right: 1.5em;
-                        color: white;
-                        opacity: 0.7;       
-                    }}
-
-                    /* Style lists */
-                    ul {{
-                        list-style-type: disc;
-                        padding-left: 1em;
-                        margin-left: 2.5em;
-                        margin-top: 1em;
-                        margin-bottom: 1em;
-                    }}
-
-                    li {{
-                        margin-bottom: 0.25em;
-                    }}
-
-                    /* Style links */
-                    a {{
-                        color: #007bff;
-                        text-decoration: none;
-                    }}
-
-                    a:hover {{
-                        text-decoration: underline;
-                    }}
-
-                    p {{
-                        font-size: 1.1rem;
-                        margin-top: 0.5em;
-                        margin-bottom: 2em;
-                        margin-left: 2em;
-                        margin-right: 1em;
-
-                    }}
-
-                    .plot-container {{
-                        display: flex;
-                        justify-content: center;
-                        margin-top: 2em;
-                        margin-left: 2em;
-                        margin-right: 2em;
-                        margin-bottom: 0.5em;
-                        padding: 1em;
-                    }}
-
-                    .intro-text {{
-                        font-size: 1.4rem;
-                        margin-top: 1.5em;
-                        margin-bottom: 1.5em;
-                        margin-left: 1.5em;
-                        margin-right: 1.5em;
-                    }}
-
-                    table {{
-                        width: 100%;
-                        border-collapse: collapse;
-                        font-family: Arial, sans-serif;
-                    }}
-
-                    .table-box {{
-                        margin: 2em;
-                        border: 1px solid #ccc;
-                    }}
-
-                    th, td {{
-                        padding: 8px;
-                        text-align: center;
-                        border: 1px solid #ccc;
-                    }}
-                    th {{
-                        background-color: #f2f2f2;
-                    }}
-                    td:hover {{
-                        filter: brightness(85%);
-                        border: 1px solid #ccc;
-                    }}
-
-                </style>
+                <title>Neet - {self.current_category} summary</title>                        
+                <style>{css_string}</style>
             </head>
 
             <body>
-                <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+                <script>{plotly_js_string}</script>
 
                 <header>
                     <h1>Positions of interest: {name}</h1>
@@ -1067,94 +954,127 @@ class POIAnalyzer():
                 <section>
                     <p class="intro-text">
                         This summary file was created from the extracted features in file <b>{self.in_path}</b> 
-                        with <b>{category}</b> positions extracted from file <b>{self.bed_path}</b>. 
+                        with <b>{self.current_category}</b> positions extracted from file <b>{self.bed_path}</b>. 
                         The plots are interactive and allow further information by hovering, zooming and panning.
                     </p>
                 </section>
 
+                
                 <section>
-                    <h2>{name} positions on reference sequence(s)</h2>
-                    <h3>Mapping of {name} positions across the reference sequences</h3>
-                    <div class="plot-container">
-                        {plots[0]}
-                    </div>
-                    <p>
-                        Positions of {name} are indicated as blue lines. Fasta file '{self.ref_path}' was used to extract
-                        reference sequence(s). Hover on positions for exact coordinates. 
-                    </p>
-                </section>
+                    <button class="collapsible">{name} positions on reference sequence(s)</button>
+                    <div class="collapsible-content">
+                        <h2 class="hiddentitle" id="map"></h2>
 
-                <section>
-                    <h2>Mismatch types</h2>
-                    <h3>Confusion matrix of {name} positions containing mismatch types</h3>
-                    <div class="plot-container">
-                        {plots[1]}
-                    </div>
-                    <p>
-                        Overview of all types of (mis-)matches in the data subset corresponding. Different kind of matches
-                        indicate possible mislabellings in the bed file, as {category} should only be found at {corresponding_base}
-                        positions.
-                    </p>
-                </section>
-
-                <section>
-                    <h2>Base compositions</h2>
-                    <h3>Base compositions for different {name} and {corresponding_base} subsets</h3>
-                    <div class="plot-container">
-                        {plots[2]}
-                    </div>
-                    <p>
-                        Each A/C/G/U element in the bars corresponds to the median count of a given base
-                        in a subset. The four medians were scaled to add up to one. {name} match: positions
-                        labelled {name} from the bed file, where the called base is equal to the reference
-                        base. {corresponding_base} match: positions with reference base {corresponding_base},
-                        where the called base is equal. {name} mismatch: positions labelled {name} from the 
-                        bed file, where the called base differs from the reference base. {corresponding_base} 
-                        mismatch: positions with reference base {corresponding_base}, where the called base 
-                        differs.
-                    </p>
-                </section>
-
-                <section>
-                    <h2>Error rates </h2>
-                    <h3>Error rates for different {name} and {corresponding_base} subsets</h3>
-                    <div class="plot-container">
-                        {plots[3]}
-                    </div>
-                    
-                    <p>
-                        Left: Distributions of mismatch, deletion, insertion and reference skip rates for different
-                        subsets. Right: Distribution of mean quality scores for different subsets. {name} match: positions
-                        labelled {name} from the bed file, where the called base is equal to the reference
-                        base. {corresponding_base} match: positions with reference base {corresponding_base},
-                        where the called base is equal. {name} mismatch: positions labelled {name} from the 
-                        bed file, where the called base differs from the reference base. {corresponding_base} 
-                        mismatch: positions with reference base {corresponding_base}, where the called base 
-                        differs.
-                    </p>
-                    <p>
-                        The table below shows p-values for statistical tests between the four groups for different error rate
-                        the mean quality distributions. 
-                    </p>
-                    <div class="table-box">
-                        {tables[0]}
+                        <h3>Mapping of {name} positions across the reference sequences</h3>
+                        <div class="plot-container">
+                            {plots[0]}
+                        </div>
+                        <p>
+                            Positions of {name} are indicated as blue lines. Fasta file '{self.ref_path}' was used to extract
+                            reference sequence(s). Hover on positions for exact coordinates. 
+                        </p>
                     </div>
                 </section>
 
                 <section>
-                    <h2>Neighbouring errors</h2>
-                    <h3>Count of positions with high error rate in the surrounding of {name} positions</h3>
-                    <div class="plot-container">
-                        {plots[4]}
+                    <button class="collapsible">Mismatch types</button>
+                    <div class="collapsible-content">
+                        <h2 class="hiddentitle" id="mismatch_types"></h2>
+                        
+                        <h3>Confusion matrix of {name} positions containing mismatch types</h3>
+                        <div class="plot-container">
+                            {plots[1]}
+                        </div>
+                        <p>
+                            Overview of all types of (mis-)matches in the data subset corresponding to {name}.
+                        </p>
                     </div>
-                    <p>
-                        Left: Occurences of high mismatch rates two bases up- and downstream from {name} positions.
-                        Right: Pie chart shows the (relative count) of different types of central {name} positions. 
-                        Red indicates errors in the surrounding positions where the position in question
-                        is also of type {name}. The count of surrounding error positions that do not fall under {name}
-                        are colored orange. Blue corresponds to {name} positions where no surrounding errors are found.
-                    </p>
                 </section>
+
+                <section>
+                    <button class="collapsible">Base compositions</button>
+                    <div class="collapsible-content">
+                        <h2 class="hiddentitle" id="base_comp"></h2>
+
+                        <h3>Base compositions for different {name} {f"and {self.current_counterpart} " if self.current_counterpart else ""}subsets</h3>
+                        <div class="plot-container">
+                            {plots[2]}
+                        </div>
+                        <p>
+                            Each A/C/G/U element in the bars corresponds to the median count of a given base in a subset. The four medians were scaled to add up to one. 
+                            {name} match: positions labelled {name} from the bed file, where the called base is equal to the reference base. 
+                            {f"{self.current_counterpart} match: positions with reference base {self.current_counterpart}, where the called base is equal." if self.current_counterpart else ""}
+                            {name} mismatch: positions labelled {name} from the bed file, where the called base differs from the reference base. 
+                            {f"{self.current_counterpart} mismatch: positions with reference base {self.current_counterpart} , where the called base differs." if self.current_counterpart else ""}
+                        </p>
+                    </div>
+                </section>
+
+                <section>
+                    <button class="collapsible">Error rates</button>
+                    <div class="collapsible-content">
+                        <h2 class="hiddentitle" id="error_rates"></h2>
+
+                        <h3>Error rates for different {name} {f"and {self.current_counterpart} " if self.current_counterpart else ""}subsets</h3>
+                        <div class="plot-container">
+                            {plots[3]}
+                        </div>
+                        
+                        <p>
+                            Left: Distributions of mismatch, deletion, insertion and reference skip rates for different subsets. Right: Distribution of mean quality scores for different subsets. 
+                            {name} match: positions labelled {name} from the bed file, where the called base is equal to the reference base. 
+                            {f"{self.current_counterpart} match: positions with reference base {self.current_counterpart}, where the called base is equal." if self.current_counterpart else ""}
+                            {name} mismatch: positions labelled {name} from the bed file, where the called base differs from the reference base. 
+                            {f"{self.current_counterpart} mismatch: positions with reference base {self.current_counterpart} , where the called base differs." if self.current_counterpart else ""}
+                        </p>
+                        <p>
+                            The table below shows p-values for statistical tests between the four groups for different error rate
+                            the mean quality distributions. 
+                        </p>
+                        <div class="table-box">
+                            {tables[0]}
+                        </div>
+
+                    </div>
+                </section>
+
+                <section>
+                    <button class="collapsible">Neighbouring errors</button>
+                    <div class="collapsible-content">
+                        <h2 class="hiddentitle" id="nb_errors"></h2>
+
+                        <h3>Count of positions with high error rate in the surrounding of {name} positions</h3>
+                        <div class="plot-container">
+                            {plots[4]}
+                        </div>
+                        <p>
+                            Left: Occurences of high mismatch rates two bases up- and downstream from {name} positions.
+                            Right: Pie chart shows the (relative count) of different types of central {name} positions. 
+                            Red indicates errors in the surrounding positions where the position in question
+                            is also of type {name}. The count of surrounding error positions that do not fall under {name}
+                            are colored orange. Blue corresponds to {name} positions where no surrounding errors are found.
+                        </p>
+
+                    </div>
+                </section>
+
+                <script>
+                    var coll = document.getElementsByClassName("collapsible");
+                    var i;
+
+                    for (i = 0; i < coll.length; i++) {{
+                    coll[i].addEventListener("click", function() {{
+                        this.classList.toggle("active");
+                        var content = this.nextElementSibling;
+                        if (content.style.display === "none") {{
+                        content.style.display = "block";
+                        }} else {{
+                        content.style.display = "none";
+                        }}
+                    }});
+                    }}
+                </script>
+
             </body>
             <footer></footer>
             </html> 
@@ -1171,51 +1091,12 @@ class POIAnalyzer():
         Returns:
             None: The DataFrame is saved as a TSV file.
         """
-        self.data.to_csv(f"{os.path.splitext(self.in_path)[0]}_w_bed_info.tsv", sep="\t", index=False, header=True)
-
-    ##############################################################################################################
-    #                                           Main processing methods                                          #
-    ##############################################################################################################
-
-    def main(self):
-        """
-        Main entry point of the script.
-
-        This method iterates through the bed categories and their corresponding bases, processing each category using
-        the `process_category` method.
-
-        Returns:
-            None: The script performs the desired processing and saves the output files.
-        """
-        for category, corr_base in zip(self.bed_categories, self.bed_categories_canoncial_bases):
-            self.process_category(category, corr_base)
-
-    def process_category(self, category: str, corresponding_base: str):
-        """
-        Process and analyze the data for a specific category and corresponding base.
-
-        This method generates multiple plots and saves them along with a summary HTML template. Optionally, it also
-        writes the processed data to a TSV file.
-
-        Parameters:
-            category (str): The category of interest.
-            corresponding_base (str): The corresponding base for the category.
-
-        Returns:
-            None: The plots and summary are saved to files, and optionally, the data is saved in TSV format.
-        """
-        plot_mod_map = self.create_map_plot(category)
-        plot_mism_types = self.create_mism_types_plot(category)
-        plot_comp = self.create_composition_plot(category, corresponding_base)
-        plot_err_rate, p_val_table = self.create_error_rate_plot(category, corresponding_base)
-        plot_nb = self.create_nb_plot(category)
-
-        plots = [plot_mod_map, plot_mism_types, plot_comp, plot_err_rate, plot_nb]
-        tables = [p_val_table]
-        self.write_template(plots, tables, category, corresponding_base)
-        if self.output_tsv:
-            self.write_tsv()
-
+        with open(f"{os.path.splitext(self.in_path)[0]}_w_bed_info.tsv", "w") as out:
+            out.write("\t".join(self.data.keys())+"\n")
+            for vals in zip(*self.data.values()):
+                vals = [str(val) for val in vals]
+                out.write("\t".join(vals)+"\n")
+      
 def setup_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="Neet - Position-of-Interest Analyzer", description="Analyze features of one or more types of positions of interest.")
     parser.add_argument('-i', '--tsv', type=str, required=True,
@@ -1239,7 +1120,7 @@ def setup_parser() -> argparse.ArgumentParser:
                             One or more categories from the bed file to aggregate the data by. 
                             Must be in the format: 'cat1' or 'cat1,cat2,cat3'
                             """)
-    parser.add_argument('-cc', '--counterparts', type=str, required=True, 
+    parser.add_argument('-cc', '--counterparts', type=str, required=False, 
                         help="""
                             Canonical base corresponding to each category specified in --bed_categories. 
                             Same format as --bed_categories flag.
@@ -1276,9 +1157,11 @@ if __name__ == "__main__":
                                export_svg=args.export_svg)
     poi_analyzer.main()
                 
-    # poi_analyzer = POIAnalyzer("/home/vincent/masterthesis/data/45s_rrna/processed/dRNA_cytoplasm/dRNA_cytoplasm_extracted.tsv",
-    #                            "/home/vincent/masterthesis/data/45s_rrna/processed/dRNA_cytoplasm",
-    #                            "/home/vincent/masterthesis/data/45s_rrna/rRNA_modifications_conv_cleaned.bed",
-    #                            "/home/vincent/masterthesis/data/45s_rrna/RNA45SN1_cleaned.fasta",
-    #                            "psu,Gm,Um", "T,G,T", True, False)
+    # poi_analyzer = POIAnalyzer(in_path="/home/vincent/projects/neet_project/data/45s_rrna/feature_tables/drna_cyt_extracted.tsv",
+    #                            out_path="/home/vincent/projects/neet_project/data/45s_rrna/poi_extractor",
+    #                            bed_path="/home/vincent/projects/neet_project/data/45s_rrna/rRNA_modifications_conv_cleaned.bed",
+    #                            ref_path="/home/vincent/projects/neet_project/data/45s_rrna/RNA45SN1.fasta",
+    #                            categories="psu,Gm", 
+    #                            canonical_counterpart="U,G",
+    #                            output_tsv=True)
     # poi_analyzer.main()
