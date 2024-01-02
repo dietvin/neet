@@ -302,8 +302,8 @@ class PositionSummary:
         Returns:
         - List[go.Bar]: List of Plotly Bar traces.
         """        
-        base_idx_rel = {"A": 12, "C": 13, "G": 14, "T": 15}
-        base_idx_abs = {"A": 5, "C": 6, "G": 7, "T": 8}
+        base_idx_rel = {"A": 12, "C": 13, "G": 14, "U": 15}
+        base_idx_abs = {"A": 5, "C": 6, "G": 7, "U": 8}
 
         n_match = int(pos_data[base_idx_abs[pos_data[3]]])
         n_mismatch = int(pos_data[5]) + int(pos_data[6]) + int(pos_data[7]) + int(pos_data[8])
