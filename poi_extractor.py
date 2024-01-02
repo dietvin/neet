@@ -681,6 +681,8 @@ class POIAnalyzer():
         except:
             return "ERROR"
 
+    # TODO: add a second table for statistical evaluation of the base compositions
+
     def get_table_header(self) -> str:
         if self.current_counterpart:
             header = f"<th></th><th>{self.current_category} match vs. {self.current_counterpart} match</th><th>{self.current_category} mismatch vs. {self.current_counterpart} mismatch</th><th>{self.current_category} match vs. {self.current_category} mismatch</th><th>{self.current_counterpart} match vs. {self.current_counterpart} mismatch</th>"
