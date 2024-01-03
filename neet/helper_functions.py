@@ -1,7 +1,10 @@
-from typing import Any, List
+from typing import Any, List, Tuple
 import argparse, os, warnings, sys
 from itertools import takewhile, repeat
 import datetime
+
+import importlib.resources as impresources
+from . import summary_style
 
 
 def print_update(message: str, line_break: bool = True, with_time: bool = True) -> None:
@@ -208,6 +211,23 @@ def float_between_zero_and_one(value: Any) -> float:
     if not 0 <= fvalue <= 1:
         raise argparse.ArgumentTypeError(f"{value} is not a float between 0 and 1")
     return fvalue
+
+
+def load_html_template_str() -> Tuple[str, str]:
+    """
+    Load static files style.css and plotly.js from folder summary_style. Returns both as strings.
+    """
+    # https://stackoverflow.com/questions/6028000/how-to-read-a-static-file-from-inside-a-python-package
+    css_style = (impresources.files(summary_style) / "style.css")
+    plotly_js = (impresources.files(summary_style) / "plotly.js")
+
+    with css_style.open("r") as css:
+        css_string = css.read()
+    with plotly_js.open("r") as plotly_js:
+        plotly_js_string = plotly_js.read()
+
+    return css_string, plotly_js_string
+
 
 
 if __name__ == "__main__":

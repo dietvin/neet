@@ -1075,11 +1075,8 @@ class POIAnalyzer():
         basename = os.path.splitext(os.path.basename(self.in_path))[0]
         out_path = f"{self.output_path}{self.current_category}_{basename}_summary.html"
 
-        with open("/home/vincent/projects/neet_project/neet/summary/style.css", "r") as css:
-            css_string = css.read()
-        with open("/home/vincent/projects/neet_project/neet/summary/plotly_js.js", "r") as plotly_js:
-            plotly_js_string = plotly_js.read()
-
+        css_string, plotly_js_string = hs.load_html_template_str()
+        
         template = f"""
             <!DOCTYPE html>
             <html lang="en">

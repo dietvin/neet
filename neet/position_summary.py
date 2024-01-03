@@ -525,10 +525,7 @@ class PositionSummary:
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         files_a, files_b = self.get_file_paths()
         
-        with open("/home/vincent/projects/neet_project/neet/summary/style.css", "r") as css:
-            css_string = css.read()
-        with open("/home/vincent/projects/neet_project/neet/summary/plotly_js.js", "r") as plotly_js:
-            plotly_js_string = plotly_js.read()
+        css_string, plotly_js_string = hs.load_html_template_str()
 
         template = f"""
             <!DOCTYPE html>

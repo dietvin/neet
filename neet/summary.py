@@ -820,10 +820,7 @@ class SummaryCreator:
                 self.write_svg(fig, name)
         plots = self.figs_to_str(plot_figs)
 
-        with open("/home/vincent/projects/neet_project/neet/summary/style.css", "r") as css:
-            css_string = css.read()
-        with open("/home/vincent/projects/neet_project/neet/summary/plotly_js.js", "r") as plotly_js:
-            plotly_js_string = plotly_js.read()
+        css_string, plotly_js_string = hs.load_html_template_str()
 
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         data_point_descr = f"Each data point corresponds to the average value along all positions in one of {self.n_bins} bins" if self.n_bins else "Each data point corresponds to one extracted position"
