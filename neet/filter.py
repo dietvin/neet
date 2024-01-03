@@ -10,7 +10,7 @@ class Filter:
     Attributes:
         input_path (str): Path to the input TSV file.
         output_path (str): Path to the output TSV file.
-        chr (str): Filter by chromosome.
+        chrom (str): Filter by chromosome.
         site (List[int]): Filter by site(s) or range.
         n_reads (Tuple[int, Callable[[int, int], bool]]): Filter by coverage.
         base (List[str]): Filter by reference base(s).
@@ -29,7 +29,7 @@ class Filter:
             Extracts the bases from the given string.
         get_val_fun_float(string: str) -> Tuple[float, Callable[[float, float], bool]]:
             Extracts the percentage of mismatched values and the corresponding comparison function from the given string.
-        filter_tsv() -> None:
+        main() -> None:
             Filters the TSV file based on the specified criteria.
         output_line(line: str, output: io.TextIOWrapper = None) -> None:
             Writes a line to the output file or stdout.
@@ -39,7 +39,7 @@ class Filter:
     input_path: str
     output_path: str
 
-    chr: str
+    chrom: str
     site: List[int] | None
     n_reads: Tuple[int, Callable[[int, int], bool]] | None
     base: List[str] | None
@@ -66,7 +66,7 @@ class Filter:
     def __init__(self, 
                  input_path: str, 
                  output_path: str, 
-                 chr: str, 
+                 chrom: str, 
                  site: str,
                  n_reads: str, 
                  base: str, 
@@ -87,7 +87,7 @@ class Filter:
         Args:
             input_path (str): Path to the input TSV file.
             output_path (str): Path to the output TSV file.
-            chr (str): Filter by chromosome.
+            chrom (str): Filter by chromosome.
             site (str): Filter by site(s) or range.
             n_reads (str): Filter by coverage.
             base (str): Filter by reference base(s).
@@ -99,7 +99,7 @@ class Filter:
         self.input_path = hs.check_get_in_path(input_path, exp_extensions=[".tsv"], warn_expected_text="Expected .tsv file")
         self.output_path = hs.check_get_out_path(output_path, self.input_path)
 
-        self.chr = chr
+        self.chrom = chrom
         self.site = self.get_sites(site)
         self.n_reads = self.get_n_reads(n_reads)
         self.base = self.get_bases(base)
@@ -291,15 +291,15 @@ class Filter:
         with open(bed_path, "r") as bed:
             for line in bed:
                 line = line.strip().split("\t")
-                chr = line[0]
+                chrom = line[0]
                 start = int(line[1])
                 end = int(line[2])
                 for i in range(start, end):
-                    pos.append((chr, start+1)) # bed files are 0-indexed
+                    pos.append((chrom, start+1)) # bed files are 0-indexed
         return set(pos)
 
 
-    def filter_tsv(self) -> None:
+    def main(self) -> None:
         """
         Filters the TSV file based on the specified criteria.
         """
@@ -334,13 +334,13 @@ class Filter:
             return fun(val, val_ref)
 
         row = row_str.strip("\n").split("\t")
-        chr = row[0]
+        chrom = row[0]
         site = int(row[1])
 
         if self.filter_bed:
-            if self.inlude_bed & ((chr, site) not in self.bed_positions):
+            if self.inlude_bed & ((chrom, site) not in self.bed_positions):
                 return False
-            if (~self.inlude_bed) & ((chr, site) in self.bed_positions):
+            if (~self.inlude_bed) & ((chrom, site) in self.bed_positions):
                 return False
                 
         n_reads = int(row[2])
@@ -354,8 +354,8 @@ class Filter:
         motif = row[21]
         q_score = float(row[22])
 
-        if self.chr:
-            if chr != self.chr: return False
+        if self.chrom:
+            if chrom != self.chrom: return False
         if self.site: 
             if site not in self.site: return False
         if self.n_reads:
@@ -440,7 +440,7 @@ if __name__ == "__main__":
 
     filter = Filter(input_path=args.input,
                     output_path=args.output,
-                    chr=args.chromosome,
+                    chrom=args.chromosome,
                     site=args.site,
                     n_reads=args.n_reads,
                     base=args.base,
@@ -455,4 +455,4 @@ if __name__ == "__main__":
                     q_score=args.q_score,
                     bed_include=args.filter_bed,
                     bed_exclude=args.exclude_bed)
-    filter.filter_tsv()
+    filter.main()

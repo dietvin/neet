@@ -16,9 +16,9 @@ class SummaryCreator:
     data: Dict[str, List[str|int|float]]
     export_svg: bool
 
-    def __init__(self, in_path: str, out_path: str, n_bins: int|None = 5000, use_perc_mismatch_alt: bool = False, export_svg: bool = False) -> None:
+    def __init__(self, in_path: str, out_path: str, n_bins: int|None, use_perc_mismatch_alt: bool, export_svg: bool) -> None:
         self.process_path(in_path, out_path)
-        self.n_bins = n_bins
+        self.n_bins = n_bins if n_bins != -1 else None
         self.perc_mis_col = "perc_mismatch_alt" if use_perc_mismatch_alt else "perc_mismatch"
         self.export_svg = export_svg
         

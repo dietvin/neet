@@ -3,6 +3,7 @@ import argparse, os, warnings, sys
 from itertools import takewhile, repeat
 import datetime
 
+import pkg_resources
 import importlib.resources as impresources
 from . import summary_style
 

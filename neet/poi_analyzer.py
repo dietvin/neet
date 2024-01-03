@@ -31,12 +31,6 @@ class POIAnalyzer():
     current_category: str
     current_counterpart: str | None 
     
-    dtypes = {'chr': str, 'site': int, 'n_reads': int, 'ref_base': str, 'majority_base': str, 'n_a': int, 'n_c': int,
-            'n_g': int, 'n_u': int, 'n_del': int, 'n_ins': int, 'n_ref_skip': int, 'n_a_rel': float, 'n_c_rel': float,
-            'n_g_rel': float, 'n_u_rel': float, 'n_del_rel': float, 'n_ins_rel': float, 'n_ref_skip_rel': float,
-            'perc_mismatch': float, 'perc_mismatch_alt': float, 'motif': str, 'q_mean': float, 'q_std': float,
-            'neighbour_error_pos': str}
-    
     def __init__(self, in_path: str, out_path: str, bed_path: str, ref_path: str,
                  categories: str,
                  canonical_counterpart: str | None,
@@ -662,11 +656,11 @@ class POIAnalyzer():
         """
         def get_rates(data: Dict[str, List[str|int|float]], x_mat: int, x_mis: int) -> Dict[str, Dict[str, List[float]]]:
             rate_dict = defaultdict(lambda: {"x": [], "y": []})
-            cols = ["ref_base", "majority_base", "perc_mismatch", "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "q_mean"]
+            cols = ["ref_base", "majority_base", self.perc_mismatch_col, "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "q_mean"]
             cols_idxs = dict(zip(cols[2:], range(len(cols))))
             for ref, maj, *rates in zip(*(data[col] for col in cols)):
                 x = x_mat if ref == maj else x_mis
-                for rate in ["perc_mismatch", "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "q_mean"]:
+                for rate in [self.perc_mismatch_col, "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "q_mean"]:
                     rate_dict[rate]["x"].append(x)
                     rate_dict[rate]["y"].append(rates[cols_idxs[rate]])
             return dict(rate_dict)

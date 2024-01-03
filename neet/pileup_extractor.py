@@ -366,7 +366,7 @@ class FeatureExtractor:
             nb_first = True
 
             if self.use_multiprocessing:
-                with Pool(processes=12) as pool:
+                with Pool(processes=self.num_processes) as pool:
                     for outline in pool.imap(self.process_position, i):
                         if len(outline) > 0: 
                             nb_lines.append(outline)
