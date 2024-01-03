@@ -1,5 +1,6 @@
-def main():
-    pass
+from pyfiglet import Figlet
 
-if __name__=="__main__":
-    main()
+def main():
+    print(Figlet(font="slant").renderText("NEET"))
+
+

@@ -1,7 +1,6 @@
 import re, os, warnings, argparse, sys, io, random
 from typing import Dict, List, Tuple, Union, Any
 from tqdm import tqdm
-from pyfiglet import Figlet
 import numpy as np
 from multiprocessing import Pool
 from neet.helper_functions import positive_int, positive_float, float_between_zero_and_one, get_num_lines
@@ -42,8 +41,6 @@ class FeatureExtractor:
                  n_bins_summary: int,
                  use_alt_summary: bool,
                  export_svg_summary: bool) -> None:
-
-        print(Figlet(font="slant").renderText("Neet - pileup extractor"))
 
         self.process_paths(ref_path, in_paths, out_paths)    
 
