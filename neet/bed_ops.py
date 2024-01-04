@@ -1,6 +1,7 @@
 import argparse, os, csv
 from typing import List, Tuple, Dict
 import neet.helper_functions as hs
+
 def tsv_to_bed(in_path: str, out_path: str) -> None:
     """
     Converts a TSV (Tab-Separated Values) file to a BED (Browser Extensible Data) file format.
@@ -45,7 +46,6 @@ def intersect_beds(file_a: str,
     hs.check_input_path(file_b, [".bed"])
     hs.check_output_path(out_path, [".bed"])
 
-
     label_a = label_a
     label_b = label_b
 
@@ -74,6 +74,25 @@ def intersect_beds(file_a: str,
             out.write("\t".join(line)+f"\t{label_b}\n")
 
 def get_coord_names(path: str, keep_name_pos: bool = True) -> Tuple[set[Tuple[str, int]], Dict[Tuple[str, int], str]]:
+    """
+    Extracts coordinate names from a file and returns a tuple containing two elements:
+    
+    Parameters:
+    - path (str): The path to the file containing coordinate information.
+    - keep_name_pos (bool, optional): If True, includes coordinate names in the result; 
+      if False, only includes the coordinate positions. Default is True.
+
+    Returns:
+    Tuple[Set[Tuple[str, int]], Dict[Tuple[str, int], str]]: A tuple containing two elements.
+        - The first element is a set of coordinate positions represented as tuples (chromosome, position).
+        - The second element is a dictionary mapping each coordinate position to its corresponding name,
+          if `keep_name_pos` is True. If `keep_name_pos` is False, the dictionary is empty.
+
+    Example:
+    ```
+    coordinates, name_positions = get_coord_names("/path/to/coordinate_file.txt", keep_name_pos=True)
+    ```
+    """
     with open(path, "r") as file:
         file_pos = []
         name_pos = {}
@@ -99,6 +118,24 @@ def get_coord_names(path: str, keep_name_pos: bool = True) -> Tuple[set[Tuple[st
             return set(file_pos), {}
 
 def intersect(bed1: str, bed2: str, out: str):
+    """
+    Intersects two BED files and writes the result to a new BED file.
+
+    Parameters:
+    - bed1 (str): Path to the first BED file.
+    - bed2 (str): Path to the second BED file.
+    - out (str): Path to the output BED file.
+
+    Returns:
+    None
+
+    This function reads two BED files, finds the shared coordinates between them, and writes
+    the intersected coordinates to a new BED file. If both input BED files have names associated
+    with the coordinates, the output file will include a comma-separated list of names.
+
+    Note: The function uses the `get_coord_names` function to extract coordinate positions and names
+    from the input BED files.
+    """
     hs.print_update(f"Reading from '{bed1}' and '{bed2}'. Writing to '{out}'")
     hs.check_input_path(bed1, [".bed"])
     hs.check_input_path(bed2, [".bed"])
@@ -171,6 +208,23 @@ def add_bed_info(tsv_file: str, bed_file: str, out_file: str) -> None:
             out_writer.writerow(row)
 
 def merge(file_paths: str, output_file_path: str):
+    """
+    Merges multiple BED files into a single BED file.
+
+    Parameters:
+    - file_paths (str): Comma-separated list of paths to the input BED files to be merged.
+    - output_file_path (str): Path to the output BED file where the merged data will be written.
+
+    Returns:
+    None
+
+    This function reads multiple BED files, merges their data based on overlapping coordinates, 
+    and writes the result to a new BED file. If the input BED files have names associated with the 
+    coordinates, the output file will include a comma-separated list of names.
+
+    Note: The function assumes the input BED files are tab-delimited and have the following format:
+    `chromosome   start   end   name`
+    """
     merged_data = {}
     file_path_list = file_paths.split(",")
     hs.print_update(f"Merging {len(file_path_list)} bed files. Writing to '{output_file_path}'")
@@ -204,6 +258,25 @@ def merge(file_paths: str, output_file_path: str):
             output_file.write(f"{entry[0]}\t{entry[1]}\t{entry[2]}\t{entry[3]}\n")
 
 def difference(bed1: str, bed2: str, out: str):
+    """
+    Finds the exclusive coordinates in the first BED file that do not overlap with the second BED file
+    and writes the result to a new BED file.
+
+    Parameters:
+    - bed1 (str): Path to the first BED file.
+    - bed2 (str): Path to the second BED file.
+    - out (str): Path to the output BED file.
+
+    Returns:
+    None
+
+    This function reads two BED files, finds the coordinates exclusive to the first file, and writes
+    the result to a new BED file. If the input BED files have names associated with the coordinates,
+    the output file will include those names.
+
+    Note: The function uses the `get_coord_names` function to extract coordinate positions and names
+    from the input BED files.
+    """
     hs.print_update(f"Reading from '{bed1}' and '{bed2}'. Writing to '{out}'")
     hs.check_input_path(bed1, [".bed"])
     hs.check_input_path(bed2, [".bed"])
@@ -220,9 +293,6 @@ def difference(bed1: str, bed2: str, out: str):
             has_name = coordinate in name_pos
             name = name_pos[coordinate] if has_name else ""
             out_file.write(f"{coordinate[0]}\t{coordinate[1]}\t{coordinate[1]+1}\t{name}\n")
-
-
-
 
 
 if __name__=="__main__":
