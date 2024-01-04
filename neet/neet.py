@@ -138,7 +138,7 @@ def setup_parsers() -> argparse.ArgumentParser:
 
     # add parser for position-of-interest analyzer
     poi_analyzer_parser = subparsers.add_parser("analyze_poi", help="Run the Position-of-Interest-Analyzer module")
-    poi_analyzer_parser.add_argument("-i", "--tsv", type=str, required=True,
+    poi_analyzer_parser.add_argument("-i", "--input", type=str, required=True,
                                      help="""
                                      Path to the input file. Must be of type tsv, as returned by the PileupExtractor.
                                      """)
