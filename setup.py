@@ -9,8 +9,9 @@ setup(name="neet",
       author_email="",
       url="https://github.com/dietvin/neet",
       license="LICENSE",
-      packages=find_packages(),
+      packages=["neet", "neet.summary_style"],
       entry_points={"console_scripts": ["neet = neet.neet:main",],},
-      install_requires=["plotly", "tqdm", "intervaltree", "scipy", "pyfiglet"],
+      install_requires=["plotly", "tqdm", "intervaltree", "scipy", "pyfiglet", "setuptools"],
       long_description=open('README.md').read(),
-      long_description_content_type='text/markdown',)
+      long_description_content_type='text/markdown',
+      package_data = {"neet.summary_style": ["plotly.js", "style.css"]},)

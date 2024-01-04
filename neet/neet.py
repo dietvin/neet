@@ -9,6 +9,9 @@ from neet.position_summary import PositionSummary
 from neet.filter import Filter
 from neet.bed_ops import tsv_to_bed, intersect_beds, add_bed_info, merge, difference
 
+def print_figlet(text: str) -> None:
+    print(Figlet(font="slant").renderText(text))
+
 def setup_parsers() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="NEET Command Line Interface")
     subparsers = parser.add_subparsers(title="Subcommands", dest="subcommand", required=True)
@@ -393,18 +396,18 @@ def setup_parsers() -> argparse.ArgumentParser:
     return parser
 
 def main():
-    print(Figlet(font="slant").renderText("NEET"))
 
     parser = setup_parsers()
     args = parser.parse_args()
 
     if args.subcommand == "extractor":
+        print_figlet("NEET - Pileup Extractor")
         feature_extractor = FeatureExtractor(in_paths=args.input, 
                                              out_paths=args.output, 
                                              ref_path=args.reference,
                                              num_reads=args.num_reads, 
-                                             perc_mismatch=args.perc_mismatched,
-                                             perc_mismatch_alt=args.perc_mismatched_alt,
+                                             perc_mismatch=args.mismatch_rate,
+                                             perc_mismatch_alt=args.mismatch_rate_alt,
                                              perc_deletion=args.perc_deletion,
                                              mean_quality=args.mean_quality,
                                              genomic_region=args.genomic_region,
@@ -418,6 +421,7 @@ def main():
         feature_extractor.main()
 
     elif args.subcommand == "summary":
+        print_figlet("NEET - Summary")
         summary = SummaryCreator(in_path=args.input, 
                                  out_path=args.output, 
                                  n_bins=args.n_bins, 
@@ -426,6 +430,7 @@ def main():
         summary.main()
 
     elif args.subcommand == "poi_analyzer":
+        print_figlet("NEET - Position-of-Interest Analyzer")
         poi_analyzer = POIAnalyzer(in_path=args.tsv,
                                    out_path=args.output,
                                    bed_path=args.bed,
@@ -438,6 +443,7 @@ def main():
         poi_analyzer.main()
 
     elif args.subcommand == "twosample":
+        print_figlet("NEET - Two-Sample Extractor")
         posextr = PositionExtractor(in_paths_a=args.sample1, 
                                     in_paths_b=args.sample2, 
                                     out_dir=args.output, 
@@ -451,6 +457,7 @@ def main():
         posextr.main()
 
     elif args.subcommand == "pos_summary":
+        print_figlet("NEET - Position Summary")
         pos_summary = PositionSummary(paths_a = args.sample1,
                                       paths_b = args.sample2,
                                       basename_a = args.basename1,
@@ -461,6 +468,7 @@ def main():
         pos_summary.main() 
     
     elif args.subcommand == "filter":
+        print_figlet("NEET - Filter")
         filter = Filter(input_path=args.input,
                         output_path=args.output,
                         chrom=args.chromosome,
@@ -481,6 +489,7 @@ def main():
         filter.main()
     
     elif args.subcommand == "bedops":
+        print_figlet("NEET - Bed Ops")
         if args.subsubcommand == "tsv_to_bed":
             tsv_to_bed(args.input, args.output)
         elif args.subsubcommand == "intersect_bed":
@@ -492,6 +501,7 @@ def main():
         elif args.subsubcommand == "difference":
             difference(bed1=args.input1, bed2=args.input1, out=args.output)
     else:
+        print_figlet("NEET")
         parser.print_help()
 
 if __name__=="__main__":
