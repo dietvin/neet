@@ -16,18 +16,18 @@ class POIAnalyzer():
     in_path: str
     bed_path: str
     ref_path: str
-    output_path: str
 
     perc_mismatch_col: str
     output_tsv: bool
     export_svg: bool
 
-    data: Dict[str, List[str|int|float]]
+    data: Dict[str, List[str]] | Dict[str, List[int]] | Dict[str, List[float]] | Dict[str, List[str | None]]
     bed_categories: List[str]
-    bed_categories_canoncial_bases: List[str] | None
+    bed_categories_counterparts: List[str] | List[None]
+    output_paths: List[str]
 
-    category_data: Dict[str, List[str|int|float]]
-    counterpart_data: Dict[str, List[str|int|float]] | None
+    category_data: Dict[str, List[str]] | Dict[str, List[int]] | Dict[str, List[float]] | Dict[str, List[str | None]]
+    counterpart_data: Dict[str, List[str]] | Dict[str, List[int]] | Dict[str, List[float]] | Dict[str, List[str | None]] | None
     current_category: str
     current_counterpart: str | None 
     
@@ -58,12 +58,13 @@ class POIAnalyzer():
             based on the provided arguments and performs necessary data processing and validation steps.
 
         """
-        self.process_path(in_path, out_path, bed_path, ref_path)
+        self.process_path(in_path, bed_path, ref_path)
         self.load_data()
         self.add_bed_info()
         self.perc_mismatch_col = "perc_mismatch_alt" if use_perc_mismatch_alt else "perc_mismatch"
-        self.get_bed_categories(categories)
-        self.get_corrensponding_base(canonical_counterpart)
+
+        self.process_categories(categories, canonical_counterpart, out_path)
+
         self.output_tsv = output_tsv
         self.export_svg = export_svg
 
@@ -71,7 +72,7 @@ class POIAnalyzer():
     #                                           Initialization methods                                           #
     ##############################################################################################################
 
-    def process_path(self, in_path: str, out_path: str, bed_path: str, ref_path: str) -> None:
+    def process_path(self, in_path: str, bed_path: str, ref_path: str) -> None:
         """
         Process and validate input and output paths for data processing.
 
@@ -97,7 +98,6 @@ class POIAnalyzer():
         self.bed_path = bed_path
         self.check_path(ref_path, [".fasta", ".fa", ".fn"])
         self.ref_path = ref_path
-        self.output_path = self.process_outpath(out_path)
 
     def check_path(self, path: str, extensions: List[str]) -> None:
         """
@@ -128,38 +128,6 @@ class POIAnalyzer():
         file_type = os.path.splitext(path)[1]
         if not file_type in extensions:
             warnings.warn(f"Found file extension {file_type}. Expected file extension to be one of: {extensions}. If this is deliberate, ignore warning.", Warning)
-
-    def process_outpath(self, out: str) -> str:
-        """
-        Process the provided output path, ensuring it is a valid directory path.
-
-        Args:
-            out (str): The output path to be processed.
-
-        Returns:
-            str: The processed output path, guaranteed to be a valid directory path.
-
-        Raises:
-            Exception: If the provided path is an existing file or if there is an error creating the directory.
-
-        Note:
-            This method checks if the provided path exists as a file or directory. If it exists as a file,
-            it raises an exception, as a directory path is required. If it exists as a directory, it ensures
-            that the path ends with a forward slash ('/') for consistency. If the path doesn't exist, it
-            attempts to create the directory, raising an exception if it fails.
-
-        """
-        if os.path.isfile(out):
-            raise Exception(f"Provided path '{out}' is a file. Please specify a directory as output path.")
-        elif os.path.isdir(out):
-            if not out.endswith("/"):
-                out += "/"
-        else:
-            try: 
-                os.makedirs(out)
-            except Exception as e:
-                raise Exception(f"Could not create directory '{out}'. Error: {e}")
-        return out
 
     def load_data(self) -> None:
         """
@@ -261,63 +229,73 @@ class POIAnalyzer():
                     interval_tree[start:end] = (chromosome, name)
         return interval_tree
 
-    def get_bed_categories(self, cat_str: str) -> None:
+    def process_categories(self, categories: str, counterparts: str|None, out_paths: str) -> None:
         """
-        Extract and validate bed categories from a comma-separated string.
+        Process categories, counterparts, and output paths.
 
-        Args:
-            cat_str (str): A comma-separated string containing bed categories.
-
-        Returns:
-            None
+        Parameters:
+        - categories (str): Comma-separated string of categories to be processed.
+        - counterparts (str|None): Comma-separated string of counterparts or None if not provided.
+        - out_paths (str): Comma-separated string of output paths or a single directory path.
 
         Raises:
-            Exception: If any category in 'cat_str' is not found in the bed file.
+        - Exception: If a specified category is not found in the bed file.
+        - Exception: If the number of counterparts does not match the number of categories.
+        - Exception: If the number of output paths does not match the number of categories.
 
         Note:
-            This method parses a comma-separated string 'cat_str' containing bed categories. It ensures
-            that each category in the string exists in the 'bed_name' column of the loaded genomic data
-            ('data' attribute). If any category is not found, an exception is raised. If all categories
-            are valid, they are stored in the 'bed_categories' attribute for later use.
-
+        - If only one output path is provided, it is considered a directory, and individual
+        output paths for each category are generated based on this directory.
         """
-        categories = cat_str.split(",")
-        unique_cat = list(sorted([i for i in set(self.data["bed_name"]) if i]))
+        
+        def check_create_dir(dirname: str):
+            """
+            Check if the directory exists, and if not, attempt to create it.
 
-        for category in categories:
+            Parameters:
+            - dirname (str): The directory path to check and create.
+
+            Raises:
+            - Exception: If the directory creation fails.
+            """
+            if not os.path.isdir(dirname): # does directory of the given file exist? If not try to create it
+                try: 
+                    os.makedirs(dirname)
+                except Exception as e:
+                    raise Exception(f"Could not create directory '{dirname}'. Error: {e}")
+
+        # process given categories
+        cat_split = categories.split(",")
+        unique_cat = list(sorted([i for i in set(self.data["bed_name"]) if i]))
+        for category in cat_split:
             if category not in unique_cat:
                 raise Exception(f"Given name '{category}' was not found in the bed file.")
-    
-        self.bed_categories = categories
-
-    def get_corrensponding_base(self, base_str: str) -> None:
-        """
-        Extract and validate corresponding bases for bed categories.
-
-        Args:
-            base_str (str): A comma-separated string containing bases corresponding to bed categories.
-
-        Returns:
-            None
-
-        Raises:
-            Exception: If the number of bases does not match the number of bed categories.
-
-        Note:
-            This method parses a comma-separated string 'base_str' containing bases corresponding to bed categories.
-            It validates that the number of bases matches the number of bed categories previously set in the
-            'bed_categories' attribute. If the counts do not match, an exception is raised. If the counts match,
-            the corresponding bases are stored in the 'bed_categories_canonical_bases' attribute for later use.
-
-        """        
-        if base_str:
-            base_str = base_str.upper()
-            counterparts = base_str.split(",")
-            if len(counterparts) != len(self.bed_categories):
-                raise Exception(f"For the {len(self.bed_categories)} categories {len(counterparts)} corresponding bases were given. Each category must have a base it corresponds to.")
-            self.bed_categories_canoncial_bases = counterparts
+            
+        # if given, process counterparts
+        if counterparts:
+            cou_split = counterparts.upper().split(",")
+            if len(cou_split) != len(cat_split):
+                raise Exception(f"For the {len(cat_split)} categories {len(cou_split)} corresponding bases were given. Each category must have a base it corresponds to.")
         else:
-            self.bed_categories_canoncial_bases = [None for _ in self.bed_categories]
+            cou_split = [None for _ in self.bed_categories]
+
+        # process ouput paths
+        out_split = out_paths.split(",")
+        if len(out_split) > 1:
+            if len(out_split) != len(cat_split): # output for each category?
+                raise Exception(f"For the {len(cat_split)} categories {len(out_split)} output paths were given. Each category must have an output path it corresponds to.")
+            else:
+                for out in out_split:
+                    check_create_dir(os.path.dirname(out))
+        else: # output string must be a directory
+            dirname = out_paths
+            check_create_dir(dirname)
+            in_basename = os.path.splitext(os.path.basename(self.in_path))[0]
+            out_split = [os.path.join(dirname, f"{c}_{in_basename}_summary.html") for c in cat_split]
+    
+        self.bed_categories = cat_split
+        self.bed_categories_counterparts = cou_split
+        self.output_paths = out_split
 
     ##############################################################################################################
     #                                           Main processing methods                                          #
@@ -333,10 +311,10 @@ class POIAnalyzer():
         Returns:
             None: The script performs the desired processing and saves the output files.
         """
-        for category, corr_base in zip(self.bed_categories, self.bed_categories_canoncial_bases):
-            self.process_category(category, corr_base)
+        for category, corr_base, output_path in zip(self.bed_categories, self.bed_categories_counterparts, self.output_paths):
+            self.process_category(category, corr_base, output_path)
 
-    def process_category(self, category: str, corresponding_base: str|None) -> None:
+    def process_category(self, category: str, corresponding_base: str|None, output_path: str) -> None:
         """
         Process and analyze the data for a specific category and (optionally) corresponding base.
 
@@ -382,8 +360,8 @@ class POIAnalyzer():
         plots = [plot_mod_map, plot_mism_types, plot_comp, plot_err_rate, plot_nb]
         tables = [p_val_table]
 
-        hs.print_update(f"  - creating HTML summary file at {self.output_path}... ", line_break=False)
-        self.write_template(plots, tables)
+        hs.print_update(f"  - creating HTML summary file at {output_path}... ", line_break=False)
+        self.write_template(plots, tables, output_path)
         hs.print_update("Done", with_time=False)
 
         if self.output_tsv:
@@ -1006,7 +984,7 @@ class POIAnalyzer():
     ##############################################################################################################
     #                                               Output methods                                               #
     ##############################################################################################################
-    def write_svg(self, fig: go.Figure, name: str) -> None:
+    def write_svg(self, fig: go.Figure, name: str, output_path) -> None:
         """
         Write a Plotly figure to an SVG file.
 
@@ -1021,7 +999,7 @@ class POIAnalyzer():
         The output file will be saved with a name based on the provided 'name' parameter and the
         instance's 'output_path'.
         """
-        outpath = f"{self.output_path}_{name}.svg"
+        outpath = f"{os.path.splitext(output_path)[0]}_{name}.svg"
         fig.write_image(outpath)
 
     def figs_to_str(self, plot_figs: List[go.Figure]) -> List[str]:
@@ -1040,7 +1018,7 @@ class POIAnalyzer():
         """
         return list(map(lambda x: to_html(x, include_plotlyjs=False), plot_figs))
 
-    def write_template(self, plot_figs: List[go.Figure], tables: List[str]) -> None:
+    def write_template(self, plot_figs: List[go.Figure], tables: List[str], output_path: str) -> None:
         """
         Write a summary HTML report with interactive plots and tables.
 
@@ -1062,12 +1040,9 @@ class POIAnalyzer():
         if self.export_svg:
             for fig, name in zip(plot_figs, ["poi_map", "poi_mismatch_types", "poi_base_comp", 
                                              "poi_error_rates", "poi_neighbours"]):
-                self.write_svg(fig, name)
+                self.write_svg(fig, name, output_path)
 
         plots = self.figs_to_str(plot_figs)
-
-        basename = os.path.splitext(os.path.basename(self.in_path))[0]
-        out_path = f"{self.output_path}{self.current_category}_{basename}_summary.html"
 
         css_string, plotly_js_string = hs.load_html_template_str()
         
@@ -1218,7 +1193,7 @@ class POIAnalyzer():
             <footer></footer>
             </html> 
         """
-        with open(out_path, "w") as out:
+        with open(output_path, "w") as out:
             out.write(template)
 
     def write_tsv(self) -> None:

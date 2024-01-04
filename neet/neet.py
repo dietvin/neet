@@ -144,7 +144,9 @@ def setup_parsers() -> argparse.ArgumentParser:
                                      """)
     poi_analyzer_parser.add_argument("-o", "--output", type=str, required=True,
                                      help="""
-                                     Path to the output directory, in which all output files will be stored.
+                                     Path to the output files or directory. If files are given, one path must
+                                     be provided for each bed-category that is given. If a directory is given
+                                     all output files stored in it.  
                                      """)
     poi_analyzer_parser.add_argument("-b", "--bed", type=str, required=True,
                                      help="""
