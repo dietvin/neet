@@ -87,11 +87,6 @@ def get_coord_names(path: str, keep_name_pos: bool = True) -> Tuple[set[Tuple[st
         - The first element is a set of coordinate positions represented as tuples (chromosome, position).
         - The second element is a dictionary mapping each coordinate position to its corresponding name,
           if `keep_name_pos` is True. If `keep_name_pos` is False, the dictionary is empty.
-
-    Example:
-    ```
-    coordinates, name_positions = get_coord_names("/path/to/coordinate_file.txt", keep_name_pos=True)
-    ```
     """
     with open(path, "r") as file:
         file_pos = []
