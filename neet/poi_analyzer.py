@@ -1202,6 +1202,3 @@ class POIAnalyzer():
             for vals in zip(*self.data.values()):
                 vals = [str(val) for val in vals]
                 out.write("\t".join(vals)+"\n")
-      
-if __name__=="__main__":
-    pass

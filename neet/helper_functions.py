@@ -269,8 +269,3 @@ def load_html_template_str() -> Tuple[str, str]:
         plotly_js_string = plotly_js.read()
 
     return css_string, plotly_js_string
-
-
-
-if __name__ == "__main__":
-    pass

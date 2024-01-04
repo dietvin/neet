@@ -766,7 +766,3 @@ class FeatureExtractor:
                 if (abs(relative_pos) <= k): # check if pos are close to each other
                     nb_info += str(relative_pos)+","
         return nb_info
-
-
-if __name__=="__main__":
-    pass
