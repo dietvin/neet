@@ -103,7 +103,7 @@ class FeatureExtractor:
         self.input_paths = in_paths
 
         # process output path(s)
-        self.output_paths = self.process_outpaths(out_paths, in_paths)
+        self.output_paths = self.process_outpaths(out_paths)
 
         # process path to reference fasta
         hs.check_input_path(ref_path, [".fasta", ".fna", ".ffn", ".faa", ".frn", ".fa"])
