@@ -56,14 +56,13 @@ class PositionSummary:
         self.basename_a = basename_a
         self.basename_b = basename_b
 
-        self.check_out(out_path)
-        if not out_path.endswith("/"):
-            out_path += "/"
+        hs.check_create_dir(out_path)
         self.out_dir = out_path
 
-        self.check_path(bed_path, extension=".bed")
+        hs.check_input_path(bed_path, extension=[".bed"])
         self.get_positions(bed_path)
         self.bed_path = bed_path
+        self.basename_bed = os.path.splitext(os.path.basename(bed_path))[0]
         self.nb_size = nb_size
 
         paths_a = self.process_in(paths_a)
@@ -96,47 +95,11 @@ class PositionSummary:
         for path in in_list:
             ext = os.path.splitext(path)[1]
             extensions.append(ext)
-            self.check_path(path, extension=".tsv")
+            hs.check_input_path(path, extension=[".tsv"])
 
         if len(set(extensions)) > 1:
             raise Exception("Input files of different kind. All files must be .bam or .pileup, not mixed.")
         return in_list
-
-    def check_path(self, path: str, extension: str = ".tsv") -> None:
-        """
-        Check if the specified file path exists and has the expected file extension.
-
-        Parameters:
-        - path (str): The file path to be checked.
-        - extension (str, optional): The expected file extension (default is ".tsv").
-
-        Raises:
-        - FileNotFoundError: If the specified file path does not exist.
-        - Exception: If the file extension of the specified path does not match the expected extension.
-        """        
-        if not os.path.exists(path): # does file exist?
-            raise FileNotFoundError(f"Input file not found. File '{path}' does not exist.")
-        file_type = os.path.splitext(path)[1]
-        if file_type != extension:
-            raise Exception(f"Found file extension {file_type}. File extension to must be {extension}.")
-
-    def check_out(self, out: str) -> None: 
-        """
-        Check if the specified output directory exists, and create it if necessary.
-
-        Parameters:
-        - out (str): The path to the output directory.
-
-        Raises:
-        - Warning: If the specified directory does not exist, a warning is issued, and the directory is created.
-        - Exception: If the directory could not be created.
-        """
-        if not os.path.isdir(out):
-            warnings.warn(f"Directory '{out}' does not exist. Creating directory.")
-            try:
-                os.makedirs(out)
-            except:
-                raise Exception(f"Directory '{out}' was not found and could not be created.")
 
     def get_positions(self, bed_path: str) -> None:
         """
@@ -578,7 +541,7 @@ class PositionSummary:
             <footer></footer>
             </html> 
             """
-        outfile = f"{self.out_dir}{self.basename_a}_{self.basename_b}_summary.html"
+        outfile = os.path.join(self.out_dir, f"{self.basename_a}_{self.basename_b}_{self.basename_bed}_summary.html")
         with open(outfile, "w") as out:
             hs.print_update(f"Writing summary file to: {outfile}")
             out.write(template)

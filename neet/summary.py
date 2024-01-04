@@ -17,7 +17,7 @@ class SummaryCreator:
     export_svg: bool
 
     def __init__(self, in_path: str, out_path: str, n_bins: int|None, use_perc_mismatch_alt: bool, export_svg: bool) -> None:
-        self.process_path(in_path, out_path)
+        self.process_paths(in_path, out_path)
         self.n_bins = n_bins if n_bins != -1 else None
         self.perc_mis_col = "perc_mismatch_alt" if use_perc_mismatch_alt else "perc_mismatch"
         self.export_svg = export_svg
@@ -26,7 +26,7 @@ class SummaryCreator:
     #                                   Functions called during initialization                                      #
     #################################################################################################################
 
-    def process_path(self, in_path: str, out_path: str) -> None:
+    def process_paths(self, in_path: str, out_path: str) -> None:
         """
         Process the input and output paths for the SummaryCreator instance.
 
@@ -42,63 +42,10 @@ class SummaryCreator:
         - None
         """
         # process input path
-        self.check_path(in_path, [".tsv"])
+        hs.check_input_path(in_path, [".tsv"])
         self.input_path = in_path
         # process output path(s)
-        self.output_path = self.process_outpath(out_path)
-
-    def check_path(self, path: str, extensions: List[str]) -> None:
-        """
-        Check the validity of the given file path.
-
-        Parameters:
-        - path (str): The file path to be checked.
-        - extensions (List[str]): List of valid file extensions.
-
-        Raises:
-        - FileNotFoundError: If the specified file path does not exist.
-        - Warning: If the file extension is not in the expected list. The warning is issued, but the function continues execution.
-
-        Returns:
-        - None
-        """
-        if not os.path.exists(path): # does file exist?
-            raise FileNotFoundError(f"Input file not found. File '{path}' does not exist.")
-        file_type = os.path.splitext(path)[1]
-        if not file_type in extensions:
-            warnings.warn(f"Found file extension {file_type}. Expected file extension to be one of: {extensions}. If this is deliberate, ignore warning.", Warning)
-
-    def process_outpath(self, out: str) -> str:
-        """
-        Process the output path and return a valid output file path.
-
-        Parameters:
-        - out (str): The specified output path.
-
-        Raises:
-        - FileNotFoundError: If the specified output directory does not exist.
-        - Warning: If the output file has an extension other than '.html'. A warning is issued, but the function continues execution.
-
-        Returns:
-        - str: The processed output file path.
-        """
-        if os.path.isdir(out): # check if outpath is directory, if the directory exists and create output file path(s) according to input file name(s)
-            if not os.path.exists(out):
-                raise FileNotFoundError(f"Directory not found. Output directory '{out}' does not exist.")
-            if not out.endswith("/"):
-                out += "/"
-            basename = os.path.splitext(os.path.basename(self.input_path))[0]
-            out_path = f"{out}{basename}_summary.html"
-            return out_path
-
-        else: # check if outpath is a list of filename(s), if the basedirectory exists and if the given file extension(s) is .tsv
-            dirname = os.path.dirname(out)
-            if not os.path.exists(dirname):
-                raise FileNotFoundError(f"Path to output file not found. '{dirname}' does not exist.")
-            file_extension = os.path.splitext(out)[1]
-            if file_extension != ".html":
-                warnings.warn(f"Given output file has extension '{file_extension}'. Note that the output file will be of type '.tsv'.")
-            return out
+        self.output_path = hs.process_outpath(out_path, f"{os.path.splitext(os.path.basename(in_path))[0]}_summary.html")
       
     def load_data(self):
         """

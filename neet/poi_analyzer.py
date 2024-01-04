@@ -247,23 +247,6 @@ class POIAnalyzer():
         - If only one output path is provided, it is considered a directory, and individual
         output paths for each category are generated based on this directory.
         """
-        
-        def check_create_dir(dirname: str):
-            """
-            Check if the directory exists, and if not, attempt to create it.
-
-            Parameters:
-            - dirname (str): The directory path to check and create.
-
-            Raises:
-            - Exception: If the directory creation fails.
-            """
-            if not os.path.isdir(dirname): # does directory of the given file exist? If not try to create it
-                try: 
-                    os.makedirs(dirname)
-                except Exception as e:
-                    raise Exception(f"Could not create directory '{dirname}'. Error: {e}")
-
         # process given categories
         cat_split = categories.split(",")
         unique_cat = list(sorted([i for i in set(self.data["bed_name"]) if i]))
@@ -286,10 +269,10 @@ class POIAnalyzer():
                 raise Exception(f"For the {len(cat_split)} categories {len(out_split)} output paths were given. Each category must have an output path it corresponds to.")
             else:
                 for out in out_split:
-                    check_create_dir(os.path.dirname(out))
+                    hs.check_create_dir(os.path.dirname(out))
         else: # output string must be a directory
             dirname = out_paths
-            check_create_dir(dirname)
+            hs.check_create_dir(dirname)
             in_basename = os.path.splitext(os.path.basename(self.in_path))[0]
             out_split = [os.path.join(dirname, f"{c}_{in_basename}_summary.html") for c in cat_split]
     
@@ -1220,71 +1203,5 @@ class POIAnalyzer():
                 vals = [str(val) for val in vals]
                 out.write("\t".join(vals)+"\n")
       
-def setup_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="Neet - Position-of-Interest Analyzer", description="Analyze features of one or more types of positions of interest.")
-    parser.add_argument('-i', '--tsv', type=str, required=True,
-                        help="""
-                            Path to the input file. Must be of type tsv, as returned by the PileupExtractor.
-                            """)
-    parser.add_argument('-o', '--output', type=str, required=True,
-                        help="""
-                            Path to output a output directory, in which all output files will be stored.
-                            """)
-    parser.add_argument('-b', '--bed', type=str, required=True,
-                        help="""
-                            Path to the bed file containing information in the fourth column.
-                            """)
-    parser.add_argument('-r', '--ref', type=str, required=True,
-                        help="""
-                            Path to the reference file. Must be of type fasta.
-                            """)
-    parser.add_argument('-c', '--bed_categories', type=str, required=True, 
-                        help="""
-                            One or more categories from the bed file to aggregate the data by. 
-                            Must be in the format: 'cat1' or 'cat1,cat2,cat3'
-                            """)
-    parser.add_argument('-cc', '--counterparts', type=str, required=False, 
-                        help="""
-                            Canonical base corresponding to each category specified in --bed_categories. 
-                            Same format as --bed_categories flag.
-                            """)
-    parser.add_argument('--update_tsv', action="store_true", 
-                        help="""
-                            If specified, the a new tsv file gets written containing the information from the bed 
-                            file in the last column. Suffix '_w_bed_info' will be added to newly created file.
-                            """)
-    parser.add_argument('--use_perc_mismatch_alt', action="store_true", 
-                        help="""
-                            If specified, uses the mismatch from the perc_mismatch_alt colum.
-                            """)
-    parser.add_argument('--export_svg', action="store_true", 
-                        help="""
-                            If specified, exports created plots as svg files.
-                            """)
-
-    return parser
-    
-if __name__ == "__main__":
-
-    parser = setup_parser()
-    args = parser.parse_args()
-
-    poi_analyzer = POIAnalyzer(in_path=args.tsv,
-                               out_path=args.output,
-                               bed_path=args.bed,
-                               ref_path=args.ref,
-                               categories=args.bed_categories,
-                               canonical_counterpart=args.counterparts,
-                               output_tsv=args.update_tsv,
-                               use_perc_mismatch_alt=args.use_perc_mismatch_alt,
-                               export_svg=args.export_svg)
-    poi_analyzer.main()
-                
-    # poi_analyzer = POIAnalyzer(in_path="/home/vincent/projects/neet_project/data/45s_rrna/feature_tables/drna_cyt_extracted.tsv",
-    #                            out_path="/home/vincent/projects/neet_project/data/45s_rrna/poi_extractor",
-    #                            bed_path="/home/vincent/projects/neet_project/data/45s_rrna/rRNA_modifications_conv_cleaned.bed",
-    #                            ref_path="/home/vincent/projects/neet_project/data/45s_rrna/RNA45SN1.fasta",
-    #                            categories="psu,Gm", 
-    #                            canonical_counterpart="U,G",
-    #                            output_tsv=True)
-    # poi_analyzer.main()
+if __name__=="__main__":
+    pass

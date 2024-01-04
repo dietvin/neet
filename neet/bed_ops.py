@@ -1,6 +1,6 @@
 import argparse, os, csv
 from typing import List, Tuple, Dict
-
+import neet.helper_functions as hs
 def tsv_to_bed(in_path: str, out_path: str) -> None:
     """
     Converts a TSV (Tab-Separated Values) file to a BED (Browser Extensible Data) file format.
@@ -12,7 +12,10 @@ def tsv_to_bed(in_path: str, out_path: str) -> None:
     Returns:
         None: This function does not return any value. The converted data is written to the output BED file.
     """
-    print(f"Reading from '{in_path}'. Writing to '{out_path}'")
+    hs.print_update(f"Reading from '{in_path}'. Writing to '{out_path}'")
+    hs.check_input_path(in_path, [".tsv"])
+    hs.check_get_out_path(out_path, [".bed"])
+
     with open(in_path, "r") as i, open(out_path, "w") as o:
         next(i)
         for line in i:
@@ -22,8 +25,8 @@ def tsv_to_bed(in_path: str, out_path: str) -> None:
 def intersect_beds(file_a: str,
                    file_b: str,
                    out_path: str,
-                   label_a: str|None = None, 
-                   label_b: str|None = None) -> None:
+                   label_a: str, 
+                   label_b: str) -> None:
     """
     Intersects two BED files and writes the results to an output file.
 
@@ -37,8 +40,14 @@ def intersect_beds(file_a: str,
     Returns:
         None: This function does not return any value. The results are written to the output file.
     """
-    label_a = label_a if label_a else os.path.splitext(os.path.basename(file_a))[0]
-    label_b = label_b if label_b else os.path.splitext(os.path.basename(file_b))[0]
+    hs.print_update(f"Reading from '{file_a}' and '{file_b}'. Writing to '{out_path}'")
+    hs.check_input_path(file_a, [".bed"])
+    hs.check_input_path(file_b, [".bed"])
+    hs.check_output_path(out_path, [".bed"])
+
+
+    label_a = label_a
+    label_b = label_b
 
     with open(file_a, 'r') as file1:
         file_a_coordinates = set(tuple(line.strip().split('\t')[:3]) for line in file1)
@@ -90,6 +99,11 @@ def get_coord_names(path: str, keep_name_pos: bool = True) -> Tuple[set[Tuple[st
             return set(file_pos), {}
 
 def intersect(bed1: str, bed2: str, out: str):
+    hs.print_update(f"Reading from '{bed1}' and '{bed2}'. Writing to '{out}'")
+    hs.check_input_path(bed1, [".bed"])
+    hs.check_input_path(bed2, [".bed"])
+    hs.check_output_path(out, [".bed"])
+
     file1_pos, name1_pos = get_coord_names(bed1)
     file2_pos, name2_pos = get_coord_names(bed2)
     
@@ -112,48 +126,6 @@ def intersect(bed1: str, bed2: str, out: str):
                 name = ""
             out_file.write(f"{coordinate[0]}\t{coordinate[1]}\t{coordinate[1]+1}\t{name}\n")
 
-def difference(bed1: str, bed2: str, out: str):
-    file1_pos, name_pos = get_coord_names(bed1)
-    file2_pos, _ = get_coord_names(bed2, keep_name_pos=False)
-    
-    exclusive_file1 = file1_pos.intersection(file2_pos)
-    del(file1_pos)
-    del(file2_pos)
-
-    with open(out, "w") as out_file:
-        for coordinate in exclusive_file1:
-            has_name = coordinate in name_pos
-            name = name_pos[coordinate] if has_name else ""
-            out_file.write(f"{coordinate[0]}\t{coordinate[1]}\t{coordinate[1]+1}\t{name}\n")
-
-
-def merge(file_paths: str, output_file_path: str):
-    merged_data = {}
-    file_path_list = file_paths.split(",")
-
-    for file_path in file_path_list:
-        with open(file_path, "r") as bed:
-            for line in bed:
-                line = line.strip().split("\t")
-                if len(line) >= 3:
-                    chromosome = line[0]
-                    start = int(line[1])
-                    end = int(line[2])
-                    name_value = line[3] if len(line) >= 4 else ""
-
-                    for i in range(start, end):
-                        pos_key = (chromosome, i)
-                        if pos_key not in merged_data:
-                            merged_data[pos_key] = [chromosome, i, i+1, name_value]
-                        elif len(name_value) > 0:
-                            merged_data[pos_key][3] += f",{name_value}"
-    
-    sorted_data = sorted(merged_data.values(), key=lambda x: (x[0], x[1]))
-
-    with open(output_file_path, 'w') as output_file:
-        for entry in sorted_data:
-            output_file.write(f"{entry[0]}\t{entry[1]}\t{entry[2]}\t{entry[3]}\n")
-
 def add_bed_info(tsv_file: str, bed_file: str, out_file: str) -> None:
     """
     Reads data from a TSV file and a BED file, combines the information, and writes the updated data to an output file.
@@ -166,6 +138,11 @@ def add_bed_info(tsv_file: str, bed_file: str, out_file: str) -> None:
     Returns:
         None
     """
+    hs.print_update(f"Reading from '{tsv_file}' and '{bed_file}'. Writing to '{out_file}'")
+    hs.check_input_path(tsv_file)
+    hs.check_input_path(bed_file)
+    hs.check_output_path(out_file)
+
     bed_data = {}
     with open(bed_file, "r") as bed:
         data = []
@@ -192,6 +169,58 @@ def add_bed_info(tsv_file: str, bed_file: str, out_file: str) -> None:
             if bed_entry:
                 row = row + bed_entry
             out_writer.writerow(row)
+
+def merge(file_paths: str, output_file_path: str):
+    merged_data = {}
+    file_path_list = file_paths.split(",")
+    hs.print_update(f"Merging {len(file_path_list)} bed files. Writing to '{output_file_path}'")
+
+    for path in file_path_list:
+        hs.check_input_path(path, [".bed"])
+
+    hs.check_output_path(output_file, [".bed"])
+
+    for file_path in file_path_list:
+        with open(file_path, "r") as bed:
+            for line in bed:
+                line = line.strip().split("\t")
+                if len(line) >= 3:
+                    chromosome = line[0]
+                    start = int(line[1])
+                    end = int(line[2])
+                    name_value = line[3] if len(line) >= 4 else ""
+
+                    for i in range(start, end):
+                        pos_key = (chromosome, i)
+                        if pos_key not in merged_data:
+                            merged_data[pos_key] = [chromosome, i, i+1, name_value]
+                        elif len(name_value) > 0:
+                            merged_data[pos_key][3] += f",{name_value}"
+    
+    sorted_data = sorted(merged_data.values(), key=lambda x: (x[0], x[1]))
+
+    with open(output_file_path, 'w') as output_file:
+        for entry in sorted_data:
+            output_file.write(f"{entry[0]}\t{entry[1]}\t{entry[2]}\t{entry[3]}\n")
+
+def difference(bed1: str, bed2: str, out: str):
+    hs.print_update(f"Reading from '{bed1}' and '{bed2}'. Writing to '{out}'")
+    hs.check_input_path(bed1, [".bed"])
+    hs.check_input_path(bed2, [".bed"])
+    hs.check_output_path(out, [".bed"])
+    file1_pos, name_pos = get_coord_names(bed1)
+    file2_pos, _ = get_coord_names(bed2, keep_name_pos=False)
+    
+    exclusive_file1 = file1_pos.intersection(file2_pos)
+    del(file1_pos)
+    del(file2_pos)
+
+    with open(out, "w") as out_file:
+        for coordinate in exclusive_file1:
+            has_name = coordinate in name_pos
+            name = name_pos[coordinate] if has_name else ""
+            out_file.write(f"{coordinate[0]}\t{coordinate[1]}\t{coordinate[1]+1}\t{name}\n")
+
 
 
 

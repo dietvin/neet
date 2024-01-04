@@ -2,6 +2,7 @@ import argparse, io, sys, re
 import neet.helper_functions as hs
 from typing import List, Tuple, Callable
 from tqdm import tqdm
+import os
 
 class Filter:
     """
@@ -96,8 +97,9 @@ class Filter:
             motif (str): Filter by motif around position.
             q_score (str): Filter by mean quality.
         """
-        self.input_path = hs.check_get_in_path(input_path, exp_extensions=[".tsv"], warn_expected_text="Expected .tsv file")
-        self.output_path = hs.check_get_out_path(output_path, self.input_path)
+        hs.check_input_path(input_path, exp_extensions=[".tsv"])
+        self.input_path = input_path
+        self.output_path = hs.process_outpath(output_path, f"{os.path.splitext(os.path.basename(input_path))[0]}_filtered.tsv")
 
         self.chrom = chrom
         self.site = self.get_sites(site)
@@ -123,7 +125,7 @@ class Filter:
             self.inlude_bed = False
         else:
             self.filter_bed = False
-
+    
 
     def get_sites(self, site_str: str) -> List[int]|None:
         """

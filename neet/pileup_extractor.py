@@ -99,37 +99,15 @@ class FeatureExtractor:
         """
         # process input path(s)
         in_paths = in_paths_str.split(",")
-        for path in in_paths: self.check_path(path, [".msf", ".pup", ".pileup"])
+        for path in in_paths: hs.check_input_path(path, [".msf", ".pup", ".pileup"])
         self.input_paths = in_paths
 
         # process output path(s)
-        self.output_paths = self.process_outpaths(out_paths)
+        self.output_paths = self.process_outpaths(out_paths, in_paths)
 
         # process path to reference fasta
-        self.check_path(ref_path, [".fasta", ".fna", ".ffn", ".faa", ".frn", ".fa"])
-        self.ref_sequences = self.get_references(ref_path)
-
-    def check_path(self, path: str, extensions: List[str]) -> None:
-        """
-        Check if the specified file path exists and has the expected file extension.
-
-        This function verifies whether the file specified by the given path exists and has a valid extension.
-        If the file does not exist, it raises a FileNotFoundError with a detailed error message.
-        If the file extension does not match any of the expected extensions, it raises a Warning.
-
-        Parameters:
-            path (str): The file path to be checked.
-            extensions (List[str]): A list of expected file extensions (e.g., ['.txt', '.csv']).
-
-        Raises:
-            FileNotFoundError: If the specified file path does not exist.
-            Warning: If the file extension is not among the expected extensions.
-        """
-        if not os.path.exists(path): # does file exist?
-            raise FileNotFoundError(f"Input file not found. File '{path}' does not exist.")
-        file_type = os.path.splitext(path)[1]
-        if not file_type in extensions:
-            warnings.warn(f"Found file extension {file_type}. Expected file extension to be one of: {extensions}. If this is deliberate, ignore warning.", Warning)
+        hs.check_input_path(ref_path, [".fasta", ".fna", ".ffn", ".faa", ".frn", ".fa"])
+        self.ref_sequences = hs.get_references(ref_path)
 
     def process_outpaths(self, out: str) -> List[str]:
         """
@@ -156,77 +134,21 @@ class FeatureExtractor:
                         user warning will be issued to inform the user that the output file
                         will be of type `.tsv`.
         """
-        if os.path.isdir(out): # check if outpaths is directory, if the directory exists and create output file path(s) according to input file name(s)
-            if not os.path.exists(out):
-                raise FileNotFoundError(f"Directory not found. Output directory '{out}' does not exist.")
-            if not out.endswith("/"):
-                out += "/"
-            out_paths = []
-            for in_path in self.input_paths:
-                basename = os.path.splitext(os.path.basename(in_path))[0]
-                out_paths.append(f"{out}{basename}_extracted.tsv")
-            return out_paths
-
-        else: # check if outpaths is a list of filename(s), if the basedirectory exists and if the given file extension(s) is .tsv
-            out_paths = out.split(",")
+        out_paths = out.split(",")
+        if len(out_paths) > 1:
             for path in out_paths:
-                dirname = os.path.dirname(path)
-                if not os.path.exists(dirname):
-                    raise FileNotFoundError(f"Path to output file not found. '{dirname}' does not exist.")
+                hs.check_create_dir(os.path.dirname(path))
                 file_extension = os.path.splitext(path)[1]
                 if file_extension != ".tsv":
                     warnings.warn(f"Given output file has extension '{file_extension}'. Note that the output file will be of type '.tsv'.")
-            return out_paths
+        else: 
+            hs.check_create_dir(out)
+            out_paths = []
+            for in_path in self.input_paths:
+                basename = os.path.splitext(os.path.basename(in_path))[0]
+                out_paths.append(os.path.join(out, f"{basename}_extracted.tsv"))
+        return out_paths
 
-    def get_references(self, path: str) -> Dict[str, str]:
-        """
-        Reads a fasta file and stores the sequences in a dictionary (values) with the 
-        corresponding chromosome names (keys).
-
-        Parameters
-        ----------
-        path : str
-            filepath to a fasta file
-
-        Returns
-        -------
-        dict[str]
-            Dictionary where the key is the chromosome name and the value is the sequence
-        """
-
-        def stdout_progress(n: int):
-            sys.stdout.write(f"\rSequences found: {n}")
-            sys.stdout.flush()
-
-        hs.print_update(f"Processing reference genome from file '{path}'.")
-        with open(path, "r") as ref:
-            refs = {}
-            line = next(ref)
-            if not line.startswith(">"):
-                raise Exception(f"Fasta format error. The first line of fasta file '{path}' does not contain a header (starting with '>').")
-            
-            chr_name = line[1:].strip().split(" ")[0]
-            seq = ""
-
-            chr_found = 1
-            stdout_progress(chr_found)
-
-            for line in ref:
-                if line.startswith(">"):
-                    refs[chr_name] = seq
-                    chr_name = line[1:].strip().split(" ")[0]
-                    seq = ""
-
-                    chr_found += 1
-                    stdout_progress(chr_found)
-
-                else:
-                    seq += line.strip()
-                    
-            refs[chr_name] = seq # add the last dict entry
-            sys.stdout.write("\n")
-        return refs
-    
     def extract_positional_info(self, data_string: str) -> Tuple[str, int, int] | None:
         """
         Extracts the chromosome name, start value, and end value from a string in the format "chromosome_name:start-end".

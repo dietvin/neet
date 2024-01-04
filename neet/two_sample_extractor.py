@@ -44,10 +44,9 @@ class PositionExtractor:
         self.in_paths_a = self.process_in(in_paths_a)
         self.in_paths_b = self.process_in(in_paths_b)
 
-        self.check_out(out_dir)
-
-        if not out_dir.endswith("/"): out_dir+="/"
+        hs.check_create_dir(out_dir)
         self.out_dir = out_dir
+
         self.export_svg = export_svg
 
         self.label_a = label_a
@@ -65,7 +64,7 @@ class PositionExtractor:
         self.error_threshold = error_threshold
         self.coverage_threshold = coverage_threshold
 
-        self.ref_dict = self.get_references(ref_path)
+        self.ref_dict = hs.get_references(ref_path, give_update=False)
 
     ##############################################################################################################
     #                                           Initialization methods                                           #
@@ -90,92 +89,11 @@ class PositionExtractor:
         for path in in_list:
             ext = os.path.splitext(path)[1]
             extensions.append(ext)
-            self.check_path(path, extension=".tsv")
+            hs.check_input_path(path, extension=[".tsv"])
 
         if len(set(extensions)) > 1:
             raise Exception("Input files of different kind. All files must be .bam or .pileup, not mixed.")
         return in_list
-
-    def check_out(self, out: str) -> None: 
-        """
-        Check if the specified output directory exists, and create it if necessary.
-
-        Parameters:
-        - out (str): The path to the output directory.
-
-        Raises:
-        - Warning: If the specified directory does not exist, a warning is issued, and the directory is created.
-        - Exception: If the directory could not be created.
-        """
-        if not os.path.isdir(out):
-            warnings.warn(f"Directory '{out}' does not exist. Creating directory.")
-            try:
-                os.makedirs(out)
-            except:
-                raise Exception(f"Directory '{out}' was not found and could not be created.")
-
-    def check_path(self, path: str, extension: str = ".tsv") -> None:
-        """
-        Check if the specified file path exists and has the expected file extension.
-
-        Parameters:
-        - path (str): The file path to be checked.
-        - extension (str, optional): The expected file extension (default is ".tsv").
-
-        Raises:
-        - FileNotFoundError: If the specified file path does not exist.
-        - Exception: If the file extension of the specified path does not match the expected extension.
-        """        
-        if not os.path.exists(path): # does file exist?
-            raise FileNotFoundError(f"Input file not found. File '{path}' does not exist.")
-        file_type = os.path.splitext(path)[1]
-        if file_type != extension:
-            raise Exception(f"Found file extension {file_type}. File extension to must be {extension}.")
-
-    def get_references(self, path: str) -> Dict[str, str]:
-        """
-        Extract reference sequences from a FASTA file.
-
-        Parameters:
-        - path (str): The path to the FASTA file.
-
-        Returns:
-        - refs (Dict[str, str]): A dictionary where keys are chromosome names and values are corresponding sequences.
-
-        Raises:
-        - Exception: If there is a format error in the FASTA file, such as a missing header in the first line.
-        """
-        def stdout_progress(n: int):
-            sys.stdout.write(f"\rSequences found: {n}")
-            sys.stdout.flush()
-
-        with open(path, "r") as ref:
-            refs = {}
-            line = next(ref)
-            if not line.startswith(">"):
-                raise Exception(f"Fasta format error. The first line of fasta file '{path}' does not contain a header (starting with '>').")
-            
-            chr_name = line[1:].strip().split(" ")[0]
-            seq = ""
-
-            chr_found = 1
-            stdout_progress(chr_found)
-
-            for line in ref:
-                if line.startswith(">"):
-                    refs[chr_name] = seq
-                    chr_name = line[1:].strip().split(" ")[0]
-                    seq = ""
-
-                    chr_found += 1
-                    stdout_progress(chr_found)
-
-                else:
-                    seq += line.strip()
-                    
-            refs[chr_name] = seq # add the last dict entry
-            sys.stdout.write("\n")
-        return refs
 
     ##############################################################################################################
     #                                             Processing methods                                             #
@@ -275,7 +193,7 @@ class PositionExtractor:
         - out_dir (str): Output directory.
         - name (str): Name for the output BED file.
         """
-        path = f"{out_dir}{name}.bed"
+        path = os.path.join(out_dir, f"{name}.bed")
         hs.print_update(f"Writing {len(positions)} sites to {path}")
         with open(path, "w") as out:
             for position in positions:
@@ -445,7 +363,7 @@ class PositionExtractor:
         - fig (go.Figure): The Plotly figure to be written.
         - name (str): The name of the SVG file.
         """
-        outpath = f"{self.out_dir}/{name}.svg"
+        outpath = os.path.join(self.out_dir, f"{name}.svg")
         fig.write_image(outpath)
 
     def create_summary(self) -> None:
@@ -472,6 +390,8 @@ class PositionExtractor:
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         css_string, plotly_js_string = hs.load_html_template_str()
+
+        outpath = os.path.join(self.out_dir, f"{self.label_a}_{self.label_b}_summary.html")
 
         template = f"""
                     <!DOCTYPE html>
@@ -556,7 +476,7 @@ class PositionExtractor:
                     <footer></footer>
                     </html> 
             """
-        with open(f"{self.out_dir}{self.label_a}_{self.label_b}_summary.html", "w") as out:
+        with open(outpath, "w") as out:
             out.write(template)
 
     ##############################################################################################################

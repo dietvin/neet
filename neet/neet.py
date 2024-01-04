@@ -212,6 +212,8 @@ def setup_parsers() -> argparse.ArgumentParser:
     two_extractor_parser.add_argument("-o", "--output", type=str, required=True,
                                       help="""
                                       Path to output a output directory, in which all output files will be stored.
+                                      The following files will be created: "<basename>_<basename2>_summary.html", 
+                                      "<basename>_<basename2>.bed", "<basename>_excl.bed", "<basename2>_excl.bed"
                                       """)
     two_extractor_parser.add_argument("-r", "--reference", type=str, required=True, 
                                       help="""
@@ -282,7 +284,10 @@ def setup_parsers() -> argparse.ArgumentParser:
     filter_parser.add_argument("-i", "--input", type=str, required=True,
                                help="Path to input TSV file.")
     filter_parser.add_argument("-o", "--output", type=str, required=True,
-                               help="Path to outptu TSV file.")
+                               help="""
+                               Path to output TSV file or directory. If a directory is given
+
+                               """)
     filter_parser.add_argument("-c", "--chromosome", type=str, required=False,
                                help="Filter by given chromosome.")
     filter_parser.add_argument("-s", "--site", type=str, required=False,
@@ -367,10 +372,10 @@ def setup_parsers() -> argparse.ArgumentParser:
                                   help="Second BED file")
     intersect_parser.add_argument("-o", "--output", type=str, required=True,
                                   help="Path to the output file.")
-    intersect_parser.add_argument("--label_a", type=str, required=False,
-                                  help="Label given to the output for file a")
-    intersect_parser.add_argument("--label_b", type=str, required=False,
-                                  help="Label given to the output for file b")
+    intersect_parser.add_argument("--label_a", type=str, required=True,
+                                  help="Label given to file a")
+    intersect_parser.add_argument("--label_b", type=str, required=True,
+                                  help="Label given to file b")
     
     add_bed_parser = subsubparsers.add_parser("add_info", help="Add the name column from a BED file to the respective line in the TSV file.")
     add_bed_parser.add_argument("-i", "--input", type=str, required=True,
