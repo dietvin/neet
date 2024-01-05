@@ -112,7 +112,7 @@ def is_directory(path: str) -> bool:
         return True
     return False
 
-def process_outpath(out: str, filename: str|None = None) -> str:
+def process_outpath(out: str, filename: str|None, ext: List[str]) -> str:
     """
     Process the output path and return a valid output file path.
 
@@ -130,7 +130,7 @@ def process_outpath(out: str, filename: str|None = None) -> str:
         check_create_dir(out)
         return os.path.join(out, filename)
     else: 
-        check_output_path()
+        check_output_path(out, ext)
         return out
 
 

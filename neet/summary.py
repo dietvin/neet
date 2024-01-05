@@ -45,7 +45,7 @@ class SummaryCreator:
         hs.check_input_path(in_path, [".tsv"])
         self.input_path = in_path
         # process output path(s)
-        self.output_path = hs.process_outpath(out_path, f"{os.path.splitext(os.path.basename(in_path))[0]}_summary.html")
+        self.output_path = hs.process_outpath(out_path, f"{os.path.splitext(os.path.basename(in_path))[0]}_summary.html", [".html"])
       
     def load_data(self):
         """

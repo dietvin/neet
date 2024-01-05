@@ -99,7 +99,7 @@ class Filter:
         """
         hs.check_input_path(input_path, exp_extensions=[".tsv"])
         self.input_path = input_path
-        self.output_path = hs.process_outpath(output_path, f"{os.path.splitext(os.path.basename(input_path))[0]}_filtered.tsv")
+        self.output_path = hs.process_outpath(output_path, f"{os.path.splitext(os.path.basename(input_path))[0]}_filtered.tsv", [".tsv"])
 
         self.chrom = chrom
         self.site = self.get_sites(site)
