@@ -378,7 +378,7 @@ def setup_parsers() -> argparse.ArgumentParser:
     intersect_parser.add_argument("--label_b", type=str, required=True,
                                   help="Label given to file b")
     
-    add_bed_parser = subsubparsers.add_parser("add_info", help="Add the name column from a BED file to the respective line in the TSV file.")
+    add_bed_parser = subsubparsers.add_parser("addinfo", help="Add the name column from a BED file to the respective line in the TSV file.")
     add_bed_parser.add_argument("-i", "--input", type=str, required=True,
                                 help="Feature table output from PileupExtractor/NeighbourhoodSearcher")
     add_bed_parser.add_argument("-o", "--output", type=str, required=True,
@@ -498,11 +498,11 @@ def main():
     
     elif args.subcommand == "bedops":
         print_figlet("NEET - Bed Ops")
-        if args.subsubcommand == "tsv_to_bed":
+        if args.subsubcommand == "tsv2bed":
             tsv_to_bed(args.input, args.output)
-        elif args.subsubcommand == "intersect_bed":
+        elif args.subsubcommand == "intersect":
             intersect_beds(args.file_a, args.file_b, args.output, args.label_a, args.label_b)
-        elif args.subsubcommand == "add_bed_info":
+        elif args.subsubcommand == "addinfo":
             add_bed_info(args.input, args.bed, args.output)
         elif args.subsubcommand == "merge":
             merge(args.input, args.output)
