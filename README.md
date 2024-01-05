@@ -4,4 +4,16 @@ The Nanopore Error pattern Exploration Toolkit (`NEET`) provides a range of func
 
 **[INCLUDE OVERVIEW]**
 
-For detailled information about the individual modules and how to use them, please refer to the wiki. 
+## Installation
+It is recommended to use Conda or Mamba for installation:
+```
+conda install neet 
+```
+For more information and alternative installation approaches refer to the (Wiki)[https://github.com/dietvin/neet/wiki/01-Installation].
+
+## General usage
+Once installed `NEET` can be accessed via the terminal:
+```
+neet --help
+```
+A detailled description of all available modules is provided in the (Wiki)[https://github.com/dietvin/neet/wiki/02-Modules]. The Wiki also provides detailed walkthroughs for some possible use cases.
