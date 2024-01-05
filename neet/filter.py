@@ -97,7 +97,7 @@ class Filter:
             motif (str): Filter by motif around position.
             q_score (str): Filter by mean quality.
         """
-        hs.check_input_path(input_path, exp_extensions=[".tsv"])
+        hs.check_input_path(input_path, extensions=[".tsv"])
         self.input_path = input_path
         self.output_path = hs.process_outpath(output_path, f"{os.path.splitext(os.path.basename(input_path))[0]}_filtered.tsv", [".tsv"])
 
@@ -209,9 +209,9 @@ class Filter:
         bases = base_str.split(",")
         bases = list(set(bases)) # remove duplicates
         for base in bases:
-            if base not in ["A", "C", "G", "T", "N"]:
+            if base not in ["A", "C", "G", "U", "N"]:
                 raise Exception(f"Given string for --base flag '{base_str}' contains unexpected base(s). \
-                                (Allowed bases: A, C, G, T, N)")
+                                (Allowed bases: A, C, G, U, N)")
         return bases
 
     def get_mismatch_types(self, mismatch_type_str: str) -> List[Tuple[str, str]]|None:
@@ -305,18 +305,23 @@ class Filter:
         """
         Filters the TSV file based on the specified criteria.
         """
+        hs.print_update(f"Reading from {self.input_path}. Writing to {self.output_path}")
         with open(self.input_path, "r") as file, open(self.output_path, "w") as out:
             n_lines = hs.get_num_lines(self.input_path)
             progress_bar = tqdm(desc="Filtering lines", total=n_lines-1)
             
             header = next(file)
             out.write(header)
+
+            count = 0
             for row in file:
                 if self.passes_filter(row):
                     out.write(row)
+                    count += 1
                 progress_bar.update()
             
             progress_bar.close()
+            hs.print_update(f"Finished. Filtered {count} out of {n_lines} positions.")
 
     def passes_filter(self, row_str: str) -> bool:
         """

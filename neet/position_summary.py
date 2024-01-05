@@ -59,7 +59,7 @@ class PositionSummary:
         hs.check_create_dir(out_path)
         self.out_dir = out_path
 
-        hs.check_input_path(bed_path, extension=[".bed"])
+        hs.check_input_path(bed_path, extensions=[".bed"])
         self.get_positions(bed_path)
         self.bed_path = bed_path
         self.basename_bed = os.path.splitext(os.path.basename(bed_path))[0]
@@ -95,7 +95,7 @@ class PositionSummary:
         for path in in_list:
             ext = os.path.splitext(path)[1]
             extensions.append(ext)
-            hs.check_input_path(path, extension=[".tsv"])
+            hs.check_input_path(path, extensions=[".tsv"])
 
         if len(set(extensions)) > 1:
             raise Exception("Input files of different kind. All files must be .bam or .pileup, not mixed.")

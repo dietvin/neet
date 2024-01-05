@@ -191,7 +191,7 @@ def setup_parsers() -> argparse.ArgumentParser:
                                       comma-separated (<repl1.tsv>,<repl2.tsv>,...). Must be of type tsv,
                                       as returned by the PileupExtractor.
                                       """)
-    two_extractor_parser.add_argument("-bn", "--basename", type=str, default="sample1",
+    two_extractor_parser.add_argument("-bn", "--basename1", type=str, default="sample1",
                                       help="""
                                       Basename of the given sample. Used to create the pileup and extracted 
                                       features files. 
@@ -222,7 +222,8 @@ def setup_parsers() -> argparse.ArgumentParser:
     two_extractor_parser.add_argument("-f", "--error_feature", type=str, default="perc_mismatch_alt", 
                                       help="""
                                       Error feature to use during extraction. Can be one of the following: 
-                                      n_del_rel, n_ins_rel, perc_mismatch, perc_mismatch_alt.
+                                      n_del_rel, n_ins_rel, perc_mismatch, perc_mismatch_alt. 
+                                      Default: "perc_mismatch_alt"
                                       """)
     two_extractor_parser.add_argument("-e", "--error_threshold", type=hs.float_between_zero_and_one, default=0.5, 
                                       help="""
@@ -303,7 +304,7 @@ def setup_parsers() -> argparse.ArgumentParser:
     filter_parser.add_argument("-b", "--base", type=str, required=False,
                                help="""
                                Filter by reference base(s). To filter single base (e.g. A):
-                               "A"; multiple bases (e.g. A, C & T): "A,C,T"
+                               "A"; multiple bases (e.g. A, C & U): "A,C,U"
                                """)
     filter_parser.add_argument("-m", "--mismatched", action="store_true", required=False,
                                help="Filter mismatched positions.")
@@ -455,7 +456,7 @@ def main():
                                     in_paths_b=args.sample2, 
                                     out_dir=args.output, 
                                     ref_path=args.reference, 
-                                    label_a=args.basename, 
+                                    label_a=args.basename1, 
                                     label_b=args.basename2, 
                                     error_feature=args.error_feature,
                                     error_threshold=args.error_threshold, 
