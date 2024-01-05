@@ -436,9 +436,9 @@ def main():
                                  export_svg=args.export_svg,)
         summary.main()
 
-    elif args.subcommand == "poi_analyzer":
+    elif args.subcommand == "analyze_poi":
         print_figlet("NEET - Position-of-Interest Analyzer")
-        poi_analyzer = POIAnalyzer(in_path=args.tsv,
+        poi_analyzer = POIAnalyzer(in_path=args.input,
                                    out_path=args.output,
                                    bed_path=args.bed,
                                    ref_path=args.ref,
