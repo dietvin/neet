@@ -92,42 +92,12 @@ class POIAnalyzer():
             for use in subsequent processing steps.
 
         """
-        self.check_path(in_path, [".tsv"])
+        hs.check_input_path(in_path, [".tsv"])
         self.in_path = in_path
-        self.check_path(bed_path, [".bed"])
+        hs.check_input_path(bed_path, [".bed"])
         self.bed_path = bed_path
-        self.check_path(ref_path, [".fasta", ".fa", ".fn"])
+        hs.check_input_path(ref_path, [".fasta", ".fa", ".fn"])
         self.ref_path = ref_path
-
-    def check_path(self, path: str, extensions: List[str]) -> None:
-        """
-        Check the existence and file extension of a specified path.
-
-        Args:
-            path (str): The path to be checked for existence and file extension.
-            extensions (List[str]): A list of valid file extensions.
-
-        Returns:
-            None
-
-        Raises:
-            FileNotFoundError: If the specified 'path' does not exist.
-            Warning: If the file extension of 'path' is not in the list of valid 'extensions'. The warning is issued
-                    if the extension does not match but execution can continue.
-
-        Note:
-            This method checks whether the specified 'path' exists. If it does not exist, a FileNotFoundError
-            is raised. It also checks the file extension of 'path' and compares it against the list of valid
-            'extensions'. If the file extension does not match any of the valid extensions, a warning is issued.
-            The warning is intended to notify the user if the file extension does not match expectations but
-            allows for continued execution if this is deliberate.
-
-        """
-        if not os.path.exists(path): # does file exist?
-            raise FileNotFoundError(f"Input file not found. File '{path}' does not exist.")
-        file_type = os.path.splitext(path)[1]
-        if not file_type in extensions:
-            warnings.warn(f"Found file extension {file_type}. Expected file extension to be one of: {extensions}. If this is deliberate, ignore warning.", Warning)
 
     def load_data(self) -> None:
         """
