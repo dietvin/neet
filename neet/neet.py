@@ -96,7 +96,7 @@ def setup_parsers() -> argparse.ArgumentParser:
                                   """)
     extractor_parser.add_argument("--plot_alt", action="store_true", 
                                   help="""
-                                  Specify whether to use the perc_mismatch or perc_mismatch_alt values for plotting
+                                  Specify whether to use the mismatch_rate or mismatch_rate_alt values for plotting
                                   in the summary report.
                                   """)
     extractor_parser.add_argument("--export_svg", action="store_true", 
@@ -126,7 +126,7 @@ def setup_parsers() -> argparse.ArgumentParser:
                                 """)
     summary_parser.add_argument("--plot_alt", action="store_true", 
                                 help="""
-                                Specify whether to use the perc_mismatch or perc_mismatch_alt values in the 
+                                Specify whether to use the mismatch_rate or mismatch_rate_alt values in the 
                                 summary report.
                                 """)
     summary_parser.add_argument("--export_svg", action="store_true", 
@@ -173,9 +173,9 @@ def setup_parsers() -> argparse.ArgumentParser:
                                      information from the name column in the bed file. Suffix "_w_bed_info" 
                                      will be added to newly created file.
                                      """)
-    poi_analyzer_parser.add_argument("--use_perc_mismatch_alt", action="store_true", 
+    poi_analyzer_parser.add_argument("--use_mismatch_rate_alt", action="store_true", 
                                      help="""
-                                     If specified use the perc_mismatch_alt values for plotting in the summary report.
+                                     If specified use the mismatch_rate_alt values for plotting in the summary report.
                                      """)
     poi_analyzer_parser.add_argument("--export_svg", action="store_true", 
                                      help="""
@@ -219,15 +219,15 @@ def setup_parsers() -> argparse.ArgumentParser:
                                       help="""
                                       Path to the reference file in fasta format
                                       """)
-    two_extractor_parser.add_argument("-f", "--error_feature", type=str, default="perc_mismatch_alt", 
+    two_extractor_parser.add_argument("-f", "--error_feature", type=str, default="mismatch_rate_alt", 
                                       help="""
                                       Error feature to use during extraction. Can be one of the following: 
-                                      n_del_rel, n_ins_rel, perc_mismatch, perc_mismatch_alt. 
-                                      Default: "perc_mismatch_alt"
+                                      deletion_rate, insertion_rate, mismatch_rate, mismatch_rate_alt. 
+                                      Default: "mismatch_rate_alt"
                                       """)
     two_extractor_parser.add_argument("-e", "--error_threshold", type=hs.float_between_zero_and_one, default=0.5, 
                                       help="""
-                                      Threshold to identify positions of iterest. Uses the perc_mismatch_alt feature. 
+                                      Threshold to identify positions of iterest. Uses the mismatch_rate_alt feature. 
                                       Default: 0.5
                                       """)
     two_extractor_parser.add_argument("-c", "--coverage_threshold", type=hs.positive_int, default=40,
@@ -314,30 +314,30 @@ def setup_parsers() -> argparse.ArgumentParser:
                                E.g: filter A-to-T mismatches --> "A-T"; filter A-to-T and 
                                C-to-T mismatches --> "A-T,C-T"
                                """)
-    filter_parser.add_argument("-p", "--percent_mismatched", type=str, required=False,
+    filter_parser.add_argument("-p", "--mismatch_rate", type=str, required=False,
                                help="""
-                               Filter by percent of mismatched reads. To filter perc_mismatched >= x:
-                               "x"; perc_mismatched <= x: "<=x"
+                               Filter by mismatch rate. To filter mismatch_rate >= x:
+                               "x"; mismatch_rate <= x: "<=x"
                                """)
-    filter_parser.add_argument("-pa", "--percent_mismatched_alt", type=str, required=False,
+    filter_parser.add_argument("-pa", "--mismatch_rate_alt", type=str, required=False,
                                help="""
                                Filter by percent of mismatched reads using the alternative measure. 
-                               To filter perc_mismatched >= x: "x"; perc_mismatched <= x: "<=x"
+                               To filter mismatch_rate_alt >= x: "x"; mismatch_rate_alt <= x: "<=x"
                                """)
-    filter_parser.add_argument("-d", "--percent_deletion", type=str, required=False,
+    filter_parser.add_argument("-d", "--deletion_rate", type=str, required=False,
                                help="""
-                               Filter by percent of deleted reads. To filter percent_deletion >= x:
-                               "x"; percent_deletion <= x: "<=x"
+                               Filter by percent of deleted reads. To filter deletion_rate >= x:
+                               "x"; deletion_rate <= x: "<=x"
                                """)
-    filter_parser.add_argument("-pi", "--percent_insertion", type=str, required=False,
+    filter_parser.add_argument("-pi", "--insertion_rate", type=str, required=False,
                                help="""
-                               Filter by percent of inserted reads. To filter percent_insertion >= x: 
-                               "x"; percent_insertion <= x: "<=x"
+                               Filter by percent of inserted reads. To filter insertion_rate >= x: 
+                               "x"; insertion_rate <= x: "<=x"
                                """)
-    filter_parser.add_argument("-pr", "--percent_refskip", type=str, required=False,
+    filter_parser.add_argument("-pr", "--refskip_rate", type=str, required=False,
                                help="""
-                               Filter by percent of reads with reference skip. To filter percent_refskip >= x:
-                               "x"; percent_refskip <= x: "<=x"
+                               Filter by percent of reads with reference skip. To filter refskip_rate >= x:
+                               "x"; refskip_rate <= x: "<=x"
                                """)
     filter_parser.add_argument("-f", "--motif", type=str, required=False,
                                help="Filter by motif around position.")
@@ -414,8 +414,8 @@ def main():
                                              out_paths=args.output, 
                                              ref_path=args.reference,
                                              num_reads=args.num_reads, 
-                                             perc_mismatch=args.mismatch_rate,
-                                             perc_mismatch_alt=args.mismatch_rate_alt,
+                                             mismatch_rate=args.mismatch_rate,
+                                             mismatch_rate_alt=args.mismatch_rate_alt,
                                              perc_deletion=args.perc_deletion,
                                              mean_quality=args.mean_quality,
                                              genomic_region=args.genomic_region,

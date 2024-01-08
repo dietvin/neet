@@ -48,7 +48,7 @@ class POIAnalyzer():
             categories (str): A comma-separated string containing bed categories.
             canonical_counterpart (str): A comma-separated string containing bases corresponding to bed categories.
             output_tsv (bool, optional): Whether to output results as a TSV file. Default is True.
-            use_perc_mismatch_alt (bool, optional): Whether to use 'perc_mismatch_alt' instead of 'perc_mismatch' column. Default is False.
+            use_perc_mismatch_alt (bool, optional): Whether to use 'mismatch_rate_alt' instead of 'mismatch_rate' column. Default is False.
 
         Returns:
             None
@@ -61,7 +61,7 @@ class POIAnalyzer():
         self.process_path(in_path, bed_path, ref_path)
         self.load_data()
         self.add_bed_info()
-        self.perc_mismatch_col = "perc_mismatch_alt" if use_perc_mismatch_alt else "perc_mismatch"
+        self.perc_mismatch_col = "mismatch_rate_alt" if use_perc_mismatch_alt else "mismatch_rate"
 
         self.process_categories(categories, canonical_counterpart, out_path)
 
@@ -109,10 +109,10 @@ class POIAnalyzer():
         Returns:
         - None
         """
-        cols = ["chr", "site", "n_reads", "ref_base", "majority_base", "n_a_rel", "n_c_rel", "n_g_rel", "n_u_rel", "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "perc_mismatch", "q_mean", "motif", "neighbour_error_pos"]
+        cols = ["chr", "site", "n_reads", "ref_base", "majority_base", "a_rate", "c_rate", "g_rate", "u_rate", "deletion_rate", "insertion_rate", "refskip_rate", "mismatch_rate", "q_mean", "motif", "neighbour_error_pos"]
 
-        col_idx = {'chr': 0, 'site': 1, 'n_reads': 2, 'ref_base': 3, 'majority_base': 4, 'n_a': 5, 'n_c': 6, 'n_g': 7, 'n_t': 8, 'n_del': 9, 'n_ins': 10, 'n_ref_skip': 11, 'n_a_rel': 12, 'n_c_rel': 13, 'n_g_rel': 14, 'n_u_rel': 15, 'n_del_rel': 16, 'n_ins_rel': 17, 'n_ref_skip_rel': 18, 'perc_mismatch': 19, 'perc_mismatch_alt': 20, 'motif': 21, 'q_mean': 22, 'q_std': 23, 'neighbour_error_pos': 24}
-        dtypes = {'chr': str, 'site': int, 'n_reads': int, 'ref_base': str, 'majority_base': str, 'n_a': int, 'n_c': int, 'n_g': int, 'n_t': int, 'n_del': int, 'n_ins': int, 'n_ref_skip': int, 'n_a_rel': float, 'n_c_rel': float, 'n_g_rel': float, 'n_u_rel': float, 'n_del_rel': float, 'n_ins_rel': float, 'n_ref_skip_rel': float, 'perc_mismatch': float, 'perc_mismatch_alt': float, 'motif': str, 'q_mean': float, 'q_std': float, 'neighbour_error_pos': str}
+        col_idx = {'chr': 0, 'site': 1, 'n_reads': 2, 'ref_base': 3, 'majority_base': 4, 'n_a': 5, 'n_c': 6, 'n_g': 7, 'n_t': 8, 'n_del': 9, 'n_ins': 10, 'n_ref_skip': 11, 'a_rate': 12, 'c_rate': 13, 'g_rate': 14, 'u_rate': 15, 'deletion_rate': 16, 'insertion_rate': 17, 'refskip_rate': 18, 'mismatch_rate': 19, 'mismatch_rate_alt': 20, 'motif': 21, 'q_mean': 22, 'q_std': 23, 'neighbour_error_pos': 24}
+        dtypes = {'chr': str, 'site': int, 'n_reads': int, 'ref_base': str, 'majority_base': str, 'n_a': int, 'n_c': int, 'n_g': int, 'n_t': int, 'n_del': int, 'n_ins': int, 'n_ref_skip': int, 'a_rate': float, 'c_rate': float, 'g_rate': float, 'u_rate': float, 'deletion_rate': float, 'insertion_rate': float, 'refskip_rate': float, 'mismatch_rate': float, 'mismatch_rate_alt': float, 'motif': str, 'q_mean': float, 'q_std': float, 'neighbour_error_pos': str}
         
         with open(self.in_path, "r") as file:
             next(file)
@@ -502,7 +502,7 @@ class POIAnalyzer():
         2. Un-scaled median rates for each base.
         3. Counts of matches and mismatches (category-match, counterpart-match, category-mismatch, counterpart-mismatch).
         """
-        cols = ["ref_base", "majority_base", "n_a_rel", "n_c_rel", "n_g_rel", "n_u_rel"]
+        cols = ["ref_base", "majority_base", "a_rate", "c_rate", "g_rate", "u_rate"]
 
         def get_rates(data: Dict[str, List[str|int|float]]) -> Tuple[Dict[str, Tuple[List[float], List[float]]], Tuple[int]]:
             rate_dict = defaultdict(lambda: ([], [])) # first sublist -> match; second sublist -> mismatch
@@ -587,11 +587,11 @@ class POIAnalyzer():
         """
         def get_rates(data: Dict[str, List[str|int|float]], x_mat: int, x_mis: int) -> Dict[str, Dict[str, List[float]]]:
             rate_dict = defaultdict(lambda: {"x": [], "y": []})
-            cols = ["ref_base", "majority_base", self.perc_mismatch_col, "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "q_mean"]
+            cols = ["ref_base", "majority_base", self.perc_mismatch_col, "deletion_rate", "insertion_rate", "refskip_rate", "q_mean"]
             cols_idxs = dict(zip(cols[2:], range(len(cols))))
             for ref, maj, *rates in zip(*(data[col] for col in cols)):
                 x = x_mat if ref == maj else x_mis
-                for rate in [self.perc_mismatch_col, "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "q_mean"]:
+                for rate in [self.perc_mismatch_col, "deletion_rate", "insertion_rate", "refskip_rate", "q_mean"]:
                     rate_dict[rate]["x"].append(x)
                     rate_dict[rate]["y"].append(rates[cols_idxs[rate]])
             return dict(rate_dict)

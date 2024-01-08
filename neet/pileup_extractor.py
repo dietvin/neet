@@ -29,8 +29,8 @@ class FeatureExtractor:
                  out_paths: str, 
                  ref_path: str,
                  num_reads: int, 
-                 perc_mismatch: float | None,
-                 perc_mismatch_alt: float | None,
+                 mismatch_rate: float | None,
+                 mismatch_rate_alt: float | None,
                  perc_deletion: float | None,
                  mean_quality: float | None,
                  genomic_region: str | None,
@@ -46,8 +46,8 @@ class FeatureExtractor:
 
         # if one of the following arguments was not provided (i.e. arg=None), set variable to a value so nothing gets filtered out
         self.filter_num_reads = num_reads if num_reads is not None else 1
-        self.filter_perc_mismatch = perc_mismatch if perc_mismatch else 0
-        self.filter_perc_mismatch_alt = perc_mismatch_alt if perc_mismatch_alt else 0
+        self.filter_perc_mismatch = mismatch_rate if mismatch_rate else 0
+        self.filter_perc_mismatch_alt = mismatch_rate_alt if mismatch_rate_alt else 0
         self.filter_perc_deletion = perc_deletion if perc_deletion else 0
         self.filter_mean_quality = mean_quality if mean_quality else 0
         self.filter_genomic_region = self.extract_positional_info(genomic_region) if genomic_region else None
@@ -280,7 +280,7 @@ class FeatureExtractor:
             hs.print_update("Counting number of lines to process.")
             progress_bar = tqdm(desc=desc, total=hs.get_num_lines(in_file))
 
-            header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_u\tn_del\tn_ins\tn_ref_skip\tn_a_rel\tn_c_rel\tn_g_rel\tn_u_rel\tn_del_rel\tn_ins_rel\tn_ref_skip_rel\tperc_mismatch\tperc_mismatch_alt\tmotif\tq_mean\tq_std\tneighbour_error_pos\n"
+            header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_u\tn_del\tn_ins\tn_ref_skip\ta_rate\tc_rate\tg_rate\tu_rate\tdeletion_rate\tinsertion_rate\trefskip_rate\tmismatch_rate\tmismatch_rate_alt\tmotif\tq_mean\tq_std\tneighbour_error_pos\n"
             o.write(header)
             
             nb_size_full = 1 + 2 * self.window_size
@@ -398,13 +398,13 @@ class FeatureExtractor:
         if count_rel["del"] < self.filter_perc_deletion: return ""
 
         # get allele fraction
-        perc_mismatch = self.get_mismatch_perc(count_rel, ref_base)
-        perc_mismatch_alt = self.get_mismatch_perc(count_rel_alt, ref_base)
+        mismatch_rate = self.get_mismatch_perc(count_rel, ref_base)
+        mismatch_rate_alt = self.get_mismatch_perc(count_rel_alt, ref_base)
 
-        # filter by perc_mismatch
-        if perc_mismatch < self.filter_perc_mismatch:
+        # filter by mismatch_rate
+        if mismatch_rate < self.filter_perc_mismatch:
             return ""
-        if perc_mismatch_alt < self.filter_perc_mismatch_alt:
+        if mismatch_rate_alt < self.filter_perc_mismatch_alt:
             return ""
 
         # get majority base
@@ -413,7 +413,7 @@ class FeatureExtractor:
         # get 11b motif
         motif = self.get_motif(chr, site, ref, k=2)
 
-        out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["u"]}\t{count["del"]}\t{count["ins"]}\t{count["ref_skip"]}\t{count_rel["a"]}\t{count_rel["c"]}\t{count_rel["g"]}\t{count_rel["u"]}\t{count_rel["del"]}\t{count_rel["ins"]}\t{count_rel["ref_skip"]}\t{perc_mismatch}\t{perc_mismatch_alt}\t{motif}\t{quality_mean}\t{quality_std}\n'
+        out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["u"]}\t{count["del"]}\t{count["ins"]}\t{count["ref_skip"]}\t{count_rel["a"]}\t{count_rel["c"]}\t{count_rel["g"]}\t{count_rel["u"]}\t{count_rel["del"]}\t{count_rel["ins"]}\t{count_rel["ref_skip"]}\t{mismatch_rate}\t{mismatch_rate_alt}\t{motif}\t{quality_mean}\t{quality_std}\n'
         return out
 
     def remove_indels(self, pileup_string: str) -> str:

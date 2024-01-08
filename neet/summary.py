@@ -19,7 +19,7 @@ class SummaryCreator:
     def __init__(self, in_path: str, out_path: str, n_bins: int|None, use_perc_mismatch_alt: bool, export_svg: bool) -> None:
         self.process_paths(in_path, out_path)
         self.n_bins = n_bins if n_bins != -1 else None
-        self.perc_mis_col = "perc_mismatch_alt" if use_perc_mismatch_alt else "perc_mismatch"
+        self.perc_mis_col = "mismatch_rate_alt" if use_perc_mismatch_alt else "mismatch_rate"
         self.export_svg = export_svg
         
     #################################################################################################################
@@ -57,10 +57,10 @@ class SummaryCreator:
         Returns:
         - None
         """
-        cols = ["chr", "n_reads", "ref_base", "majority_base", "n_del_rel", "n_ins_rel", "n_ref_skip_rel", "perc_mismatch", "q_mean", "motif"]
+        cols = ["chr", "n_reads", "ref_base", "majority_base", "deletion_rate", "insertion_rate", "refskip_rate", "mismatch_rate", "q_mean", "motif"]
 
-        col_idx = {'chr': 0, 'site': 1, 'n_reads': 2, 'ref_base': 3, 'majority_base': 4, 'n_a': 5, 'n_c': 6, 'n_g': 7, 'n_t': 8, 'n_del': 9, 'n_ins': 10, 'n_ref_skip': 11, 'n_a_rel': 12, 'n_c_rel': 13, 'n_g_rel': 14, 'n_t_rel': 15, 'n_del_rel': 16, 'n_ins_rel': 17, 'n_ref_skip_rel': 18, 'perc_mismatch': 19, 'perc_mismatch_alt': 20, 'motif': 21, 'q_mean': 22, 'q_std': 23, 'neighbour_error_pos': 24}
-        dtypes = {'chr': str, 'site': int, 'n_reads': int, 'ref_base': str, 'majority_base': str, 'n_a': int, 'n_c': int, 'n_g': int, 'n_t': int, 'n_del': int, 'n_ins': int, 'n_ref_skip': int, 'n_a_rel': float, 'n_c_rel': float, 'n_g_rel': float, 'n_t_rel': float, 'n_del_rel': float, 'n_ins_rel': float, 'n_ref_skip_rel': float, 'perc_mismatch': float, 'perc_mismatch_alt': float, 'motif': str, 'q_mean': float, 'q_std': float, 'neighbour_error_pos': str}
+        col_idx = {'chr': 0, 'site': 1, 'n_reads': 2, 'ref_base': 3, 'majority_base': 4, 'n_a': 5, 'n_c': 6, 'n_g': 7, 'n_t': 8, 'n_del': 9, 'n_ins': 10, 'n_ref_skip': 11, 'a_rate': 12, 'c_rate': 13, 'g_rate': 14, 'u_rate': 15, 'deletion_rate': 16, 'insertion_rate': 17, 'refskip_rate': 18, 'mismatch_rate': 19, 'mismatch_rate_alt': 20, 'motif': 21, 'q_mean': 22, 'q_std': 23, 'neighbour_error_pos': 24}
+        dtypes = {'chr': str, 'site': int, 'n_reads': int, 'ref_base': str, 'majority_base': str, 'n_a': int, 'n_c': int, 'n_g': int, 'n_t': int, 'n_del': int, 'n_ins': int, 'n_ref_skip': int, 'a_rate': float, 'c_rate': float, 'g_rate': float, 'u_rate': float, 'deletion_rate': float, 'insertion_rate': float, 'refskip_rate': float, 'mismatch_rate': float, 'mismatch_rate_alt': float, 'motif': str, 'q_mean': float, 'q_std': float, 'neighbour_error_pos': str}
         
         with open(self.input_path, "r") as file:
             next(file)
@@ -248,29 +248,29 @@ class SummaryCreator:
         Returns:
         - Dict[str, Tuple[int|List[float], int|List[float]]]: Dictionary containing binned or original mismatch data.
         """
-        data_mis = {"perc_mismatch": [], "n_del_rel": [], "n_ins_rel": [], "n_ref_skip_rel": []}
-        data_mat = {"perc_mismatch": [], "n_del_rel": [], "n_ins_rel": [], "n_ref_skip_rel": []}
+        data_mis = {"mismatch_rate": [], "deletion_rate": [], "insertion_rate": [], "refskip_rate": []}
+        data_mat = {"mismatch_rate": [], "deletion_rate": [], "insertion_rate": [], "refskip_rate": []}
 
         for d in zip(self.data["ref_base"], 
                      self.data["majority_base"], 
-                     self.data["perc_mismatch"], 
-                     self.data["n_del_rel"], 
-                     self.data["n_ins_rel"],
-                     self.data["n_ref_skip_rel"]):
+                     self.data["mismatch_rate"], 
+                     self.data["deletion_rate"], 
+                     self.data["insertion_rate"],
+                     self.data["refskip_rate"]):
             if d[0] == d[1]:
-                data_mat["perc_mismatch"].append(d[2])
-                data_mat["n_del_rel"].append(d[3])
-                data_mat["n_ins_rel"].append(d[4])
-                data_mat["n_ref_skip_rel"].append(d[5])
+                data_mat["mismatch_rate"].append(d[2])
+                data_mat["deletion_rate"].append(d[3])
+                data_mat["insertion_rate"].append(d[4])
+                data_mat["refskip_rate"].append(d[5])
             else:
-                data_mis["perc_mismatch"].append(d[2])
-                data_mis["n_del_rel"].append(d[3])
-                data_mis["n_ins_rel"].append(d[4])
-                data_mis["n_ref_skip_rel"].append(d[5])
+                data_mis["mismatch_rate"].append(d[2])
+                data_mis["deletion_rate"].append(d[3])
+                data_mis["insertion_rate"].append(d[4])
+                data_mis["refskip_rate"].append(d[5])
 
         data_dict = {}
-        data_dict["overall"] = (len(data_mat["perc_mismatch"]), len(data_mis["perc_mismatch"]))
-        for mismatch_type in ["perc_mismatch", "n_del_rel", "n_ins_rel", "n_ref_skip_rel"]:
+        data_dict["overall"] = (len(data_mat["mismatch_rate"]), len(data_mis["mismatch_rate"]))
+        for mismatch_type in ["mismatch_rate", "deletion_rate", "insertion_rate", "refskip_rate"]:
             if self.n_bins is not None:
                 if len(data_mat[mismatch_type]) > self.n_bins:
                     data_mat[mismatch_type] = self.bin_data(data_mat[mismatch_type])
@@ -396,10 +396,10 @@ class SummaryCreator:
 
         for ref, maj, *error_rates in zip(self.data["ref_base"], 
                                           self.data["majority_base"], 
-                                          self.data["perc_mismatch"], 
-                                          self.data["n_del_rel"], 
-                                          self.data["n_ins_rel"], 
-                                          self.data["n_ref_skip_rel"]):
+                                          self.data["mismatch_rate"], 
+                                          self.data["deletion_rate"], 
+                                          self.data["insertion_rate"], 
+                                          self.data["refskip_rate"]):
             if (ref != "N") & (maj != "N"):
                 mis_count[f"{ref} - {maj}"] += 1
                 # prepare error rate data for distribution plots by each error type
@@ -423,7 +423,7 @@ class SummaryCreator:
 
         # extract the data for each 3 base-pair motif; store error rates in dict by motifs
         motif_center_idx = len(self.data["motif"][0]) // 2
-        for motif, *error_rates in zip(self.data["motif"], self.data["perc_mismatch"], self.data["n_del_rel"], self.data["n_ins_rel"], self.data["n_ref_skip_rel"]):
+        for motif, *error_rates in zip(self.data["motif"], self.data["mismatch_rate"], self.data["deletion_rate"], self.data["insertion_rate"], self.data["refskip_rate"]):
             motif_3bp = motif[motif_center_idx-1:motif_center_idx+2]
             for i, err_type in enumerate(["mismatch_rate", "deletion_rate", "insertion_rate", "refskip_rate"]):
                 motif_error_rates[motif_3bp][err_type].append(error_rates[i])
@@ -581,7 +581,7 @@ class SummaryCreator:
                                 column_titles=("Mismatch frequency", "Deletion frequency", "Insertion frequency", "Reference skip frequ.", None))
             fig = self.update_plot(fig, height=600, width=1400)
 
-            for i, (dname, legend) in enumerate(zip(["perc_mismatch", "n_del_rel", "n_ins_rel", "n_ref_skip_rel"], [True, False, False, False]), start=1):
+            for i, (dname, legend) in enumerate(zip(["mismatch_rate", "deletion_rate", "insertion_rate", "refskip_rate"], [True, False, False, False]), start=1):
                 box_mat = boxplot(data_processed[dname][0], group="match", showlegend=legend)
                 box_mis = boxplot(data_processed[dname][1], group="mismatch", showlegend=legend)
                 fig.add_traces([box_mat, box_mis], rows=1, cols=i)

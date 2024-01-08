@@ -53,13 +53,13 @@ class PositionExtractor:
         self.label_b = label_b
         
         try:
-            feature_idx = {"n_del_rel": 16,
-                           "n_ins_rel": 17,
-                           "perc_mismatch": 19,
-                           "perc_mismatch_alt": 20}
+            feature_idx = {"deletion_rate": 16,
+                           "insertion_rate": 17,
+                           "mismatch_rate": 19,
+                           "mismatch_rate_alt": 20}
             self.error_feature_idx = feature_idx[error_feature]
         except KeyError:
-            raise Exception(f"Invalid error feature '{error_feature}'. Use one of: n_del_rel, n_ins_rel, perc_mismatch, perc_mismatch_alt")
+            raise Exception(f"Invalid error feature '{error_feature}'. Use one of: deletion_rate, insertion_rate, mismatch_rate, mismatch_rate_alt")
 
         self.error_threshold = error_threshold
         self.coverage_threshold = coverage_threshold
