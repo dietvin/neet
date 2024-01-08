@@ -16,14 +16,6 @@ Once installed `NEET` can be accessed via the terminal:
 ```
 neet --help
 ```
-Modules can be accessed as follows:
-```
-neet [SUBMODULE] --help
-```
-Modules can be accessed as follows:
-```
-neet [SUBMODULE] --help
-```
 Individual modules can be accessed as follows:
 ```
 neet [MODULE] --help
