@@ -30,6 +30,8 @@ def setup_parsers() -> argparse.ArgumentParser:
                                   If filename(s) are given the order corresponds to the input files. 
                                   If a directory is given, the output files are created using the 
                                   basename from an input file with the suffix "_extracted.tsv".
+                                  Accordingly the summary file will be created with the suffix
+                                  "_extracted_summary.html".
                                   """)
     extractor_parser.add_argument("-r", "--ref", type=str, required=True, 
                                   help="Path to the reference file in fasta format")
@@ -113,7 +115,9 @@ def setup_parsers() -> argparse.ArgumentParser:
                                 """)
     summary_parser.add_argument("-o", "--output", type=str, required=True,
                                 help="""
-                                Path to output a output directory or file. If plots --export_svg is set the exported 
+                                Path to output a output directory or file. If a directory is given, the output 
+                                files are created using the basename from an input file with the suffix 
+                                "_summary.html". If plots --export_svg is set the exported 
                                 plots will be stored in the same directory as the HTML report.                                
                                 """)
     summary_parser.add_argument("-b", "--n_bins", type=int, required=False, default=5000,
@@ -146,7 +150,8 @@ def setup_parsers() -> argparse.ArgumentParser:
                                      help="""
                                      Path to the output files or directory. If files are given, one path must
                                      be provided for each bed-category that is given. If a directory is given
-                                     all output files stored in it.  
+                                     a summary file will be created for each given category named
+                                     "<category>_<input-basename>_summary.html".
                                      """)
     poi_analyzer_parser.add_argument("-b", "--bed", type=str, required=True,
                                      help="""
@@ -170,7 +175,7 @@ def setup_parsers() -> argparse.ArgumentParser:
     poi_analyzer_parser.add_argument("--update_tsv", action="store_true", 
                                      help="""
                                      If specified, creates an updated feature table (TSV) containing the 
-                                     information from the name column in the bed file. Suffix "_w_bed_info" 
+                                     information from the name column in the bed file. Suffix "_w_bed_info.tsv" 
                                      will be added to newly created file.
                                      """)
     poi_analyzer_parser.add_argument("--use_mismatch_rate_alt", action="store_true", 
@@ -271,7 +276,8 @@ def setup_parsers() -> argparse.ArgumentParser:
                                     """)
     pos_summary_parser.add_argument("-o", "--output_dir", type=str, required=True,
                                     help="""
-                                    Path to output directory. The output file is created using the basenames from the input samples.
+                                    Path to output directory. The output file is created using the basenames from the input samples
+                                    as follows: <basename1>_<basename2>_<basename-bed-file>_summary.html
                                     """)
     pos_summary_parser.add_argument("-n", "--n_surrounding", type=hs.positive_int, required=False, default=2,
                                     help="""
