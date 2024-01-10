@@ -604,7 +604,7 @@ class POIAnalyzer():
             for key in rates.keys():
                 rates[key]["x"] += rates_cou[key]["x"]
                 rates[key]["y"] += rates_cou[key]["y"]
-            x_vals = [f"<i>{self.current_category}</i>", 
+            x_vals = [f"<i>{self.current_category}</i> match", 
                     f"{self.current_counterpart} match", 
                     f"<i>{self.current_category}</i> mismatch", 
                     f"{self.current_counterpart} mismatch"]
