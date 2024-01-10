@@ -31,7 +31,7 @@ def setup_parsers() -> argparse.ArgumentParser:
                                   If a directory is given, the output files are created using the 
                                   basename from an input file with the suffix "_extracted.tsv".
                                   """)
-    extractor_parser.add_argument("-r", "--reference", type=str, required=True, 
+    extractor_parser.add_argument("-r", "--ref", type=str, required=True, 
                                   help="Path to the reference file in fasta format")
     extractor_parser.add_argument("-n", "--num_reads", type=hs.positive_int, required=False,
                                   help="""
@@ -215,7 +215,7 @@ def setup_parsers() -> argparse.ArgumentParser:
                                       The following files will be created: "<basename>_<basename2>_summary.html", 
                                       "<basename>_<basename2>.bed", "<basename>_excl.bed", "<basename2>_excl.bed"
                                       """)
-    two_extractor_parser.add_argument("-r", "--reference", type=str, required=True, 
+    two_extractor_parser.add_argument("-r", "--ref", type=str, required=True, 
                                       help="""
                                       Path to the reference file in fasta format
                                       """)
@@ -265,7 +265,7 @@ def setup_parsers() -> argparse.ArgumentParser:
                                     Basename of the second sample.
                                     Default: "sample2"
                                     """)
-    pos_summary_parser.add_argument("-b", "--bed_file", type=str, required=True,
+    pos_summary_parser.add_argument("-b", "--bed", type=str, required=True,
                                     help="""
                                     Path to the input BED file.
                                     """)
@@ -287,7 +287,8 @@ def setup_parsers() -> argparse.ArgumentParser:
     filter_parser.add_argument("-o", "--output", type=str, required=True,
                                help="""
                                Path to output TSV file or directory. If a directory is given
-
+                               writes the output file with the basename of the input file
+                               + "_filtered".
                                """)
     filter_parser.add_argument("-c", "--chromosome", type=str, required=False,
                                help="Filter by given chromosome.")
@@ -412,7 +413,7 @@ def main():
         print_figlet("NEET - Pileup Extractor")
         feature_extractor = FeatureExtractor(in_paths=args.input, 
                                              out_paths=args.output, 
-                                             ref_path=args.reference,
+                                             ref_path=args.ref,
                                              num_reads=args.num_reads, 
                                              mismatch_rate=args.mismatch_rate,
                                              mismatch_rate_alt=args.mismatch_rate_alt,
@@ -455,7 +456,7 @@ def main():
         posextr = PositionExtractor(in_paths_a=args.sample1, 
                                     in_paths_b=args.sample2, 
                                     out_dir=args.output, 
-                                    ref_path=args.reference, 
+                                    ref_path=args.ref, 
                                     label_a=args.basename1, 
                                     label_b=args.basename2, 
                                     error_feature=args.error_feature,
@@ -470,7 +471,7 @@ def main():
                                       paths_b = args.sample2,
                                       basename_a = args.basename1,
                                       basename_b = args.basename2,
-                                      bed_path = args.bed_file,
+                                      bed_path = args.bed,
                                       out_path = args.output_dir,
                                       nb_size = args.n_surrounding)
         pos_summary.main() 
