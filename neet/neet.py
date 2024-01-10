@@ -447,7 +447,7 @@ def main():
                                    categories=args.bed_categories,
                                    canonical_counterpart=args.counterparts,
                                    output_tsv=args.update_tsv,
-                                   use_perc_mismatch_alt=args.use_perc_mismatch_alt,
+                                   use_perc_mismatch_alt=args.use_mismatch_rate_alt,
                                    export_svg=args.export_svg)
         poi_analyzer.main()
 
@@ -487,7 +487,7 @@ def main():
                         mismatched=args.mismatched,
                         mismatch_types=args.mismatch_types,
                         perc_mismatched=args.percent_mismatched,
-                        perc_mismatched_alt=args.percent_mismatched_alt,
+                        perc_mismatched_alt=args.mismatch_rate_alt,
                         perc_deletion=args.percent_deletion,
                         perc_insertion=args.percent_insertion,
                         perc_refskip=args.percent_refskip,
