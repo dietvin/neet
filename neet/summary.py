@@ -180,7 +180,7 @@ class SummaryCreator:
         if total_length == num_segments:
             return data
         elif total_length < num_segments:
-            raise Exception(f"Number of bins too large (={num_segments}). Must be smaller than the data length (={total_length})")
+            return data
         segment_length = segment_length = total_length // num_segments
         remainder = total_length % num_segments
         
