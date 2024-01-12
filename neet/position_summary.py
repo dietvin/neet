@@ -511,7 +511,7 @@ class PositionSummary:
         for (position_a, data_a), (position_b, data_b) in zip(self.data_sample_a.items(), self.data_sample_b.items()):
             plots = self.create_position_plots(data_a, data_b)
             if self.export_svg:
-                self.write_svg()
+                self.write_svg(plots, position_a, export_dir)
             collapsible_sections += self.create_html_section(position_a, plots) 
         
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
