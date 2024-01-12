@@ -21,4 +21,4 @@ Individual modules can be accessed as follows:
 neet [MODULE] --help
 ```
 Available modules are: Pileup Extractor (`extractor`), Summary (`summmary`), Position-of-Interest Analyzer (`analyze_poi`), Two-Sample Extractor (`twosample`), Position Summary (`pos_summary`), Filter (`filter`) and Bedops (`bedops`). 
-A detailled description of all available modules is provided in the [Wiki](https://github.com/dietvin/neet/wiki/02-Modules). The Wiki also provides detailed walkthroughs for some possible use cases.
+A detailled description of all available modules is provided in the [Wiki](https://github.com/dietvin/neet/wiki/02-Modules). The Wiki also provides [walkthroughs](https://github.com/dietvin/neet/wiki/03-Example-Workflows) for some possible use cases.
