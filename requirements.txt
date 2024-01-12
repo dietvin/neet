@@ -1,0 +1,6 @@
+plotly==5.18.0
+tqdm==4.66.1
+intervaltree==3.1.0
+scipy==1.11.4
+pyfiglet==1.0.2
+setuptools==69.0.3
