@@ -285,6 +285,14 @@ def setup_parsers() -> argparse.ArgumentParser:
                                     In the created plots sites X-n, ..., X, ..., X+n are shown. 
                                     Default: 2
                                     """)
+    pos_summary_parser.add_argument("--export_svg", action="store_true", 
+                                    help="""
+                                    Specify to export the created plots in SVG format. Files will be created in a directory of the 
+                                    following format: <output_dir>/<basename1>_<basename2>_<basename-bed-file>
+                                    For each position three plots will be created. The files will be named as follows:
+                                    <chromosome>_<coordinate>_<plot-type>.svg
+                                    """)
+
     
     # add parser for filtering
     filter_parser = subparsers.add_parser("filter", help="Run the Filter module")
@@ -479,7 +487,8 @@ def main():
                                       basename_b = args.basename2,
                                       bed_path = args.bed,
                                       out_path = args.output_dir,
-                                      nb_size = args.n_surrounding)
+                                      nb_size = args.n_surrounding,
+                                      export_svg=args.export_svg)
         pos_summary.main() 
     
     elif args.subcommand == "filter":

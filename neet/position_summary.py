@@ -47,11 +47,13 @@ class PositionSummary:
     data_sample_a: Dict[Tuple[chr, int], List[List[List[str]]]]
     data_sample_b: Dict[Tuple[chr, int], List[List[List[str]]]]
 
+    export_svg: bool
+
     colors = {"A": "#2ca02c", "C": "#1f77b4", "G": "#ff7f0e", "U": "#d62728", 
               "match": "#9467bd", "mis": "#8c564b", "del": "#e377c2", 
               "ins": "#7f7f7f", "ref_skip": "#7f7f7f"}
 
-    def __init__(self, paths_a: str, paths_b: str, basename_a: str, basename_b: str, bed_path: str, out_path: str, nb_size: int) -> None:
+    def __init__(self, paths_a: str, paths_b: str, basename_a: str, basename_b: str, bed_path: str, out_path: str, nb_size: int, export_svg: bool) -> None:
         
         self.basename_a = basename_a
         self.basename_b = basename_b
@@ -64,6 +66,8 @@ class PositionSummary:
         self.bed_path = bed_path
         self.basename_bed = os.path.splitext(os.path.basename(bed_path))[0]
         self.nb_size = nb_size
+
+        self.export_svg = export_svg
 
         paths_a = self.process_in(paths_a)
         paths_b = self.process_in(paths_b)
@@ -370,7 +374,7 @@ class PositionSummary:
         bar_traces = [create_bar_func(d, x, c, l) for d, x, c, l in zip(data, x_vals, is_center_pos, show_legend)]
         return [item for t in bar_traces for item in t]
 
-    def create_position_plots(self, data_a: List[List[List[str]]], data_b: List[List[List[str]]]) -> Tuple[str]:
+    def create_position_plots(self, data_a: List[List[List[str]]], data_b: List[List[List[str]]]) -> Tuple[go.Figure, go.Figure, go.Figure]:
         """
         Create Plotly plots for base composition, error rates, and insertion rates for each position.
 
@@ -410,10 +414,10 @@ class PositionSummary:
                 fig.update_xaxes(tickvals=[], ticktext=[], row=i, col=1)
             fig.update_xaxes(tickvals=list(range(-self.nb_size,self.nb_size+1)), ticktext=[d[3] for d in data_a[0]], row=n_samples, col=1)
 
-            figs.append(fig.to_html(include_plotlyjs=False))
+            figs.append(fig)
         return tuple(figs)
     
-    def create_html_section(self, position: Tuple[str, int], plots: Tuple[str, str, str]) -> str:
+    def create_html_section(self, position: Tuple[str, int], plots: Tuple[go.Figure, go.Figure, go.Figure]) -> str:
         """
         Create an HTML section for a genomic position with embedded plots.
 
@@ -426,9 +430,9 @@ class PositionSummary:
         """
         chrom, site = position[0], position[1]
     
-        plot_base_comp = plots[0]
-        plot_err_rates = plots[1]
-        plot_ins_rate = plots[2]
+        plot_base_comp = plots[0].to_html(include_plotlyjs=False)
+        plot_err_rates = plots[1].to_html(include_plotlyjs=False)
+        plot_ins_rate = plots[2].to_html(include_plotlyjs=False)
 
         collapsible_section = f"""
             <section>
@@ -473,6 +477,24 @@ class PositionSummary:
         
         return create_list(self.paths_a), create_list(self.paths_b)
 
+    def write_svg(self, figs: Tuple[go.Figure, go.Figure, go.Figure], position: Tuple[str, int], output_dir: str) -> None:
+        """
+        Write the three plots (base composition, error rates and insertion rates) to three separate SVG files in
+        output_dir. The name of the file is in the following format: <chr>_<coordinate>_<plot-type>.svg
+        All plots are written to the directory created beforehand.
+
+        Parameters:
+        - figs (Tuple[go.Figure, go.Figure, go.Figure]): Plotly figures of base composition, error rates and insertion rates
+        - positions (Tuple[str, int]): Genomic position (chromosome, site).
+        - output_dir (str): Output directory as created beforehand in main method.
+
+        Returns:
+        - None
+        """
+        for fig, fig_type in zip(figs, ["base_composit", "error_rates", "insertion_rates"]):
+            outpath = os.path.join(output_dir, f"{position[0]}_{position[1]}_{fig_type}.svg")
+            fig.write_image(outpath)
+
     def main(self) -> str:
         """
         Main method to generate the HTML summary report.
@@ -481,8 +503,15 @@ class PositionSummary:
         - str: File path to the generated HTML summary report.
         """
         collapsible_sections = ""
+
+        if self.export_svg:
+            export_dir = os.path.join(self.out_dir, f"{self.basename_a}_{self.basename_b}_{self.basename_bed}") 
+            os.makedirs(export_dir)
+
         for (position_a, data_a), (position_b, data_b) in zip(self.data_sample_a.items(), self.data_sample_b.items()):
             plots = self.create_position_plots(data_a, data_b)
+            if self.export_svg:
+                self.write_svg()
             collapsible_sections += self.create_html_section(position_a, plots) 
         
         time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
