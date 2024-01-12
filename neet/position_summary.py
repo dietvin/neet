@@ -506,7 +506,7 @@ class PositionSummary:
 
         if self.export_svg:
             export_dir = os.path.join(self.out_dir, f"{self.basename_a}_{self.basename_b}_{self.basename_bed}") 
-            os.makedirs(export_dir)
+            os.makedirs(export_dir, exist_ok=True)
 
         for (position_a, data_a), (position_b, data_b) in zip(self.data_sample_a.items(), self.data_sample_b.items()):
             plots = self.create_position_plots(data_a, data_b)
