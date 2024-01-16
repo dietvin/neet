@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 
 from setuptools import setup
-from neet.__version__ import __version__
-
+# from neet.__version__ import __version__
+__version__="0.0.1"
 setup(name="neet",
       version=__version__,
       description="Nanopore error pattern exploration toolkit",
