@@ -21,7 +21,7 @@ def setup_parsers() -> argparse.ArgumentParser:
                                         data. Github: https://github.com/dietvin/neet
                                         """)
     
-    parser.add_argument("-v", "--version", action="version", version=f"NEET v.{__version__}", help="show version number and exit")
+    parser.add_argument("-v", "--version", action="version", version=f"NEET v{__version__}", help="show version number and exit")
 
     subparsers = parser.add_subparsers(title="Modules", dest="subcommand")
 
