@@ -402,9 +402,12 @@ def setup_parsers() -> argparse.ArgumentParser:
     # add parser for bed ops
     bedops_parser = subparsers.add_parser("bedops", 
                                           help="""
-                                            Perform minor tasks related to bed files in. 
+                                            Perform minor tasks related to bed files. 
                                             """)
-    subsubparsers = bedops_parser.add_subparsers(title="Bed-Ops commands", dest="subsubcommand", required=True)
+    subsubparsers = bedops_parser.add_subparsers(title="Bed-Ops commands", dest="subsubcommand",
+                                                 help="""
+                                                    Perform minor tasks related to bed files.
+                                                    """)
 
     tsv2bed_parser = subsubparsers.add_parser("tsv2bed", help="Transform feature table into BED format")
     tsv2bed_parser.add_argument("-i", "--input", type=str, required=True,
@@ -447,17 +450,14 @@ def setup_parsers() -> argparse.ArgumentParser:
                                    help="Path to the output file")
 
 
-    return parser
+    return parser, bedops_parser
 
 def main():
 
-    parser = setup_parsers()
+    parser, bedops_parser = setup_parsers()
     args = parser.parse_args()
 
-    if not hasattr(args, 'subcommand'):
-        parser.print_help()
-
-    elif args.subcommand == "extractor":
+    if args.subcommand == "extractor":
         print_figlet("NEET - Pileup Extractor")
         feature_extractor = FeatureExtractor(in_paths=args.input, 
                                              out_paths=args.output, 
@@ -558,6 +558,8 @@ def main():
             merge(args.input, args.output)
         elif args.subsubcommand == "difference":
             difference(bed1=args.input1, bed2=args.input1, out=args.output)
+        else:
+            bedops_parser.print_help()
     else:
         print_figlet("NEET")
         parser.print_help()
