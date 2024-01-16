@@ -13,11 +13,19 @@ def print_figlet(text: str) -> None:
     print(Figlet(font="slant").renderText(text))
 
 def setup_parsers() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="NEET Command Line Interface")
-    subparsers = parser.add_subparsers(title="Subcommands", dest="subcommand", required=True)
+    parser = argparse.ArgumentParser(prog="NEET", 
+                                     description="""
+                                        Nanopore Error pattern Exploration Toolkit (NEET) -- 
+                                        Framework for the analysis and exploration of (direct RNA) nanopore sequencing
+                                        data. Github: https://github.com/dietvin/neet
+                                        """)
+    subparsers = parser.add_subparsers(title="Modules", dest="subcommand")
 
     # add parser for pileup extractor
-    extractor_parser = subparsers.add_parser("extractor", help="Run the Extractor module")
+    extractor_parser = subparsers.add_parser("extractor", 
+                                             help="""
+                                                Extract mapped sequencing data from pileup format into an accessible feature table. 
+                                                """)
 
     extractor_parser.add_argument("-i", "--input", type=str, required=True,
                                   help="""
@@ -108,7 +116,10 @@ def setup_parsers() -> argparse.ArgumentParser:
                                   """)
 
     # add parser for summary
-    summary_parser = subparsers.add_parser("summary", help="Run the Summary module")
+    summary_parser = subparsers.add_parser("summary", 
+                                           help="""
+                                            Create a visual overview of a feature table. 
+                                            """)
     summary_parser.add_argument("-i", "--input", type=str, required=True,
                                 help="""
                                 Path to the input TSV file. 
@@ -141,7 +152,11 @@ def setup_parsers() -> argparse.ArgumentParser:
 
 
     # add parser for position-of-interest analyzer
-    poi_analyzer_parser = subparsers.add_parser("analyze_poi", help="Run the Position-of-Interest-Analyzer module")
+    poi_analyzer_parser = subparsers.add_parser("analyzepoi", 
+                                                help="""
+                                                    Analyze and explore specific positions of interest
+                                                    """)
+    
     poi_analyzer_parser.add_argument("-i", "--input", type=str, required=True,
                                      help="""
                                      Path to the input file. Must be of type tsv, as returned by the PileupExtractor.
@@ -189,7 +204,11 @@ def setup_parsers() -> argparse.ArgumentParser:
                                      """)
 
     # add parser for two sample extractor
-    two_extractor_parser = subparsers.add_parser("twosample", help="Run the Two-Sample-Extractor module")
+    two_extractor_parser = subparsers.add_parser("twosample", 
+                                                 help="""
+                                                    Extract positions of differential error rates between two samples.
+                                                    """)
+    
     two_extractor_parser.add_argument("-i", "--sample1", type=str, required=True,
                                       help="""
                                       Path to the input file(s). If replicates are available, specify paths 
@@ -247,7 +266,12 @@ def setup_parsers() -> argparse.ArgumentParser:
                                       """)
 
     # add parser for position summary
-    pos_summary_parser = subparsers.add_parser("pos_summary", help="Run the Position-Summary module")
+    pos_summary_parser = subparsers.add_parser("possummary", 
+                                               help="""
+                                                Visualize base compositions and error rates at individual positions
+                                                between two conditions. 
+                                                """)
+    
     pos_summary_parser.add_argument("-i", "--sample1", type=str, required=True,
                                     help="""
                                     Path to the input file(s). If replicates are available, 
@@ -295,7 +319,11 @@ def setup_parsers() -> argparse.ArgumentParser:
 
     
     # add parser for filtering
-    filter_parser = subparsers.add_parser("filter", help="Run the Filter module")
+    filter_parser = subparsers.add_parser("filter", 
+                                          help="""
+                                            Filter a feature table on one or more features.
+                                            """)
+    
     filter_parser.add_argument("-i", "--input", type=str, required=True,
                                help="Path to input TSV file.")
     filter_parser.add_argument("-o", "--output", type=str, required=True,
@@ -372,7 +400,10 @@ def setup_parsers() -> argparse.ArgumentParser:
                                """)
     
     # add parser for bed ops
-    bedops_parser = subparsers.add_parser("bedops", help="Run the Bed-Ops module")
+    bedops_parser = subparsers.add_parser("bedops", 
+                                          help="""
+                                            Perform minor tasks related to bed files in. 
+                                            """)
     subsubparsers = bedops_parser.add_subparsers(title="Bed-Ops commands", dest="subsubcommand", required=True)
 
     tsv2bed_parser = subsubparsers.add_parser("tsv2bed", help="Transform feature table into BED format")
@@ -423,7 +454,10 @@ def main():
     parser = setup_parsers()
     args = parser.parse_args()
 
-    if args.subcommand == "extractor":
+    if not hasattr(args, 'subcommand'):
+        parser.print_help()
+
+    elif args.subcommand == "extractor":
         print_figlet("NEET - Pileup Extractor")
         feature_extractor = FeatureExtractor(in_paths=args.input, 
                                              out_paths=args.output, 
@@ -452,7 +486,7 @@ def main():
                                  export_svg=args.export_svg,)
         summary.main()
 
-    elif args.subcommand == "analyze_poi":
+    elif args.subcommand == "analyzepoi":
         print_figlet("NEET - Position-of-Interest Analyzer")
         poi_analyzer = POIAnalyzer(in_path=args.input,
                                    out_path=args.output,
@@ -479,7 +513,7 @@ def main():
                                     export_svg=args.export_svg)
         posextr.main()
 
-    elif args.subcommand == "pos_summary":
+    elif args.subcommand == "possummary":
         print_figlet("NEET - Position Summary")
         pos_summary = PositionSummary(paths_a = args.sample1,
                                       paths_b = args.sample2,
