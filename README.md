@@ -3,9 +3,11 @@
 The Nanopore Error pattern Exploration Toolkit (`NEET`) provides a range of functionalities that provide an easily accessible and interactive analysis approach for (systematic) base-calling errors in direct RNA nanopore sequencing data. The implemented modules include options for condensing, visualizing and differentiating error features contained in direct RNA sequencing data - including mismatch, deletion and insertion rates, among others.
 
 ## Installation
-It is recommended to use Conda or Mamba for installation:
+It is recommended to use Conda/Mamba and pip for installation:
 ```
-conda install neet 
+conda create -y -n neet python==3.10 && conda activate neet
+pip install neet-nanopore
+neet --version
 ```
 For more information and alternative installation approaches refer to the [Wiki](https://github.com/dietvin/neet/wiki/01-Installation).
 
