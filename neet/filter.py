@@ -1,5 +1,5 @@
 import argparse, io, sys, re
-import neet.helper_functions as hs
+from . import helper_functions as hs
 from typing import List, Tuple, Callable
 from tqdm import tqdm
 import os

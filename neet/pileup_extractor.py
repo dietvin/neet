@@ -3,9 +3,8 @@ from typing import Dict, List, Tuple, Union, Any
 from tqdm import tqdm
 import numpy as np
 from multiprocessing import Pool
-from neet.helper_functions import positive_int, positive_float, float_between_zero_and_one, get_num_lines
-import neet.helper_functions as hs
-from neet.summary import SummaryCreator
+from . import helper_functions as hs
+from .summary import SummaryCreator
 class FeatureExtractor:
 
     input_paths : List[str]

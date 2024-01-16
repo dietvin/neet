@@ -1,4 +1,4 @@
-import neet.helper_functions as hs
+from . import helper_functions as hs
 from typing import Tuple, List, Dict
 import argparse, os, warnings, datetime
 import plotly.graph_objects as go

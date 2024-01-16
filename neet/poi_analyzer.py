@@ -9,7 +9,7 @@ import datetime, argparse
 from collections import defaultdict
 from statistics import median
 from scipy.stats import normaltest, bartlett, ttest_ind, mannwhitneyu
-import neet.helper_functions as hs
+from . import helper_functions as hs
 
 class POIAnalyzer():
 

@@ -1,7 +1,7 @@
 from typing import List, Dict, Any, Tuple, Set
 import os, warnings, sys, datetime, argparse
 from collections import Counter
-import neet.helper_functions as hs
+from . import helper_functions as hs
 import plotly.graph_objects as go
 from plotly.io import to_html
 

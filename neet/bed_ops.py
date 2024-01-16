@@ -1,6 +1,6 @@
 import argparse, os, csv
 from typing import List, Tuple, Dict
-import neet.helper_functions as hs
+from . import helper_functions as hs
 from tqdm import tqdm
 
 def tsv_to_bed(in_path: str, out_path: str) -> None:
