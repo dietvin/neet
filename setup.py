@@ -3,13 +3,9 @@
 from setuptools import setup
 from neet.__version__ import __version__
 
-with open("README.md", "r") as f:
-    long_description = f.read()
-
 setup(name="neet",
       version=__version__,
       description="Nanopore error pattern exploration toolkit",
-      long_description=long_description,
       author="Vincent Dietrich",
       author_email="dietricv@uni-mainz.de",
       url="https://github.com/dietvin/neet",
