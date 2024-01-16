@@ -1,10 +1,9 @@
 #!/usr/bin/env python
 
 from setuptools import setup
-from .neet.__version__ import __version__
 
 setup(name="neet",
-      version=__version__,
+      version="0.0.1",
       description="Nanopore error pattern exploration toolkit",
       author="Vincent Dietrich",
       author_email="dietricv@uni-mainz.de",
