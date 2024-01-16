@@ -1,14 +1,14 @@
 from pyfiglet import Figlet
 import argparse
-import neet.helper_functions as hs
-from neet.__version__ import __version__
-from neet.pileup_extractor import FeatureExtractor
-from neet.summary import SummaryCreator
-from neet.poi_analyzer import POIAnalyzer
-from neet.two_sample_extractor import PositionExtractor
-from neet.position_summary import PositionSummary
-from neet.filter import Filter
-from neet.bed_ops import tsv_to_bed, intersect_beds, add_bed_info, merge, difference
+from . import helper_functions as hs
+from .__version__ import __version__
+from .pileup_extractor import FeatureExtractor
+from .summary import SummaryCreator
+from .poi_analyzer import POIAnalyzer
+from .two_sample_extractor import PositionExtractor
+from .position_summary import PositionSummary
+from .filter import Filter
+from .bed_ops import tsv_to_bed, intersect_beds, add_bed_info, merge, difference
 
 def print_figlet(text: str) -> None:
     print(Figlet(font="slant").renderText(text))
