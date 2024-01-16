@@ -1,6 +1,7 @@
 from pyfiglet import Figlet
 import argparse
 import neet.helper_functions as hs
+from neet.__version__ import __version__
 from neet.pileup_extractor import FeatureExtractor
 from neet.summary import SummaryCreator
 from neet.poi_analyzer import POIAnalyzer
@@ -19,6 +20,9 @@ def setup_parsers() -> argparse.ArgumentParser:
                                         Framework for the analysis and exploration of (direct RNA) nanopore sequencing
                                         data. Github: https://github.com/dietvin/neet
                                         """)
+    
+    parser.add_argument("-v", "--version", action="version", version=f"NEET v.{__version__}", help="show version number and exit")
+
     subparsers = parser.add_subparsers(title="Modules", dest="subcommand")
 
     # add parser for pileup extractor
