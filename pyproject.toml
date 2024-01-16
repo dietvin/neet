@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "neet-nanopore"
+version = "0.0.2"
+
+dynamic = ["dependencies", 
+    "scripts", 
+    "classifiers", 
+    "authors", 
+    "license", 
+    "requires-python", 
+    "readme"]
