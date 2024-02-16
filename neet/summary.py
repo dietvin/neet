@@ -241,7 +241,7 @@ class SummaryCreator:
 
         return n_sites_x, n_sites_y, chroms, n_reads, q_mean
 
-    def prepare_data_mism_general(self) -> Dict[str, Tuple[int|List[float], int|List[float]]]:
+    def prepare_data_mism_general(self) -> Dict[str, Tuple[int|List[float], int|List[float], int|List[float]]]:
         """
         Prepare mismatch data for plotting general mismatch information.
 
@@ -249,6 +249,7 @@ class SummaryCreator:
         - Dict[str, Tuple[int|List[float], int|List[float]]]: Dictionary containing binned or original mismatch data.
         """
         data_mis = {"mismatch_rate": [], "deletion_rate": [], "insertion_rate": [], "refskip_rate": []}
+        data_del = {"mismatch_rate": [], "deletion_rate": [], "insertion_rate": [], "refskip_rate": []}
         data_mat = {"mismatch_rate": [], "deletion_rate": [], "insertion_rate": [], "refskip_rate": []}
 
         for d in zip(self.data["ref_base"], 
@@ -262,6 +263,11 @@ class SummaryCreator:
                 data_mat["deletion_rate"].append(d[3])
                 data_mat["insertion_rate"].append(d[4])
                 data_mat["refskip_rate"].append(d[5])
+            elif d[1] == "-":
+                data_del["mismatch_rate"].append(d[2])
+                data_del["deletion_rate"].append(d[3])
+                data_del["insertion_rate"].append(d[4])
+                data_del["refskip_rate"].append(d[5])
             else:
                 data_mis["mismatch_rate"].append(d[2])
                 data_mis["deletion_rate"].append(d[3])
@@ -269,14 +275,16 @@ class SummaryCreator:
                 data_mis["refskip_rate"].append(d[5])
 
         data_dict = {}
-        data_dict["overall"] = (len(data_mat["mismatch_rate"]), len(data_mis["mismatch_rate"]))
+        data_dict["overall"] = (len(data_mat["mismatch_rate"]), len(data_mis["mismatch_rate"]), len(data_del["mismatch_rate"]))
         for mismatch_type in ["mismatch_rate", "deletion_rate", "insertion_rate", "refskip_rate"]:
             if self.n_bins is not None:
                 if len(data_mat[mismatch_type]) > self.n_bins:
                     data_mat[mismatch_type] = self.bin_data(data_mat[mismatch_type])
                 if len(data_mis[mismatch_type]) > self.n_bins:
                     data_mis[mismatch_type] = self.bin_data(data_mis[mismatch_type])
-            data_dict[mismatch_type] = (data_mat[mismatch_type], data_mis[mismatch_type])
+                if len(data_del[mismatch_type]) > self.n_bins:
+                    data_del[mismatch_type] = self.bin_data(data_del[mismatch_type])
+            data_dict[mismatch_type] = (data_mat[mismatch_type], data_mis[mismatch_type], data_del[mismatch_type])
 
         return data_dict
     
@@ -291,21 +299,21 @@ class SummaryCreator:
         - Tuple[List[List[int]], List[List[str]], int]: Tuple containing matrix data, matrix labels, and the maximum value in the matrix.
         """
         # prepare data for the confusion matrix
-        matrix_data = [[None]*4 for _ in range(4)]
-        matrix_labels = [[None]*4 for _ in range(4)]
-        bases = ["A", "C", "G", "U"]
+        matrix_data = [[None]*5 for _ in range(5)]
+        matrix_labels = [[None]*5 for _ in range(5)]
+        bases = ["A", "C", "G", "U", "-"]
         # fill count matrix
-        for i in range(4): 
-            for j in range(4):
-                count = mis_count[f"{bases[i]} - {bases[j]}"]
+        for i in range(5): 
+            for j in range(5):
+                count = mis_count[f"{bases[i]} - {bases[j]}"] if i<4 else 0 # 0 in case of "- - X"
                 matrix_data[i][j] = count
                 if i != j:
                     matrix_labels[i][j] = count
         # fill the matrix containing corresponding labels
         vals_flat = [element for sublist in matrix_labels for element in sublist if (element is not None)]
         vals_sum = sum(vals_flat)
-        for i in range(4): 
-            for j in range(4):
+        for i in range(5): 
+            for j in range(5):
                 if matrix_labels[i][j]:
                     matrix_labels[i][j] = f"{round(matrix_labels[i][j] / vals_sum * 100, 2)}%"
                 else: 
@@ -357,7 +365,9 @@ class SummaryCreator:
             mismatch_types = ["A - C","A - G","A - U",
                             "C - A","C - G","C - U",
                             "G - A","G - C","G - U",
-                            "U - A","U - C","U - G"]
+                            "U - A","U - C","U - G",
+                            "A - -", "C - -", "G - -",
+                            "U - -"]
             for mis_type in mismatch_types:
                 mask = [mis_type == m for m in mis_error_rates["mismatch_type"]]
                 for err_type in ["mismatch_rate", "deletion_rate", "insertion_rate", "refskip_rate"]:
@@ -389,7 +399,7 @@ class SummaryCreator:
         - Tuple[List[List[int]], List[List[str]], int, List[int], List[str], Dict[str, List[str|float]]]: 
         Tuple containing data for confusion matrix, pie chart, and box plot for mismatch types analysis.
         """
-        mis_types = [f"{f} - {t}" for f in ["A", "C", "G", "U"] for t in ["A", "C", "G", "U"]]
+        mis_types = [f"{f} - {t}" for f in ["A", "C", "G", "U"] for t in ["A", "C", "G", "U", "-"]]
         mis_count = dict(zip(mis_types, [0]*len(mis_types)))
 
         mis_error_rates = {"mismatch_type": [],"mismatch_rate": [], "deletion_rate": [], "insertion_rate": [], "refskip_rate": []}
@@ -565,10 +575,14 @@ class SummaryCreator:
                     name = "Match"
                     fillcolor = "#4c72b0"
                     legendgroup = "match"
-                else:
+                elif group == "mismatch":
                     name = "Mismatch"
                     fillcolor = "#dd8452"
                     legendgroup = "mism"
+                else:
+                    name = "Deletion"
+                    fillcolor = "#2ca02c"
+                    legendgroup = "del"
                 return go.Box(y=data, name=name, marker=dict(color="black", outliercolor="black", size=2), 
                             fillcolor=fillcolor, showlegend=showlegend, legendgroup=legendgroup)
 
@@ -584,14 +598,15 @@ class SummaryCreator:
             for i, (dname, legend) in enumerate(zip(["mismatch_rate", "deletion_rate", "insertion_rate", "refskip_rate"], [True, False, False, False]), start=1):
                 box_mat = boxplot(data_processed[dname][0], group="match", showlegend=legend)
                 box_mis = boxplot(data_processed[dname][1], group="mismatch", showlegend=legend)
-                fig.add_traces([box_mat, box_mis], rows=1, cols=i)
+                box_del = boxplot(data_processed[dname][2], group="deletion", showlegend=legend)
+                fig.add_traces([box_mat, box_mis, box_del], rows=1, cols=i)
 
-            pie = go.Pie(labels=["Match", "Mismatch"], 
-                        values=[data_processed["overall"][0], data_processed["overall"][1]], 
-                        hoverinfo='label+percent', 
-                        textinfo='value', 
+            pie = go.Pie(labels=["Match", "Mismatch", "Deletion"], 
+                        values=[data_processed["overall"][0], data_processed["overall"][1], data_processed["overall"][2]], 
+                        hoverinfo="label+percent", 
+                        textinfo="value", 
                         textfont_size=20, 
-                        marker=dict(colors=['#4c72b0', '#dd8452'], line=dict(color='#000000', width=2)), 
+                        marker=dict(colors=["#4c72b0", "#dd8452", "#2ca02c"], line=dict(color="#000000", width=2)), 
                         showlegend=False,
                         sort=False)
             fig.add_trace(pie, row=1, col=5)
@@ -625,8 +640,8 @@ class SummaryCreator:
             fig = px.imshow(matrix_data, labels=dict(x="Called base", y="Reference base", color="Count"), zmin=0, zmax=1.2*matrix_max_mism, color_continuous_scale="portland")
             fig = self.update_plot(fig, None, "Called base", "Reference base", width=800)
             fig.update_traces(text=matrix_labels, texttemplate="%{text}")
-            fig.update_xaxes(fixedrange=True, tickvals=[0,1,2,3], ticktext=["A", "C", "G", "U"])
-            fig.update_yaxes(fixedrange=True, tickvals=[0,1,2,3], ticktext=["A", "C", "G", "U"])
+            fig.update_xaxes(fixedrange=True, tickvals=[0,1,2,3,4], ticktext=["A", "C", "G", "U", "-"])
+            fig.update_yaxes(fixedrange=True, tickvals=[0,1,2,3,4], ticktext=["A", "C", "G", "U", "-"])
             matrix = fig
         except Exception as e:
             fig = self.create_error_placeholder(e)
