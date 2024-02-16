@@ -179,7 +179,7 @@ def get_references(path: str, give_update: bool = True) -> Dict[str, str]:
                 stdout_progress(chr_found)
 
             else:
-                seq += line.strip()
+                seq += line.strip().upper()
                 
         refs[chr_name] = seq # add the last dict entry
         sys.stdout.write("\n")
