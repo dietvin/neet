@@ -548,6 +548,7 @@ class FeatureExtractor:
             Key from the dictionary corresponding to the largest value
         """
         dict_subset = dict((k, count_dict[k]) for k in ("a", "c", "g", "u"))
+        dict_subset["-"] = count_dict["del"]
 
         return max(dict_subset, key = lambda k: dict_subset[k]).upper()
 
