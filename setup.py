@@ -3,7 +3,7 @@
 from setuptools import setup
 
 setup(name="neet",
-      version="0.0.3",
+      version="0.0.4",
       description="Nanopore error pattern exploration toolkit",
       author="Vincent Dietrich",
       author_email="dietricv@uni-mainz.de",
