@@ -448,7 +448,7 @@ class POIAnalyzer():
         - Tuple[List[List[int]], List[List[str]], int]: Tuple containing matrix data, matrix labels, and the maximum value in the matrix.
         """
 
-        mis_types = [f"{f} - {t}" for f in ["A", "C", "G", "U"] for t in ["A", "C", "G", "U"]]
+        mis_types = [f"{f} - {t}" for f in ["A", "C", "G", "U", "-"] for t in ["A", "C", "G", "U", "-"]]
         mis_count = dict(zip(mis_types, [0]*len(mis_types)))
 
         for ref, maj in zip(self.category_data["ref_base"], self.category_data["majority_base"]):
@@ -456,12 +456,12 @@ class POIAnalyzer():
                 mis_count[f"{ref} - {maj}"] += 1
 
         # prepare data for the confusion matrix
-        matrix_data = [[None]*4 for _ in range(4)]
-        matrix_labels = [[None]*4 for _ in range(4)]
-        bases = ["A", "C", "G", "U"]
+        matrix_data = [[None]*5 for _ in range(5)]
+        matrix_labels = [[None]*5 for _ in range(5)]
+        bases = ["A", "C", "G", "U", "-"]
         # fill count matrix
-        for i in range(4): 
-            for j in range(4):
+        for i in range(5): 
+            for j in range(5):
                 count = mis_count[f"{bases[i]} - {bases[j]}"]
                 matrix_data[i][j] = count
                 if i != j:
@@ -469,8 +469,8 @@ class POIAnalyzer():
         # fill the matrix containing corresponding labels
         vals_flat = [element for sublist in matrix_labels for element in sublist if (element is not None)]
         vals_sum = sum(vals_flat)
-        for i in range(4): 
-            for j in range(4):
+        for i in range(5): 
+            for j in range(5):
                 if matrix_labels[i][j]:
                     matrix_labels[i][j] = f"{round(matrix_labels[i][j] / vals_sum * 100, 2)}%"
                 else: 
@@ -836,8 +836,8 @@ class POIAnalyzer():
         fig = px.imshow(matrix_data, labels=dict(x="Called base", y="Reference base", color="Count"), zmin=0, zmax=1.2*matrix_max_mism, color_continuous_scale="portland")
         fig = self.update_plot(fig, None, "Called base", "Reference base", width=800)
         fig.update_traces(text=matrix_labels, texttemplate="%{text}")
-        fig.update_xaxes(fixedrange=True, tickvals=[0,1,2,3],ticktext=["A", "C", "G", "U"])
-        fig.update_yaxes(fixedrange=True, tickvals=[0,1,2,3],ticktext=["A", "C", "G", "U"])
+        fig.update_xaxes(fixedrange=True, tickvals=[0,1,2,3,4],ticktext=["A", "C", "G", "U", "-"])
+        fig.update_yaxes(fixedrange=True, tickvals=[0,1,2,3,4],ticktext=["A", "C", "G", "U", "-"])
         
         return fig
 
