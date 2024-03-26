@@ -1,9 +1,9 @@
-import re, os, warnings, argparse, sys, io, random, tempfile, pickle, queue
-from typing import Dict, List, Tuple, Union, Any
+import re, os, warnings, io, tempfile
+from typing import Dict, List, Tuple
 from tqdm import tqdm
 import numpy as np
 from multiprocessing import Queue, Process, cpu_count
-from threading import Thread, Lock
+from threading import Thread
 import helper_functions as hs
 from summary import SummaryCreator
 
