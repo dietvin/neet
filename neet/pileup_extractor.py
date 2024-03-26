@@ -1,10 +1,13 @@
-import re, os, warnings, argparse, sys, io, random
+import re, os, warnings, argparse, sys, io, random, tempfile, pickle, queue
 from typing import Dict, List, Tuple, Union, Any
 from tqdm import tqdm
 import numpy as np
-from multiprocessing import Pool
-from . import helper_functions as hs
-from .summary import SummaryCreator
+from multiprocessing import Queue, Process, cpu_count
+from threading import Thread, Lock
+import helper_functions as hs
+from summary import SummaryCreator
+
+
 class FeatureExtractor:
 
     input_paths : List[str]
@@ -17,7 +20,12 @@ class FeatureExtractor:
     filter_perc_mismatch_alt: float
     filter_mean_quality: float
     filter_genomic_region: Tuple[str, int, int] | None
-    num_processes: int
+
+    num_processes_worker: int
+    num_processes_writer: int
+    queue_size: int
+    temp_file_line_count: int
+
     window_size: int
     neighbour_error_threshold: float
     n_bins_summary: int|None
@@ -27,19 +35,20 @@ class FeatureExtractor:
                  in_paths: str,
                  out_paths: str, 
                  ref_path: str,
-                 num_reads: int, 
-                 mismatch_rate: float | None,
-                 mismatch_rate_alt: float | None,
-                 perc_deletion: float | None,
-                 mean_quality: float | None,
-                 genomic_region: str | None,
-                 use_multiprocessing: bool,
-                 num_processes: int,
-                 window_size: int,
-                 neighbour_error_threshold: float,
-                 n_bins_summary: int,
-                 use_alt_summary: bool,
-                 export_svg_summary: bool) -> None:
+                 num_reads: int | None = None, 
+                 mismatch_rate: float | None = None, 
+                 mismatch_rate_alt: float | None = None,
+                 perc_deletion: float | None = None,
+                 mean_quality: float | None = None,
+                 genomic_region: str | None = None,
+                 num_processes: int = 16,
+                 queue_size: int = 5000,
+                 temp_file_line_count: int = 100000,
+                 window_size: int = 2,
+                 neighbour_error_threshold: float = 0.5,
+                 n_bins_summary: int = 5000,
+                 use_alt_summary: bool = False,
+                 export_svg_summary: bool = False) -> None:
 
         self.process_paths(ref_path, in_paths, out_paths)    
 
@@ -51,12 +60,25 @@ class FeatureExtractor:
         self.filter_mean_quality = mean_quality if mean_quality else 0
         self.filter_genomic_region = self.extract_positional_info(genomic_region) if genomic_region else None
 
-        self.use_multiprocessing = use_multiprocessing
-        self.num_processes = num_processes
-
+        # set up number of processes and parameters for multiprocessing
+        max_processes = cpu_count()-1 
+        if num_processes > max_processes:
+            hs.print_update(f"Specified {num_processes} processes, but only {max_processes} are available. Using {max_processes} processes instead.")
+            num_processes = max_processes
+        if num_processes >= 4:
+            num_processes -= 1 # -1 for the progress bar process
+            self.num_processes_worker = int(round(0.7 * num_processes))
+            self.num_processes_writer = num_processes - self.num_processes_worker
+        else:
+            hs.print_update(f"Specified {num_processes} processes, but at least 4 processes are needed. Assigning 2 worker, 1 writer and 1 progress process.")
+            self.num_processes_worker = 2
+            self.num_processes_writer = 1
+        self.queue_size = queue_size
+        self.temp_file_line_count = temp_file_line_count
+        # neighbour mismatch search parameters
         self.window_size = window_size
         self.neighbour_error_threshold = neighbour_error_threshold
-
+        # HTML summary report parameters 
         self.n_bins_summary = n_bins_summary if n_bins_summary > 0 else None 
         self.use_alt_summary = use_alt_summary
         self.export_svg_summary = export_svg_summary
@@ -110,7 +132,10 @@ class FeatureExtractor:
 
     def process_outpaths(self, out: str) -> List[str]:
         """
-        Process the output file paths based on the input `out` argument.
+        Process the output file paths based on the input `out` argument. Multiple options are available.
+        - give exact filepath(s) for each input file given
+        - give one directory, then the basename of the input file will be used to create the output file
+        Lastly the 
 
         Args:
             out (str): The output file path or directory path. If set to "-", no output file paths
@@ -134,23 +159,27 @@ class FeatureExtractor:
                         will be of type `.tsv`.
         """
         out_paths = out.split(",")
-        if len(out_paths) > 1:
+        if (len(out_paths) == 1) & (os.path.isfile(out_paths[0])):
+            hs.check_create_dir(os.path.dirname(path))
+            file_extension = os.path.splitext(path)[1]
+            if file_extension != ".tsv":
+                warnings.warn(f"Given output file has extension '{file_extension}'. Note that the output file will be of type '.tsv'.")
+        elif (len(out_paths) == 1) & (os.path.isdir(out_paths[0])):
+            hs.check_create_dir(out_paths[0])
+            basename = os.path.splitext(os.path.basename(self.input_paths[0]))[0]
+            out_paths = [os.path.join(out, f"{basename}_extracted.tsv")]
+        else:
             for path in out_paths:
                 hs.check_create_dir(os.path.dirname(path))
                 file_extension = os.path.splitext(path)[1]
                 if file_extension != ".tsv":
                     warnings.warn(f"Given output file has extension '{file_extension}'. Note that the output file will be of type '.tsv'.")
-        else: 
-            hs.check_create_dir(out)
-            out_paths = []
-            for in_path in self.input_paths:
-                basename = os.path.splitext(os.path.basename(in_path))[0]
-                out_paths.append(os.path.join(out, f"{basename}_extracted.tsv"))
         return out_paths
 
     def extract_positional_info(self, data_string: str) -> Tuple[str, int, int] | None:
         """
         Extracts the chromosome name, start value, and end value from a string in the format "chromosome_name:start-end".
+        Used if the user specified a specific genomic region.
 
         Parameters
         ----------
@@ -209,10 +238,10 @@ class FeatureExtractor:
             raise Exception(f"Chromosome region error: End position {end} not in range of corrdinates 1-{chr_len} (both incl.).")
         return True
 
+    #################################################################################################################
+    #                                  Functions called during the main processing                                  #
+    #################################################################################################################
 
-    #################################################################################################################
-    #                                  Functions called during feature extraction                                   #
-    #################################################################################################################
     def main(self) -> None:
         """
         Process multiple pairs of input and output files. Reads .pileup files and processes them in parallel using multiprocessing.
@@ -225,108 +254,257 @@ class FeatureExtractor:
             self.process_file(in_file, out_file)
             self.create_summary_file(out_file)
 
+
     def process_file(self, in_file: str, out_file: str) -> None:
         """
-        Reads a .pileup file, processes it in a sliding window to incorporate the neighbourhood search,
-        and writes the results to a new file.
+        Process a single input file and write the extracted features to an output file.
 
-        Parameters
-        ----------
-        in_file : str
-            Path to the input .pileup file.
-        out_file : str
-            Path to the output tsv file.
+        Parameters:
+            in_file (str): Path to the input file.
+            out_file (str): Path to the output file.
 
-        Returns
-        -------
-        None
-        """  
+        Returns:
+            None
+        """
+        hs.print_update("Counting number of lines to process.")
+        n_lines = hs.get_num_lines(in_file)
 
-        def write_edge_lines(neighbourhood: List[str], outfile: io.TextIOWrapper, start: bool = True):
-            """
-            Writes the neighbourhood information for the first or last rows as returned by the process_edge method.
+        hs.print_update(f"Initializing {self.num_processes_worker} worker processes.")
+        
+        input_queue = Queue(maxsize=self.queue_size)
+        output_queue = Queue(maxsize=self.queue_size)
+        tmpname_queue = Queue(maxsize=self.queue_size)
+        progress_queue = Queue(maxsize=self.queue_size)
 
-            Args:
-                neighbourhood: A list of lines representing the current neighbourhood.
-                outfile: The output file to write the edge lines to.
-                start: A boolean indicating if it's the start or end of the neighbourhood.
+        # initialize worker processes (processes that process the pileup input into an output string)
+        worker_processes = []
+        for _ in range(self.num_processes_worker):
+            p = Process(target=self.worker, args=(input_queue, output_queue))
+            p.start()
+            worker_processes.append(p)
+        
+        # initialize the writer processes (that write threshold number of lines to a SORTED temp file)
+        writer_processes = []
+        for i in range(self.num_processes_writer):
+            p = Process(target=self.writer, args=(output_queue, tmpname_queue, progress_queue, i))
+            p.start()
+            writer_processes.append(p)
+        
+        # combine the sorted tempfiles into one sorted output file
+        combiner_process = Process(target=self.combine_tmp_files, args=(tmpname_queue, out_file))
+        combiner_process.start()
 
-            Returns:
-                None
-            """
-            k = self.window_size
-            r = range(k) if start else range(k+1, 2*k+1)
-            for current_pos in r:
-                outline = self.process_edge(current_pos, neighbourhood, start)
-                outfile.write(outline)
+        progress_thread = Thread(target=self.update_progress, args=(progress_queue, n_lines))
+        progress_thread.start()
 
-        def write_center_line(neighbourhood: List[str], outfile: io.TextIOWrapper):
-            """
-            Writes the neighbourhood information for the center position of a full-sized neighbourhood.
+        with open(in_file, "r") as f:
+            for idx, line in enumerate(f):
+                input_queue.put((idx, line))
 
-            Args:
-                neighbourhood: A list of lines representing the current neighbourhood.
-                outfile: The output file to write the edge lines to.
+        for _ in range(self.num_processes_worker): input_queue.put((None, None))
+        for p in worker_processes: p.join()
 
-            Returns:
-                None
-            """
-            outline = self.process_neighbourhood(neighbourhood)
-            outfile.write(outline)
+        for _ in range(self.num_processes_writer): output_queue.put((None, None))
+        for p in writer_processes: p.join()
 
-        with open(in_file, "r") as i, open(out_file, "w") as o:
-            desc = "Processing pileup rows"
-            hs.print_update("Counting number of lines to process.")
-            progress_bar = tqdm(desc=desc, total=hs.get_num_lines(in_file))
+        progress_queue.put(None)
+        progress_thread.join()
 
-            header = f"chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_u\tn_del\tn_ins\tn_ref_skip\ta_rate\tc_rate\tg_rate\tu_rate\tdeletion_rate\tinsertion_rate\trefskip_rate\tmismatch_rate\tmismatch_rate_alt\tmotif\tq_mean\tq_std\tneighbour_error_pos\n"
-            o.write(header)
+        tmpname_queue.put(None)
+        combiner_process.join()
+
+    def worker(self, input_queue: Queue, output_queue: Queue):
+        """
+        Worker process to process lines from the input queue and put processed results into the output queue.
+
+        Parameters:
+            input_queue (Queue): Input queue containing lines to be processed.
+            output_queue (Queue): Output queue for processed results.
+
+        Returns:
+            None
+        """
+        idx, line = input_queue.get()
+        while idx:
+            processed_line = self.process_position(line)
+            output_queue.put((idx, processed_line))
+            idx, line = input_queue.get()
+        
+    def writer(self, output_queue: Queue, tmpname_queue: Queue, progress_queue: Queue, process_id: int):     
+        """
+        Writer process to collect processed lines and write them to temporary files.
+
+        Parameters:
+            output_queue (Queue): Output queue containing processed lines.
+            tmpname_queue (Queue): Queue to store names of temporary files.
+            progress_queue (Queue): Queue to update progress.
+            threshold (int): Threshold number of lines before writing to a temporary file.
+            process_id (int): Process identifier.
+
+        Returns:
+            None
+        """                   
+        outline_collection = []
+
+        output_element = output_queue.get()
+        # collect output lines until the threshold is reached, at this point a tempfile is created and the collected 
+        # lines are written to file and the outline_collection is reset
+        while output_element[0]:
+            # only add sucessfully processed lines to the collection (doing it here and not in the worker process
+            # to keep the progress bar from updating properly) 
+            if output_element[1] != "":
+                outline_collection.append(output_element)
+
+            if len(outline_collection) > self.temp_file_line_count:
+                self.__write_tempfile(outline_collection, process_id, tmpname_queue)
+                outline_collection = []
+
+            progress_queue.put(True)
+            output_element = output_queue.get()
+
+        # write the remaining elements in the collection to file
+        self.__write_tempfile(outline_collection, process_id, tmpname_queue)
+
+    def __write_tempfile(self, outline_collection: List[Tuple[int, str]], process_id: int, tmpname_queue: Queue) -> None:
+        """
+        Write the collected outlines to a temporary file.
+
+        Parameters:
+            outline_collection (List[Tuple[int, str]]): Collection of outlines, each containing an index and a string.
+            process_id (int): Identifier of the process.
+            tmpname_queue (Queue): Queue to store the name of the temporary file.
+
+        Returns:
+            None
+        """
+        with tempfile.NamedTemporaryFile(mode="w", prefix=f"neet_{str(process_id)}_", delete=False) as tmpfile:
+            outline_collection = sorted(outline_collection, key=lambda x: x[0])
+            tmpfile.writelines([f"{outline[0]}|{outline[1]}" for outline in outline_collection])
+            tmpname_queue.put(tmpfile.name)
+
+    def update_progress(self, progress_queue: Queue, n_lines: int):
+        """
+        Update progress using tqdm based on progress queue.
+
+        Parameters:
+            progress_queue (Queue): Progress queue.
+            n_lines (int): Total number of lines to process.
+
+        Returns:
+            None
+        """
+        with tqdm(total=n_lines, desc="Processing pileup rows") as progress:
+            increment = progress_queue.get()
+            while increment:
+                progress.update()
+                increment = progress_queue.get()
+        
+    def combine_tmp_files(self, tmpname_queue: Queue, output_file: str):
+        """
+        Combine temporary files into one sorted output file using the SortedFileMerge
+        class to perform the merging in a multithreaded fashion for big runtime boost:        
+        Single threaded. Example with 400 files with 100000 lines each:
+
+        Merging temporary files: 100%|█████████▉| 399/399 [1:07:40<00:10, 10.18s/it]
+        Multi threaded:
+        Merging temporary files: 100%|██████████| 399/399 [09:39<00:00,  1.45s/it]
+
+        Parameters:
+            tmpname_queue (Queue): Queue containing names of temporary files.
+            output_file (str): Output file path.
+
+        Returns:
+            None
+        """
+        tmpfiles = []
+        tmpfile = tmpname_queue.get()
+        while tmpfile:
+            tmpfiles.append(tmpfile)
+            tmpfile = tmpname_queue.get()
+
+        tmp_file_merger = hs.SortedFileMerge(tmpfiles, n_threads=50)
+        final_tmpfile = tmp_file_merger.start()
+        self.__write_final_output(final_tmpfile, output_file)
+
+    def __write_final_output(self, last_tmpfile: str, output_file: str):
+        """
+        Write final output file from the last temporary file. This includes removing the first index
+        columns as well as performing the neighbouring mismatch search.
+
+        Parameters:
+            last_tmpfile (str): Path to the last temporary file.
+            output_file (str): Output file path.
+
+        Returns:
+            None
+        """
+        final_output_progress = tqdm(desc="Writing final output")
+
+        nb_size_full = 1 + 2 * self.window_size
+        nb_lines = []
+        nb_first = True
+        with open(last_tmpfile, "r") as tmp, open(output_file, "w") as out:
+            out.write("chr\tsite\tn_reads\tref_base\tmajority_base\tn_a\tn_c\tn_g\tn_u\tn_del\tn_ins\tn_ref_skip\ta_rate\tc_rate\tg_rate\tu_rate\tdeletion_rate\tinsertion_rate\trefskip_rate\tmismatch_rate\tmismatch_rate_alt\tmotif\tq_mean\tq_std\tneighbour_error_pos\n")
             
-            nb_size_full = 1 + 2 * self.window_size
-            nb_lines = []
-            nb_first = True
-
-            if self.use_multiprocessing:
-                with Pool(processes=self.num_processes) as pool:
-                    for outline in pool.imap(self.process_position, i):
-                        if len(outline) > 0: 
-                            nb_lines.append(outline)
-
-                            if len(nb_lines) > nb_size_full:  
-                                nb_lines.pop(0)
-
-                            if len(nb_lines) == nb_size_full:
-                                if nb_first:
-                                    nb_first = False
-                                    write_edge_lines(nb_lines, o, start=True)
-                                write_center_line(nb_lines, o)
-                        progress_bar.update()
-            else:
-                for line in i:
-                    outline = self.process_position(line) # extracting the features themselves
-                    if len(outline) > 0: 
-                        nb_lines.append(outline)
-
-                        if len(nb_lines) > nb_size_full:  
-                            nb_lines.pop(0)
-
-                        if len(nb_lines) == nb_size_full:
-                            if nb_first:
-                                nb_first = False
-                                write_edge_lines(nb_lines, o, start=True)
-                            write_center_line(nb_lines, o)
-                    progress_bar.update()
-
+            for line in tmp:
+                outline = line.split("|")[1]
+                # fill up the sliding window to the specified size
+                nb_lines.append(outline)
+                # remove the first element if the sliding window moved
+                if len(nb_lines) > nb_size_full:
+                    nb_lines.pop(0)
+                # process the sliding window (i.e. add the neighbourhood info and write to the output file)
+                if len(nb_lines) == nb_size_full:
+                    if nb_first:
+                        nb_first = False
+                        self.__write_edge_lines(nb_lines, out, start=True)
+                    self.__write_center_line(nb_lines, out)
+                final_output_progress.update()
+            # process the remaining lines once the final tempfile has run through completely 
             if len(nb_lines) < nb_size_full:
                 for current_pos in range(len(nb_lines)):
                     outline = self.process_small(current_pos, nb_lines)
-                    o.write(outline)
+                    out.write(outline)
             else:
-                write_edge_lines(nb_lines, o, start=False)
+                self.__write_edge_lines(nb_lines, out, start=False)
 
-            progress_bar.update()
-            progress_bar.close()
+            os.unlink(last_tmpfile)
 
+            final_output_progress.update()
+        final_output_progress.close()
+
+    def __write_edge_lines(self, neighbourhood: List[str], outfile: io.TextIOWrapper, start: bool = True):
+        """
+        Writes the neighbourhood information for the first or last rows as returned by the process_edge method.
+
+        Args:
+            neighbourhood: A list of lines representing the current neighbourhood.
+            outfile: The output file to write the edge lines to.
+            start: A boolean indicating if it's the start or end of the neighbourhood.
+
+        Returns:
+            None
+        """
+        k = self.window_size
+        r = range(k) if start else range(k+1, 2*k+1)
+        for current_pos in r:
+            outline = self.process_edge(current_pos, neighbourhood, start)
+            outfile.write(outline)
+
+    def __write_center_line(self, neighbourhood: List[str], outfile: io.TextIOWrapper):
+        """
+        Writes the neighbourhood information for the center position of a full-sized neighbourhood.
+
+        Args:
+            neighbourhood: A list of lines representing the current neighbourhood.
+            outfile: The output file to write the edge lines to.
+
+        Returns:
+            None
+        """
+        outline = self.process_neighbourhood(neighbourhood)
+        outfile.write(outline)
+                
     def create_summary_file(self, file_path: str) -> None:
         """
         Create a summary file from the newly created tsv file.
@@ -342,6 +520,10 @@ class FeatureExtractor:
                                          use_perc_mismatch_alt=self.use_alt_summary,
                                          export_svg=self.export_svg_summary)
         summary_creator.main()
+
+    #################################################################################################################
+    #                                  Functions called during feature extraction                                   #
+    #################################################################################################################
 
     def process_position(self, line_str: str) -> str:
         """
@@ -766,3 +948,15 @@ class FeatureExtractor:
                 if (abs(relative_pos) <= k): # check if pos are close to each other
                     nb_info += str(relative_pos)+","
         return nb_info
+    
+
+if __name__=="__main__":
+    # f = FeatureExtractor(in_paths="/home/vincent/projects/neet_project/data/3rep_whole_genome/pileups/nuc1.pileup",
+    #                      out_paths="/home/vincent/projects/neet_project/data/3rep_whole_genome/test",
+    #                      ref_path="/home/vincent/projects/neet_project/data/3rep_whole_genome/GRCh38_clean.genome.fa",
+    #                      num_processes=24)
+    f = FeatureExtractor(in_paths="/home/vincent/projects/neet_project/data/45s_rrna/pileups/drna_cyt.pileup",
+                         out_paths="/home/vincent/projects/neet_project/data/45s_rrna/test",
+                         ref_path="/home/vincent/projects/neet_project/data/45s_rrna/RNA45SN1.fasta",
+                         num_processes=24)
+    f.main()

@@ -2,7 +2,7 @@ import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
 from plotly.io import to_html
-from . import helper_functions as hs
+import helper_functions as hs
 import os, warnings, sys, datetime, argparse
 from statistics import mean
 from collections import defaultdict
