@@ -5,7 +5,7 @@ import datetime
 
 import pkg_resources
 import importlib.resources as impresources
-from . import summary_style
+import summary_style
 
 
 def print_update(message: str, line_break: bool = True, with_time: bool = True) -> None:
@@ -269,3 +269,130 @@ def load_html_template_str() -> Tuple[str, str]:
         plotly_js_string = plotly_js.read()
 
     return css_string, plotly_js_string
+
+
+
+
+from threading import Thread, Lock
+from queue import Queue
+from tqdm import tqdm
+import tempfile
+
+class SortedFileMerge:
+    """
+    Class to merge sorted temporary files. Taken from a list of paths to these temporary files,
+    each thread takes two files, combines these and adds the newly created temporary file back
+    into the pool. This way each iteration the total number of temporary files decreases by 1.
+    Once two files are processed, they get deleted. In the end one final temporary file remains 
+    containing all sites sorted by chromosome and coordinate.
+
+    Attributes:
+        tmpfiles (List[str]): A list of paths to sorted temporary files.
+        remaining (int): Number of temporary files remaining to be merged.
+        remaining_lock (Lock): Lock for synchronizing access to `remaining`.
+        n_threads (int): Number of threads to use for merging.
+    """
+    tmpfiles: List[str]
+    remaining: int
+    remaining_lock: Lock
+    n_threads: int
+
+    def __init__(self, tmpfiles: List[str], n_threads: int = 2) -> None:
+        """
+        Initializes SortedFileMerge with a list of temporary files and number of threads.
+
+        Args:
+            tmpfiles (List[str]): A list of paths to sorted temporary files.
+            n_threads (int, optional): Number of threads for merging. Defaults to 2.
+        """
+        self.tmpfiles = tmpfiles
+        self.remaining = len(tmpfiles)
+        self.remaining_lock = Lock()
+        self.n_threads = n_threads
+
+    def start(self) -> str:
+        """
+        Starts the merging process and returns the path of the final merged file.
+
+        Returns:
+            str: Path to the final merged file.
+        """
+        tmp_queue = Queue()
+        for i in self.tmpfiles:
+            tmp_queue.put(i)
+
+        progress_queue = Queue()
+        progress_thread = Thread(target=self.progress, args=(progress_queue, len(self.tmpfiles)))
+        progress_thread.start()
+
+        threads = []
+        for i in range(self.n_threads):
+            t = Thread(target=self.combine_two_tmps, args=(tmp_queue, progress_queue))
+            t.start()
+            threads.append(t)     
+
+        for t in threads:
+            t.join()
+
+        progress_queue.put(False)
+        progress_thread.join()
+
+        return tmp_queue.get()
+
+    def progress(self, progress_queue: Queue, n_files: int) -> None:
+        """
+        Tracks the progress of merging temporary files.
+
+        Args:
+            progress_queue (Queue): Queue to communicate progress.
+            n_files (int): Total number of files to merge.
+        """
+        with tqdm(desc="Merging temporary files", total=n_files-1) as progress:
+            increase = progress_queue.get()        
+            while increase:
+                progress.update()
+                increase = progress_queue.get()
+
+    def combine_two_tmps(self, tmpfiles_queue: Queue, progress_queue: Queue) -> None:
+        """
+        Combines two temporary files into one until all files are merged.
+
+        Args:
+            tmpfiles_queue (Queue): Queue containing paths to temporary files.
+            progress_queue (Queue): Queue to communicate progress.
+        """
+        while self.remaining > 1:
+            with self.remaining_lock:
+                self.remaining -= 1
+
+            tmp_path1 = tmpfiles_queue.get()
+            tmp_path2 = tmpfiles_queue.get()
+            
+            with open(tmp_path1, "r") as f1, open(tmp_path2, "r") as f2, tempfile.NamedTemporaryFile(mode="w", prefix="neet_", delete=False) as new_tmp:
+                line1 = f1.readline()
+                line2 = f2.readline()
+                while line1 != "" and line2 != "":
+                    idx1, idx2 = int(line1.split("|")[0]), int(line2.split("|")[0])
+                    # check which row is earlier and write the earlier line to file, then update the written file
+                    if idx1 < idx2:
+                        new_tmp.write(line1)
+                        line1 = f1.readline()
+                    else:
+                        new_tmp.write(line2)
+                        line2 = f2.readline()
+                        
+                # write the remaining lines to the new file
+                if line1 == "":
+                    while line2 != "":
+                        new_tmp.write(line2)
+                        line2 = f2.readline()
+                else:
+                    while line1 != "":
+                        new_tmp.write(line1)
+                        line1 = f1.readline()
+
+                os.unlink(tmp_path1)
+                os.unlink(tmp_path2)
+
+                tmpfiles_queue.put(new_tmp.name)
+                progress_queue.put(True)
