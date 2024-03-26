@@ -81,14 +81,11 @@ def setup_parsers() -> argparse.ArgumentParser:
                                   Genomic region in "CHR:START-END" format or "CHR" for whole chromosome. 
                                   Specify to only extract information from a specific region.
                                   """)
-    extractor_parser.add_argument("--use_multiprocessing", action="store_true", 
+    extractor_parser.add_argument("-t", "--num_processes", type=int, required=False, default=16,
                                   help="""
-                                  Specify whether to use multiprocessing for processing. Recommended for shorter, 
-                                  deeply sequenced data. For low coverage, whole genome data set to false for 
-                                  faster runtime.
+                                  Number of parallel processes to use. Note that one process is reserved 
+                                  for writing.
                                   """)
-    extractor_parser.add_argument("-t", "--num_processes", type=int, required=False, default=4,
-                                  help="Number of parallel processes to use. Default: 4")
     extractor_parser.add_argument("-nw", "--window_size", type=int, required=False, default=2,
                                   help="""
                                   Number up-/downstream positions to consider for neighbouring error search.
@@ -100,24 +97,8 @@ def setup_parsers() -> argparse.ArgumentParser:
                                   with a mismatch rate above the given value will be counted as an error.
                                   Default: 0.5
                                   """)
-    extractor_parser.add_argument("-b", "--n_bins", type=int, required=False, default=5000,
-                                  help="""Number of bins to split the data into when creating the summary report.
-                                  This only affects the plots, not the underlying feature table. Used to improve 
-                                  performance and clarity of the created plots with many outliers. Note that 
-                                  setting the value to a low number can lead to misleading plots. Set to "-1" 
-                                  to disable binning. 
-                                  Default: 5000
-                                  """)
-    extractor_parser.add_argument("--plot_alt", action="store_true", 
-                                  help="""
-                                  Specify whether to use the mismatch_rate or mismatch_rate_alt values for plotting
-                                  in the summary report.
-                                  """)
-    extractor_parser.add_argument("--export_svg", action="store_true", 
-                                  help="""
-                                  Specify to export the created plots in SVG format. Files will be created in the
-                                  output directory.
-                                  """)
+    extractor_parser.add_argument("--no_summary", action="store_true", 
+                                  help="Specify to disable the automatic creation of a HTML summary.")
 
     # add parser for summary
     summary_parser = subparsers.add_parser("summary", 
@@ -472,13 +453,10 @@ def main():
                                              perc_deletion=args.perc_deletion,
                                              mean_quality=args.mean_quality,
                                              genomic_region=args.genomic_region,
-                                             use_multiprocessing=args.use_multiprocessing,
                                              num_processes=args.num_processes,
                                              window_size=args.window_size,
                                              neighbour_error_threshold=args.neighbour_thresh,
-                                             n_bins_summary = args.n_bins,
-                                             use_alt_summary=args.plot_alt,
-                                             export_svg_summary=args.export_svg)
+                                             no_summary=args.no_summary)
         feature_extractor.main()
 
     elif args.subcommand == "summary":
