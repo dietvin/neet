@@ -28,8 +28,8 @@ class FeatureExtractor:
 
     window_size: int
     neighbour_error_threshold: float
-    n_bins_summary: int|None
-    use_alt_summary: bool
+
+    no_summary: bool
 
     def __init__(self, 
                  in_paths: str,
@@ -46,9 +46,7 @@ class FeatureExtractor:
                  temp_file_line_count: int = 100000,
                  window_size: int = 2,
                  neighbour_error_threshold: float = 0.5,
-                 n_bins_summary: int = 5000,
-                 use_alt_summary: bool = False,
-                 export_svg_summary: bool = False) -> None:
+                 no_summary: bool = False) -> None:
 
         self.process_paths(ref_path, in_paths, out_paths)    
 
@@ -78,10 +76,8 @@ class FeatureExtractor:
         # neighbour mismatch search parameters
         self.window_size = window_size
         self.neighbour_error_threshold = neighbour_error_threshold
-        # HTML summary report parameters 
-        self.n_bins_summary = n_bins_summary if n_bins_summary > 0 else None 
-        self.use_alt_summary = use_alt_summary
-        self.export_svg_summary = export_svg_summary
+        # create HTML summary
+        self.no_summary = no_summary 
 
     def __str__(self) -> str:
         return ""
@@ -252,7 +248,8 @@ class FeatureExtractor:
         for in_file, out_file in zip(self.input_paths, self.output_paths):
             hs.print_update(f"Processing file '{in_file}'. Writing to '{out_file}'.")
             self.process_file(in_file, out_file)
-            self.create_summary_file(out_file)
+            if not self.no_summary:
+                self.create_summary_file(out_file)
 
 
     def process_file(self, in_file: str, out_file: str) -> None:
@@ -516,9 +513,7 @@ class FeatureExtractor:
             None
         """
         out_path = os.path.splitext(file_path)[0]+"_summary.html"
-        summary_creator = SummaryCreator(file_path, out_path, n_bins=self.n_bins_summary, 
-                                         use_perc_mismatch_alt=self.use_alt_summary,
-                                         export_svg=self.export_svg_summary)
+        summary_creator = SummaryCreator(file_path, out_path)
         summary_creator.main()
 
     #################################################################################################################
