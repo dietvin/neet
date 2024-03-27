@@ -246,7 +246,8 @@ class FeatureExtractor:
             None
         """ 
         for in_file, out_file in zip(self.input_paths, self.output_paths):
-            hs.print_update(f"Processing file '{in_file}'. Writing to '{out_file}'.")
+            hs.print_update(f"Processing file '{in_file}'")
+            hs.print_update(f"Writing to '{out_file}'")
             self.process_file(in_file, out_file)
             if not self.no_summary:
                 self.create_summary_file(out_file)
@@ -390,7 +391,7 @@ class FeatureExtractor:
         Returns:
             None
         """
-        with tqdm(total=n_lines, desc="Processing pileup rows") as progress:
+        with tqdm(total=n_lines, desc=f"{hs.get_time()} | Processing pileup rows") as progress:
             increment = progress_queue.get()
             while increment:
                 progress.update()
@@ -435,7 +436,7 @@ class FeatureExtractor:
         Returns:
             None
         """
-        final_output_progress = tqdm(desc="Writing final output")
+        final_output_progress = tqdm(desc=f"{hs.get_time()} | Writing final output")
 
         nb_size_full = 1 + 2 * self.window_size
         nb_lines = []
@@ -469,6 +470,7 @@ class FeatureExtractor:
 
             final_output_progress.update()
         final_output_progress.close()
+        hs.print_update(f"Finished. Wrote output to {output_file}")
 
     def __write_edge_lines(self, neighbourhood: List[str], outfile: io.TextIOWrapper, start: bool = True):
         """
@@ -947,9 +949,9 @@ class FeatureExtractor:
 
 if __name__=="__main__":
     # f = FeatureExtractor(in_paths="/home/vincent/projects/neet_project/data/3rep_whole_genome/pileups/nuc1.pileup",
-    #                      out_paths="/home/vincent/projects/neet_project/data/3rep_whole_genome/test",
-    #                      ref_path="/home/vincent/projects/neet_project/data/3rep_whole_genome/GRCh38_clean.genome.fa",
-    #                      num_processes=24)
+                        #  out_paths="/home/vincent/projects/neet_project/data/3rep_whole_genome/test",
+                        #  ref_path="/home/vincent/projects/neet_project/data/3rep_whole_genome/GRCh38_clean.genome.fa",
+                        #  num_processes=24)
     f = FeatureExtractor(in_paths="/home/vincent/projects/neet_project/data/45s_rrna/pileups/drna_cyt.pileup",
                          out_paths="/home/vincent/projects/neet_project/data/45s_rrna/test",
                          ref_path="/home/vincent/projects/neet_project/data/45s_rrna/RNA45SN1.fasta",
