@@ -9,14 +9,19 @@ import summary_style
 
 
 def print_update(message: str, line_break: bool = True, with_time: bool = True) -> None:
-    time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    time = get_time()
     if line_break:
         message += "\n"
     if with_time:
-        sys.stdout.write(f"{time}  |  {message}")
+        sys.stdout.write(f"{time} | {message}")
     else:
         sys.stdout.write(f"{message}")
 
+def get_time() -> str:
+    """
+    Returns the current time in the format 'YYYY-mm-DD HH:MM:SS'
+    """
+    return datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 def get_num_lines(path: str) -> int:
     """
