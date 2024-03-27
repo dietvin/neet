@@ -17,7 +17,7 @@ class SummaryCreator:
     data: Dict[str, List[str|int|float]]
     export_svg: bool
 
-    def __init__(self, in_path: str, out_path: str, n_bins: int|None, use_perc_mismatch_alt: bool, export_svg: bool) -> None:
+    def __init__(self, in_path: str, out_path: str, n_bins: int|None = 5000, use_perc_mismatch_alt: bool = False, export_svg: bool = False) -> None:
         self.process_paths(in_path, out_path)
         self.n_bins = n_bins if n_bins != -1 else None
         self.perc_mis_col = "mismatch_rate_alt" if use_perc_mismatch_alt else "mismatch_rate"
@@ -124,7 +124,6 @@ class SummaryCreator:
             progress.update()
             progress.set_description(f"{time} | Motif summary")
             plots.append(self.create_motif_plot())
-            hs.print_update(f"Done.", with_time=False)
 
             progress.update()
             progress.set_description(f"{time} | Writing to HTML")
