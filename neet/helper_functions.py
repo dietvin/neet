@@ -154,14 +154,12 @@ def get_references(path: str, give_update: bool = True) -> Dict[str, str]:
     dict[str]
         Dictionary where the key is the chromosome name and the value is the sequence
     """
-
+    time = get_time()
     def stdout_progress(n: int):
         if give_update:
-            sys.stdout.write(f"\rSequences found: {n}")
+            sys.stdout.write(f"\r{time} | Processing reference genome from file '{path}'. Sequences found: {n}")
             sys.stdout.flush()
-
-    if give_update:
-        print_update(f"Processing reference genome from file '{path}'.", line_break=False)
+            
     with open(path, "r") as ref:
         refs = {}
         line = next(ref)
@@ -352,7 +350,7 @@ class SortedFileMerge:
             progress_queue (Queue): Queue to communicate progress.
             n_files (int): Total number of files to merge.
         """
-        with tqdm(desc="Merging temporary files", total=n_files-1) as progress:
+        with tqdm(desc=f"{get_time()} | Merging temporary files", total=n_files-1) as progress:
             increase = progress_queue.get()        
             while increase:
                 progress.update()
