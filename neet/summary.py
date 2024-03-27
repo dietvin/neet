@@ -7,6 +7,7 @@ import os, warnings, sys, datetime, argparse
 from statistics import mean
 from collections import defaultdict
 from typing import List, Tuple, Dict
+from tqdm import tqdm
 
 class SummaryCreator:
     input_path: str
@@ -93,39 +94,45 @@ class SummaryCreator:
         Returns:
             None
         """
+        time = hs.get_time()
+
         hs.print_update(f"Starting creation of summary from file '{self.input_path}'.")
-        hs.print_update("  - loading data... ", line_break=False)
-        self.load_data()
-        n_positions = len(self.data["chr"])
-        n_chromosomes = len(set(self.data["chr"]))
 
-        hs.print_update(f"Done. Found {n_positions} sites along {n_chromosomes} sequences.", with_time=False)
+        with tqdm(desc=f"{time} | Loading data", total=7) as progress:
+            self.load_data()
+            n_positions = len(self.data["chr"])
+            n_chromosomes = len(set(self.data["chr"]))
 
-        plots = []
-        
-        hs.print_update("  - creating general summary... ", line_break=False)
-        plots.append(self.create_general_plot())
-        hs.print_update(f"Done.", with_time=False)
+            plots = []
+    
+            progress.update()
+            progress.set_description(f"{time} | General summary")
+            plots.append(self.create_general_plot())
 
-        hs.print_update("  - creating chromosome-wise summary... ", line_break=False)
-        plots.append(self.create_chr_plot())
-        hs.print_update(f"Done.", with_time=False)
+            progress.update()
+            progress.set_description(f"{time} | Chromosome-wise summary")
+            plots.append(self.create_chr_plot())
 
-        hs.print_update("  - creating general mismatch summary... ", line_break=False)
-        plots.append(self.create_mism_general_plot())
-        hs.print_update(f"Done.", with_time=False)
+            progress.update()
+            progress.set_description(f"{time} | General mismatch summary")
+            plots.append(self.create_mism_general_plot())
 
-        hs.print_update("  - creating specific mismatch type summary... ", line_break=False)
-        plots += self.create_mism_types_plots()
-        hs.print_update(f"Done.", with_time=False)
+            progress.update()
+            progress.set_description(f"{time} | Specific mismatch summary")
+            plots += self.create_mism_types_plots()
 
-        hs.print_update("  - creating motif summary... ", line_break=False)
-        plots.append(self.create_motif_plot())
-        hs.print_update(f"Done.", with_time=False)
+            progress.update()
+            progress.set_description(f"{time} | Motif summary")
+            plots.append(self.create_motif_plot())
+            hs.print_update(f"Done.", with_time=False)
 
-        hs.print_update(f"  - creating HTML summary file at {self.output_path}")
-        self.write_to_html(n_positions, n_chromosomes, plots)
-        hs.print_update("Finished.")
+            progress.update()
+            progress.set_description(f"{time} | Writing to HTML")
+            self.write_to_html(n_positions, n_chromosomes, plots)
+
+            progress.update()
+
+        hs.print_update(f"Finished. Wrote output to {self.output_path}")
     
 
     ################################################################################################################
