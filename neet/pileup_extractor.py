@@ -255,7 +255,14 @@ class FeatureExtractor:
     #################################################################################################################
 
     def set_up_logger(self, loglevel: str, logpath: str|None) -> None:
-        
+        """
+        Sets the logging configuration (path to the log file; logging level) and initializes the logger.
+
+        Parameters:
+            loglevel (str): Logging level that will be used for a given run
+            path (int | None): Path to the log file/directory. If None, a log file will be placed in the current directory.
+
+        """
         # check if the loglevel is given correctly
         numeric_level = getattr(logging, loglevel.upper())
         if not isinstance(numeric_level, int):
@@ -276,6 +283,13 @@ class FeatureExtractor:
         hs.print_update(f"Logging to file '{logpath}' with level {loglevel}")
 
     def log_message(self, msg: str, level: int) -> None:
+        """
+        Receives a message and the logging level and logs the message accordingly.
+
+        Parameters:
+            msg (str): Logging message
+            level (int): Logging level (corresponding logging.DEBUG etc.)
+        """
         if self.use_logging:
             if level == logging.DEBUG:
                 self.logger.debug(msg)
@@ -289,7 +303,15 @@ class FeatureExtractor:
                 self.logger.critical(msg)
 
     def log_init(self) -> None:
+        """
+        Logs the parameters given for initialization. 
 
+        Parameters:
+            None
+
+        Returns:
+            None
+        """
         self.log_message(f"Starting Feature Extractor - {hs.get_time()}", logging.INFO)
         self.log_message("The following parameters have been specified:", logging.DEBUG)
         for var_name, val in zip(
@@ -310,7 +332,18 @@ class FeatureExtractor:
         ):
             self.log_message(f"{var_name} :  {val}", level=logging.DEBUG)
 
-    def log_messages_mp(self, log_queue: Queue):
+    def log_messages_mp(self, log_queue: Queue[Tuple[str, int]]):
+        """
+        During processing of an input file, receives the logging messages from parallel processes
+        from the Queue and directs them to the log_message method.
+
+        Parameters:
+            log_queue (Queue[Tuple[str, int]]): Queue containing tuples of the message and logging level.
+
+        Returns:
+            None
+
+        """
         msg_elements = log_queue.get()
         while msg_elements:
             self.log_message(*msg_elements)
@@ -407,7 +440,7 @@ class FeatureExtractor:
         log_queue.put(None)
         logger_thread.join()
 
-    def worker(self, input_queue: Queue, output_queue: Queue, log_queue: Queue):
+    def worker(self, input_queue: Queue[Tuple[int, str]], output_queue: Queue[Tuple[int, str]], log_queue: Queue[Tuple[str, int]]):
         """
         Worker process to process lines from the input queue and put processed results into the output queue.
 
@@ -424,7 +457,7 @@ class FeatureExtractor:
             output_queue.put((idx, processed_line))
             idx, line = input_queue.get()
         
-    def writer(self, output_queue: Queue, tmpname_queue: Queue, progress_queue: Queue, process_id: int, log_queue: Queue):
+    def writer(self, output_queue: Queue[Tuple[int, str]], tmpname_queue: Queue[str], progress_queue: Queue[bool], process_id: int, log_queue: Queue[Tuple[str, int]]):
         """
         Writer process to collect processed lines and write them to temporary files.
 
@@ -459,15 +492,15 @@ class FeatureExtractor:
         # write the remaining elements in the collection to file
         self.__write_tempfile(outline_collection, process_id, tmpname_queue, log_queue)
 
-    def __write_tempfile(self, outline_collection: List[Tuple[int, str]], process_id: int, tmpname_queue: Queue, log_queue: Queue) -> None:
+    def __write_tempfile(self, outline_collection: List[Tuple[int, str]], process_id: int, tmpname_queue: Queue[str], log_queue: Queue[Tuple[str, int]]) -> None:
         """
         Write the collected outlines to a temporary file.
 
         Parameters:
             outline_collection (List[Tuple[int, str]]): Collection of outlines, each containing an index and a string.
             process_id (int): Identifier of the process.
-            tmpname_queue (Queue): Queue to store the name of the temporary file.
-
+            tmpname_queue (Queue[str]): Queue to store the name of the temporary file.
+            log_queue (Queue[Tuple[str, int]]): Queue to store log messages
         Returns:
             None
         """
@@ -477,12 +510,12 @@ class FeatureExtractor:
             tmpfile.writelines([f"{outline[0]}|{outline[1]}" for outline in outline_collection])
             tmpname_queue.put(tmpfile.name)
 
-    def update_progress(self, progress_queue: Queue, n_lines: int):
+    def update_progress(self, progress_queue: Queue[bool], n_lines: int):
         """
         Update progress using tqdm based on progress queue.
 
         Parameters:
-            progress_queue (Queue): Progress queue.
+            progress_queue (Queue[bool]): Progress queue.
             n_lines (int): Total number of lines to process.
 
         Returns:
@@ -494,7 +527,7 @@ class FeatureExtractor:
                 progress.update()
                 increment = progress_queue.get()
         
-    def combine_tmp_files(self, tmpname_queue: Queue, output_file: str, log_queue: Queue):
+    def combine_tmp_files(self, tmpname_queue: Queue[str], output_file: str, log_queue: Queue[Tuple[str, int]]):
         """
         Combine temporary files into one sorted output file using the SortedFileMerge
         class to perform the merging in a multithreaded fashion for big runtime boost.        
@@ -506,8 +539,9 @@ class FeatureExtractor:
         Merging temporary files: 100%|██████████| 399/399 [09:39<00:00,  1.45s/it]
 
         Parameters:
-            tmpname_queue (Queue): Queue containing names of temporary files.
+            tmpname_queue (Queue[str]): Queue containing names of temporary files.
             output_file (str): Output file path.
+            log_queue (Queue[Tuple[str, int]]): Queue containing log messages
 
         Returns:
             None
@@ -624,7 +658,7 @@ class FeatureExtractor:
     #                                   Methods called during feature extraction                                    #
     #################################################################################################################
 
-    def process_position(self, line_str: str, idx: int, log_queue: Queue) -> str:
+    def process_position(self, line_str: str, idx: int, log_queue: Queue[Tuple[str, int]]) -> str:
         """
         Processes a single position from the pileup data.
 
