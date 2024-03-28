@@ -75,7 +75,6 @@ def check_output_path(path: str, extensions: List[str]) -> None:
         extensions (List[str]): A list of expected file extensions (e.g., ['.txt', '.csv']).
 
     Raises:
-        FileNotFoundError: If the specified file path does not exist.
         Warning: If the file extension is not among the expected extensions.
     """
     basedir = os.path.dirname(path)
@@ -279,7 +278,7 @@ def load_html_template_str() -> Tuple[str, str]:
 from threading import Thread, Lock
 from queue import Queue
 from tqdm import tqdm
-import tempfile
+import tempfile, logging
 
 class SortedFileMerge:
     """
@@ -300,6 +299,8 @@ class SortedFileMerge:
     remaining_lock: Lock
     n_threads: int
 
+    logger: logging.Logger
+
     def __init__(self, tmpfiles: List[str], n_threads: int = 2) -> None:
         """
         Initializes SortedFileMerge with a list of temporary files and number of threads.
@@ -313,6 +314,8 @@ class SortedFileMerge:
         self.remaining_lock = Lock()
         self.n_threads = n_threads
 
+        self.logger = logging.getLogger("SortedFileMerge")
+
     def start(self) -> str:
         """
         Starts the merging process and returns the path of the final merged file.
@@ -324,13 +327,17 @@ class SortedFileMerge:
         for i in self.tmpfiles:
             tmp_queue.put(i)
 
+        log_queue = Queue()
+        log_thread = Thread(target=self.log, args=(log_queue,))
+        log_thread.start()
+
         progress_queue = Queue()
         progress_thread = Thread(target=self.progress, args=(progress_queue, len(self.tmpfiles)))
         progress_thread.start()
 
         threads = []
         for i in range(self.n_threads):
-            t = Thread(target=self.combine_two_tmps, args=(tmp_queue, progress_queue))
+            t = Thread(target=self.combine_two_tmps, args=(tmp_queue, progress_queue, log_queue))
             t.start()
             threads.append(t)     
 
@@ -339,6 +346,9 @@ class SortedFileMerge:
 
         progress_queue.put(False)
         progress_thread.join()
+
+        log_queue.put(None)
+        log_thread.join()
 
         return tmp_queue.get()
 
@@ -356,7 +366,13 @@ class SortedFileMerge:
                 progress.update()
                 increase = progress_queue.get()
 
-    def combine_two_tmps(self, tmpfiles_queue: Queue, progress_queue: Queue) -> None:
+    def log(self, log_queue: Queue) -> None:
+        msg = log_queue.get()
+        while msg:
+            self.logger.debug(msg)
+            msg = log_queue.get()            
+
+    def combine_two_tmps(self, tmpfiles_queue: Queue, progress_queue: Queue, log_queue: Queue) -> None:
         """
         Combines two temporary files into one until all files are merged.
 
@@ -399,3 +415,5 @@ class SortedFileMerge:
 
                 tmpfiles_queue.put(new_tmp.name)
                 progress_queue.put(True)
+                
+                log_queue.put(f"Combined '{tmp_path1}' and '{tmp_path2}' into '{new_tmp.name}'")
