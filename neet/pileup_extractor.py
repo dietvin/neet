@@ -1,4 +1,4 @@
-import re, os, warnings, io, tempfile
+import re, os, warnings, io, tempfile, logging, datetime
 from typing import Dict, List, Tuple
 from tqdm import tqdm
 import numpy as np
@@ -31,6 +31,11 @@ class FeatureExtractor:
 
     no_summary: bool
 
+    use_logging: bool
+    logger: logging.Logger
+    loglevel: int
+    logpath: str
+
     def __init__(self, 
                  in_paths: str,
                  out_paths: str, 
@@ -46,7 +51,9 @@ class FeatureExtractor:
                  temp_file_line_count: int = 100000,
                  window_size: int = 2,
                  neighbour_error_threshold: float = 0.5,
-                 no_summary: bool = False) -> None:
+                 no_summary: bool = False,
+                 logging_level: str | None = None,
+                 log_path: str | None = None) -> None:
 
         self.process_paths(ref_path, in_paths, out_paths)    
 
@@ -62,13 +69,15 @@ class FeatureExtractor:
         max_processes = cpu_count()-1 
         if num_processes > max_processes:
             hs.print_update(f"Specified {num_processes} processes, but only {max_processes} are available. Using {max_processes} processes instead.")
+            self.log_message(f"Specified {num_processes} processes, but only {max_processes} are available. Using {max_processes} processes instead.", logging.INFO)
             num_processes = max_processes
         if num_processes >= 4:
-            num_processes -= 1 # -1 for the progress bar process
+            num_processes -= 1 # -1 for the combiner process
             self.num_processes_worker = int(round(0.7 * num_processes))
             self.num_processes_writer = num_processes - self.num_processes_worker
         else:
             hs.print_update(f"Specified {num_processes} processes, but at least 4 processes are needed. Assigning 2 worker, 1 writer and 1 progress process.")
+            self.log_message(f"Specified {num_processes} processes, but at least 4 processes are needed. Assigning 2 worker, 1 writer and 1 progress process.", logging.INFO)
             self.num_processes_worker = 2
             self.num_processes_writer = 1
         self.queue_size = queue_size
@@ -79,12 +88,17 @@ class FeatureExtractor:
         # create HTML summary
         self.no_summary = no_summary 
 
-    def __str__(self) -> str:
-        return ""
+        # set up logging if specified
+        if logging_level:
+            self.use_logging = True
+            self.set_up_logger(logging_level, log_path)
+            self.log_init()
+        else:
+            self.use_logging = False
 
 
     #################################################################################################################
-    #                                   Functions called during initialization                                      #
+    #                                    Methods called during initialization                                       #
     #################################################################################################################
 
     def process_paths(self, ref_path: str, in_paths_str: str, out_paths: str) -> None:
@@ -125,6 +139,7 @@ class FeatureExtractor:
         # process path to reference fasta
         hs.check_input_path(ref_path, [".fasta", ".fna", ".ffn", ".faa", ".frn", ".fa"])
         self.ref_sequences = hs.get_references(ref_path)
+        self.ref_path = ref_path
 
     def process_outpaths(self, out: str) -> List[str]:
         """
@@ -234,8 +249,75 @@ class FeatureExtractor:
             raise Exception(f"Chromosome region error: End position {end} not in range of corrdinates 1-{chr_len} (both incl.).")
         return True
 
+
     #################################################################################################################
-    #                                  Functions called during the main processing                                  #
+    #                                                Loggin methods                                                 #
+    #################################################################################################################
+
+    def set_up_logger(self, loglevel: str, logpath: str|None) -> None:
+        
+        # check if the loglevel is given correctly
+        numeric_level = getattr(logging, loglevel.upper())
+        if not isinstance(numeric_level, int):
+            raise ValueError(f"Invalid log level: {loglevel}")
+        
+        # check if a (valid) logpath is given or set a valid one
+        filename = f"neet_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+        if not logpath:
+            logpath = os.path.join(os.getcwd(), filename)
+        elif os.path.isfile(logpath):
+            hs.check_output_path(logpath, extensions=[".log"])
+        elif os.path.isdir(logpath):
+            logpath = os.path.join(logpath, filename)
+
+        # set up config
+        logging.basicConfig(filename=logpath, level=numeric_level, filemode="w")
+        self.logger = logging.getLogger("PileupExtractor")
+        hs.print_update(f"Logging to file '{logpath}' with level {loglevel}")
+
+    def log_message(self, msg: str, level: int) -> None:
+        if self.use_logging:
+            if level == logging.DEBUG:
+                self.logger.debug(msg)
+            elif level == logging.INFO:
+                self.logger.info(msg)
+            elif level == logging.WARNING:
+                self.logger.warn(msg)
+            elif level == logging.ERROR:
+                self.logger.error(msg)
+            elif level == logging.CRITICAL:
+                self.logger.critical(msg)
+
+    def log_init(self) -> None:
+
+        self.log_message(f"Starting Feature Extractor - {hs.get_time()}", logging.INFO)
+        self.log_message("The following parameters have been specified:", logging.DEBUG)
+        for var_name, val in zip(
+            ["input_paths", "output_paths", "ref_path", "ref_sequences", 
+              "filter_num_reads", "filter_perc_mismatch", "filter_perc_mismatch_alt", 
+              "filter_mean_quality", "filter_genomic_region", "num_processes_worker",
+              "num_processes_writer", "queue_size", "temp_file_line_count", 
+              "window_size", "neighbour_error_threshold", "no_summary"],
+            [self.input_paths, self.output_paths, 
+             self.ref_path, list(self.ref_sequences.keys()), 
+             self.filter_num_reads, self.filter_perc_mismatch, 
+             self.filter_perc_mismatch_alt, self.filter_mean_quality, 
+             self.filter_genomic_region, self.num_processes_worker, 
+             self.num_processes_writer, self.queue_size, 
+             self.temp_file_line_count, self.window_size, 
+             self.neighbour_error_threshold, self.no_summary]
+             
+        ):
+            self.log_message(f"{var_name} :  {val}", level=logging.DEBUG)
+
+    def log_messages_mp(self, log_queue: Queue):
+        msg_elements = log_queue.get()
+        while msg_elements:
+            self.log_message(*msg_elements)
+            msg_elements = log_queue.get()
+
+    #################################################################################################################
+    #                                   Methods called during the main processing                                   #
     #################################################################################################################
 
     def main(self) -> None:
@@ -246,8 +328,10 @@ class FeatureExtractor:
             None
         """ 
         for in_file, out_file in zip(self.input_paths, self.output_paths):
-            hs.print_update(f"Processing file '{in_file}'")
-            hs.print_update(f"Writing to '{out_file}'")
+            hs.print_update(f"Processing file '{in_file}'.")
+            hs.print_update(f"Writing to '{out_file}'.")
+            self.log_message(f"Start processing file '{in_file}'. Will write finished output to '{out_file}'.", logging.INFO)
+
             self.process_file(in_file, out_file)
             if not self.no_summary:
                 self.create_summary_file(out_file)
@@ -265,31 +349,40 @@ class FeatureExtractor:
             None
         """
         hs.print_update("Counting number of lines to process.")
+        self.log_message(f"Counting lines in input file.", logging.INFO)
+
         n_lines = hs.get_num_lines(in_file)
+        self.log_message(f"{n_lines} lines found in file", logging.INFO)
 
         hs.print_update(f"Initializing {self.num_processes_worker} worker processes.")
+        self.log_message(f"Initializing {self.num_processes_worker} worker processes.", logging.INFO)
         
         input_queue = Queue(maxsize=self.queue_size)
         output_queue = Queue(maxsize=self.queue_size)
         tmpname_queue = Queue(maxsize=self.queue_size)
         progress_queue = Queue(maxsize=self.queue_size)
+        log_queue = Queue(maxsize=self.queue_size)
+
+        # initialize the logger thread to collect the logging messages from different processes
+        logger_thread = Thread(target=self.log_messages_mp, args=(log_queue,))
+        logger_thread.start()
 
         # initialize worker processes (processes that process the pileup input into an output string)
         worker_processes = []
         for _ in range(self.num_processes_worker):
-            p = Process(target=self.worker, args=(input_queue, output_queue))
+            p = Process(target=self.worker, args=(input_queue, output_queue, log_queue))
             p.start()
             worker_processes.append(p)
         
         # initialize the writer processes (that write threshold number of lines to a SORTED temp file)
         writer_processes = []
         for i in range(self.num_processes_writer):
-            p = Process(target=self.writer, args=(output_queue, tmpname_queue, progress_queue, i))
+            p = Process(target=self.writer, args=(output_queue, tmpname_queue, progress_queue, i, log_queue))
             p.start()
             writer_processes.append(p)
         
         # combine the sorted tempfiles into one sorted output file
-        combiner_process = Process(target=self.combine_tmp_files, args=(tmpname_queue, out_file))
+        combiner_process = Process(target=self.combine_tmp_files, args=(tmpname_queue, out_file, log_queue))
         combiner_process.start()
 
         progress_thread = Thread(target=self.update_progress, args=(progress_queue, n_lines))
@@ -311,7 +404,10 @@ class FeatureExtractor:
         tmpname_queue.put(None)
         combiner_process.join()
 
-    def worker(self, input_queue: Queue, output_queue: Queue):
+        log_queue.put(None)
+        logger_thread.join()
+
+    def worker(self, input_queue: Queue, output_queue: Queue, log_queue: Queue):
         """
         Worker process to process lines from the input queue and put processed results into the output queue.
 
@@ -324,11 +420,11 @@ class FeatureExtractor:
         """
         idx, line = input_queue.get()
         while idx:
-            processed_line = self.process_position(line)
+            processed_line = self.process_position(line, idx, log_queue)
             output_queue.put((idx, processed_line))
             idx, line = input_queue.get()
         
-    def writer(self, output_queue: Queue, tmpname_queue: Queue, progress_queue: Queue, process_id: int):     
+    def writer(self, output_queue: Queue, tmpname_queue: Queue, progress_queue: Queue, process_id: int, log_queue: Queue):
         """
         Writer process to collect processed lines and write them to temporary files.
 
@@ -361,9 +457,9 @@ class FeatureExtractor:
             output_element = output_queue.get()
 
         # write the remaining elements in the collection to file
-        self.__write_tempfile(outline_collection, process_id, tmpname_queue)
+        self.__write_tempfile(outline_collection, process_id, tmpname_queue, log_queue)
 
-    def __write_tempfile(self, outline_collection: List[Tuple[int, str]], process_id: int, tmpname_queue: Queue) -> None:
+    def __write_tempfile(self, outline_collection: List[Tuple[int, str]], process_id: int, tmpname_queue: Queue, log_queue: Queue) -> None:
         """
         Write the collected outlines to a temporary file.
 
@@ -376,6 +472,7 @@ class FeatureExtractor:
             None
         """
         with tempfile.NamedTemporaryFile(mode="w", prefix=f"neet_{str(process_id)}_", delete=False) as tmpfile:
+            log_queue.put((f"Creating temporary file {tmpfile.name}", logging.DEBUG))
             outline_collection = sorted(outline_collection, key=lambda x: x[0])
             tmpfile.writelines([f"{outline[0]}|{outline[1]}" for outline in outline_collection])
             tmpname_queue.put(tmpfile.name)
@@ -397,12 +494,13 @@ class FeatureExtractor:
                 progress.update()
                 increment = progress_queue.get()
         
-    def combine_tmp_files(self, tmpname_queue: Queue, output_file: str):
+    def combine_tmp_files(self, tmpname_queue: Queue, output_file: str, log_queue: Queue):
         """
         Combine temporary files into one sorted output file using the SortedFileMerge
-        class to perform the merging in a multithreaded fashion for big runtime boost:        
-        Single threaded. Example with 400 files with 100000 lines each:
-
+        class to perform the merging in a multithreaded fashion for big runtime boost.        
+        Example with 400 files with 100000 lines each:
+        
+        Single threaded:
         Merging temporary files: 100%|█████████▉| 399/399 [1:07:40<00:10, 10.18s/it]
         Multi threaded:
         Merging temporary files: 100%|██████████| 399/399 [09:39<00:00,  1.45s/it]
@@ -419,7 +517,8 @@ class FeatureExtractor:
         while tmpfile:
             tmpfiles.append(tmpfile)
             tmpfile = tmpname_queue.get()
-
+        
+        log_queue.put((f"Start combining {len(tmpfiles)} temporary files", logging.INFO))
         tmp_file_merger = hs.SortedFileMerge(tmpfiles, n_threads=50)
         final_tmpfile = tmp_file_merger.start()
         self.__write_final_output(final_tmpfile, output_file)
@@ -437,6 +536,7 @@ class FeatureExtractor:
             None
         """
         final_output_progress = tqdm(desc=f"{hs.get_time()} | Writing final output")
+        self.log_message("Starting final processing iteration. Performing neighbourhood error search.", logging.INFO)
 
         nb_size_full = 1 + 2 * self.window_size
         nb_lines = []
@@ -470,7 +570,9 @@ class FeatureExtractor:
 
             final_output_progress.update()
         final_output_progress.close()
-        hs.print_update(f"Finished. Wrote output to {output_file}")
+
+        hs.print_update(f"Finished. Wrote output to '{output_file}'.")
+        self.log_message(f"Finished processing. Final output file at '{output_file}'.", logging.INFO)
 
     def __write_edge_lines(self, neighbourhood: List[str], outfile: io.TextIOWrapper, start: bool = True):
         """
@@ -519,10 +621,10 @@ class FeatureExtractor:
         summary_creator.main()
 
     #################################################################################################################
-    #                                  Functions called during feature extraction                                   #
+    #                                   Methods called during feature extraction                                    #
     #################################################################################################################
 
-    def process_position(self, line_str: str) -> str:
+    def process_position(self, line_str: str, idx: int, log_queue: Queue) -> str:
         """
         Processes a single position from the pileup data.
 
@@ -537,22 +639,27 @@ class FeatureExtractor:
         try:
             chr, site, ref_base, read_bases, read_qualities = line[0], int(line[1]), line[2].replace("T", "U"), line[4], line[5]
         except:
+            log_queue.put((f"{idx} - Failed to extract elements", logging.DEBUG))
             return ""
             
         # filter by genomic region
         region = self.filter_genomic_region
         if region is not None:
             if not(chr == region[0] and site >= region[1] and site <= region[2]): # both start and end inclusive
+                log_queue.put((f"{idx} - Position filtered because outside of specified regions.", logging.DEBUG))
                 return ""
 
         # extract coverage and filter by number of reads if the standard coverage option is used 
         n_reads = int(line[3])
-        if n_reads < self.filter_num_reads: return ""
+        if n_reads < self.filter_num_reads: 
+            log_queue.put((f"{idx} - Position filtered because of low coverage.", logging.DEBUG))
+            return ""
 
         # get reference sequence 
         try:
             ref = self.ref_sequences[chr]
         except:
+            log_queue.put((f"{idx} - Could not get reference sequence from sequence {chr}.", logging.DEBUG))
             return ""
         # get absolute number of A, C, G, U, ins, del
         count, ref_skip_positions = self.parse_pileup_string(read_bases, ref_base)
@@ -560,7 +667,9 @@ class FeatureExtractor:
         # get qualitiy measures
         quality_mean, quality_std = self.get_read_quality(read_qualities, ref_skip_positions)
         # filter by mean read quality
-        if quality_mean < self.filter_mean_quality: return ""
+        if quality_mean < self.filter_mean_quality: 
+            log_queue.put((f"{idx} - Position filtered because of low quality.", logging.DEBUG))
+            return ""
 
         # in case the alternative way of calculating the coverage is specified
         # could use if else statement and get the other case down here, but then 
@@ -573,7 +682,9 @@ class FeatureExtractor:
         count_rel_alt = self.get_relative_count(count, n_reads_alt)
 
         # filter by percentage of deletions
-        if count_rel["del"] < self.filter_perc_deletion: return ""
+        if count_rel["del"] < self.filter_perc_deletion: 
+            log_queue.put((f"{idx} - Position filtered because of low deletion rate.", logging.DEBUG))
+            return ""
 
         # get allele fraction
         mismatch_rate = self.get_mismatch_perc(count_rel, ref_base)
@@ -581,8 +692,10 @@ class FeatureExtractor:
 
         # filter by mismatch_rate
         if mismatch_rate < self.filter_perc_mismatch:
+            log_queue.put((f"{idx} - Position filtered because of low mismatch rate.", logging.DEBUG))
             return ""
         if mismatch_rate_alt < self.filter_perc_mismatch_alt:
+            log_queue.put((f"{idx} - Position filtered because of low alternative mismatch rate.", logging.DEBUG))
             return ""
 
         # get majority base
@@ -590,6 +703,9 @@ class FeatureExtractor:
 
         # get 11b motif
         motif = self.get_motif(chr, site, ref, k=2)
+        if motif == "":
+            log_queue.put((f"{idx} - Could not extract motif from reference sequence.", logging.DEBUG))
+
 
         out = f'{chr}\t{site}\t{n_reads}\t{ref_base}\t{majority_base}\t{count["a"]}\t{count["c"]}\t{count["g"]}\t{count["u"]}\t{count["del"]}\t{count["ins"]}\t{count["ref_skip"]}\t{count_rel["a"]}\t{count_rel["c"]}\t{count_rel["g"]}\t{count_rel["u"]}\t{count_rel["del"]}\t{count_rel["ins"]}\t{count_rel["ref_skip"]}\t{mismatch_rate}\t{mismatch_rate_alt}\t{motif}\t{quality_mean}\t{quality_std}\n'
         return out
@@ -838,7 +954,7 @@ class FeatureExtractor:
         return mean, std 
     
     #################################################################################################################
-    #                                  Functions called during neighbour search                                     #
+    #                                   Methods called during neighbour search                                      #
     #################################################################################################################
     def process_small(self, current_pos: int, neighbourhood: List[str]) -> str:
         """
@@ -955,5 +1071,6 @@ if __name__=="__main__":
     f = FeatureExtractor(in_paths="/home/vincent/projects/neet_project/data/45s_rrna/pileups/drna_cyt.pileup",
                          out_paths="/home/vincent/projects/neet_project/data/45s_rrna/test",
                          ref_path="/home/vincent/projects/neet_project/data/45s_rrna/RNA45SN1.fasta",
-                         num_processes=24)
+                         num_processes=24,
+                         logging_level="DEBUG")
     f.main()
